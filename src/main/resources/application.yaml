@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: turnos-service
+  config:
+    # Lee el mismo .env que usa docker compose; si no existe, se usan las variables de entorno
+    import: optional:file:.env[.properties]
+  datasource:
+    url: jdbc:postgresql://${TURNOS_DB_HOST:localhost}:${TURNOS_DB_PORT:5432}/${TURNOS_DB_NAME:turnos}
+    username: ${TURNOS_DB_USER:turnos}
+    password: ${TURNOS_DB_PASSWORD}
+  jpa:
+    hibernate:
+      # El esquema lo crean las migraciones de Flyway; Hibernate solo verifica que coincida
+      ddl-auto: validate
+    open-in-view: false

@@ -1,0 +1,22 @@
+# Infraestructura local de desarrollo del servicio de turnos.
+# Uso: copiar .env.example como .env, completar los valores y ejecutar `docker compose up -d`.
+services:
+  turnos-db:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: ${TURNOS_DB_NAME:-turnos}
+      POSTGRES_USER: ${TURNOS_DB_USER:-turnos}
+      POSTGRES_PASSWORD: ${TURNOS_DB_PASSWORD:?Definí TURNOS_DB_PASSWORD en el archivo .env}
+    ports:
+      - "${TURNOS_DB_PORT:-5432}:5432"
+    volumes:
+      # Desde la imagen 18, Postgres guarda sus datos dentro de /var/lib/postgresql
+      - turnos-db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  turnos-db-data:
