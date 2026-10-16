@@ -20,10 +20,10 @@ sequenceDiagram
     DB-->>Service: Matching users or none
     Note over Service: If both match, the login conflict is reported first
     break Login already registered
-        Service-->>App: 409 (functional code)
+        Service-->>App: 400 (USERNAME_ALREADY_EXISTS)
     end
     break Email already registered
-        Service-->>App: 409 (functional code)
+        Service-->>App: 400 (EMAIL_ALREADY_EXISTS)
     end
     Service->>Service: Hash password
     Service->>DB: Save user (activated, ROLE_USER, system fields)
