@@ -8,3 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## 2026-10-13
 ### Added
 - Documentacion relacionada con el servicio: contratos con otros servicios, casos de uso, modelo de dominio y diagramas de secuencia.
+
+## 2026-10-15
+### Added
+- Creada la estructura del proyecto y dependencias añadidas. Springboot con Postgres compose container.
+
+## 2026-10-16
+### Added
+- Slice base de User con sus tests creados. No se incluyen clases y directorios que no so utilizados todavia. 
