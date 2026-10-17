@@ -15,4 +15,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 2026-10-16
 ### Added
-- Slice base de User con sus tests creados. No se incluyen clases y directorios que no so utilizados todavia. 
+- Slice base de User con sus tests creados. No se incluyen clases y directorios que no so utilizados todavia.
+
+## 2026-10-17
+### Added
+- Directorios y archivos que utiliza el caso de uso T01-Registrar-Usuario.
+- Tests de los archivos del caso de uso T01-Registar-Usuario.
+- Tests de Integracion del slice user utlizando Testcontainer.
+- ApiExceptionHandler en carpeta config para manejar el formato de errores y excepciones.
+- SecurityConfig en carpeta config para personalizar la seguridad de endpoints y requests.
+### Changed
+- Caso de uso T01 dentro de docs modifica su flujo alternativo
