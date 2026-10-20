@@ -163,7 +163,7 @@ classDiagram
 | # | Regla |
 | --- | --- |
 | 1 | `login` y `email` son únicos sin distinguir mayúsculas |
-| 2 | `externalPatientId()` vale `"user-" + id`, no se guarda, es estable y tiene hasta 100 caracteres; es el identificador del usuario ante la cátedra |
+| 2 | `externalPatientId()` es el `id` del usuario como texto, sin prefijo: el mismo valor que el `sub` de su JWT (contrato de turnos §4.2.1). No se guarda, no cambia una vez usado y tiene hasta 100 caracteres; es el identificador del usuario ante la cátedra |
 | 3 | `User` guarda `createdDate` y `lastModifiedDate`, pero no quién los hizo (`createdBy`, `lastModifiedBy`) |
 | 4 | El proceso se identifica por `reservationProcessId`, un texto opaco que asigna la cátedra; turnos no genera identificadores propios para los procesos |
 | 5 | Un usuario tiene como máximo un proceso abierto (`HELD`, `WAITING_FOR_PHONE` o `PHONE_SUBMITTED`); las reservas confirmadas no cuentan |

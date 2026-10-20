@@ -13,3 +13,9 @@ spring:
       # El esquema lo crean las migraciones de Flyway; Hibernate solo verifica que coincida
       ddl-auto: validate
     open-in-view: false
+
+turnos:
+  jwt:
+    # Sin valor por defecto: si falta, la aplicación no arranca y el log nombra la propiedad
+    private-key-location: ${TURNOS_JWT_PRIVATE_KEY_LOCATION:}
+    token-validity: ${TURNOS_JWT_TOKEN_VALIDITY:24h}
