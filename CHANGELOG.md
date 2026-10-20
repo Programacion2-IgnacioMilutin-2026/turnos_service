@@ -26,3 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SecurityConfig en carpeta config para personalizar la seguridad de endpoints y requests.
 ### Changed
 - Caso de uso T01 dentro de docs modifica su flujo alternativo
+
+## 2026-10-20
+### Added
+- Archivo .gitignore
+- Documentacion del SDD para aplicar el caso de uso T02 (SPEC, PLAN y TASK) y una toma de decision relacionada con la firma del jwt
+- Archivos y tests relacionados con el caso de uso T02-IniciarSesion

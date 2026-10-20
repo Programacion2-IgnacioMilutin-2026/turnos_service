@@ -6,11 +6,7 @@ import turnos.user.application.exception.UserLoginAlreadyExistsException;
 import turnos.user.domain.model.Authority;
 import turnos.user.domain.model.User;
 import turnos.user.domain.ports.out.PasswordHasher;
-import turnos.user.domain.ports.out.UserRepository;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class RegisterUserUseCaseImplTest {
 
     private final InMemoryUserRepository userRepository = new InMemoryUserRepository();
-    private final PasswordHasher passwordHasher = password -> "hashed:" + password;
+    private final PasswordHasher passwordHasher = new FakePasswordHasher();
     private final RegisterUserUseCaseImpl registerUserUseCase = new RegisterUserUseCaseImpl(userRepository, passwordHasher);
 
     @Test
@@ -77,35 +73,5 @@ class RegisterUserUseCaseImplTest {
                 .email(email)
                 .langKey("es")
                 .build();
-    }
-
-    // Busca con igualdad exacta, como la base: así el test comprueba que las minúsculas las pone el caso de uso
-    private static class InMemoryUserRepository implements UserRepository {
-
-        private final List<User> users = new ArrayList<>();
-        private final List<Long> idsReceivedOnCreate = new ArrayList<>();
-
-        @Override
-        public User create(User user) {
-            idsReceivedOnCreate.add(user.getId());
-            user.setId((long) users.size() + 1);
-            users.add(user);
-            return user;
-        }
-
-        @Override
-        public Optional<User> findByLogin(String login) {
-            return users.stream().filter(user -> user.getLogin().equals(login)).findFirst();
-        }
-
-        @Override
-        public boolean existsByLogin(String login) {
-            return findByLogin(login).isPresent();
-        }
-
-        @Override
-        public boolean existsByEmail(String email) {
-            return users.stream().anyMatch(user -> user.getEmail().equals(email));
-        }
     }
 }

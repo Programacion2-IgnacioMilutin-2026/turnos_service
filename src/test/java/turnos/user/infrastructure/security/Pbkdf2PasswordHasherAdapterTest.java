@@ -31,4 +31,17 @@ class Pbkdf2PasswordHasherAdapterTest {
     void theSamePasswordGivesADifferentHashEachTime() {
         assertThat(hasher.hash("secreta123")).isNotEqualTo(hasher.hash("secreta123"));
     }
+
+    @Test
+    void aPasswordMatchesItsOwnHash() {
+        assertThat(hasher.matches("secreta123", hasher.hash("secreta123"))).isTrue();
+    }
+
+    @Test
+    void aDifferentPasswordDoesNotMatch() {
+        String hash = hasher.hash("secreta123");
+
+        assertThat(hasher.matches("Secreta123", hash)).isFalse();
+        assertThat(hasher.matches("secreta12", hash)).isFalse();
+    }
 }

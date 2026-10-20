@@ -2,6 +2,7 @@ package turnos.user.infrastructure.web.mapper;
 
 import org.springframework.stereotype.Component;
 import turnos.user.domain.model.User;
+import turnos.user.infrastructure.web.dto.TokenResponse;
 import turnos.user.infrastructure.web.dto.UserRequest;
 import turnos.user.infrastructure.web.dto.UserResponse;
 
@@ -35,6 +36,15 @@ public class UserDtoMapper {
                 .imageUrl(domain.getImageUrl())
                 .langKey(domain.getLangKey())
                 .activated(domain.isActivated())
+                .build();
+    }
+
+    public TokenResponse toTokenResponse(String token) {
+        if (token == null) {
+            return null;
+        }
+        return TokenResponse.builder()
+                .idToken(token)
                 .build();
     }
 }

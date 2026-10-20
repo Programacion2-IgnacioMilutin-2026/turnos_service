@@ -75,5 +75,11 @@ class UserDtoMapperTest {
     void nullMapsToNull() {
         assertThat(mapper.toDomain(null)).isNull();
         assertThat(mapper.toResponse(null)).isNull();
+        assertThat(mapper.toTokenResponse(null)).isNull();
+    }
+
+    @Test
+    void tokenResponseKeepsTheToken() {
+        assertThat(mapper.toTokenResponse("header.payload.signature").getIdToken()).isEqualTo("header.payload.signature");
     }
 }

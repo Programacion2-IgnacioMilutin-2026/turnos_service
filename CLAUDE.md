@@ -5,7 +5,14 @@ Los comandos se ejecutan desde la raíz de este repositorio.
 ## Requisitos
 
 - Docker en ejecución: lo usan el compose y los tests.
-- Un archivo `.env` creado a partir de `.env.example`, con `TURNOS_DB_PASSWORD` completo. No se versiona.
+- Un archivo `.env` creado a partir de `.env.example`, con `TURNOS_DB_PASSWORD` y `TURNOS_JWT_PRIVATE_KEY_LOCATION` completos. No se versiona.
+- El par de claves RSA del JWT de los usuarios en `secrets/`, que no se versiona. Sin la clave privada, la aplicación no arranca (los tests generan su propio par). Se crea una sola vez:
+
+```bash
+mkdir -p secrets
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out secrets/jwt-private.pem
+openssl rsa -pubout -in secrets/jwt-private.pem -out secrets/jwt-public.pem
+```
 
 ## Comandos
 
