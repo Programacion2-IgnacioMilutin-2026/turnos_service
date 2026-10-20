@@ -32,3 +32,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Archivo .gitignore
 - Documentacion del SDD para aplicar el caso de uso T02 (SPEC, PLAN y TASK) y una toma de decision relacionada con la firma del jwt
 - Archivos y tests relacionados con el caso de uso T02-IniciarSesion
+- Property al pom.xml y buil.yaml en .github/workflow/ para integrar SonarQube
