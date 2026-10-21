@@ -33,3 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentacion del SDD para aplicar el caso de uso T02 (SPEC, PLAN y TASK) y una toma de decision relacionada con la firma del jwt
 - Archivos y tests relacionados con el caso de uso T02-IniciarSesion
 - Property al pom.xml y buil.yaml en .github/workflow/ para integrar SonarQube
+
+## 2026-10-21
+### Added
+- Documentacion de SDD para aplicar el caso de uso X01-AutenticacionCuentaTecnica.
+- Slice Integration. Contiene la integracion/login de con el servicio de catedra.
+- Clock en config para reintentos de inicio de sesion a la catedra.
+- Dependencia en pom.xml para poder elgir un .env distinto al real en los tests.
+- Tests del slice Integracion. Incluy servidor HTTP para simular la catedra.
