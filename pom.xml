@@ -161,6 +161,16 @@
 				</executions>
 			</plugin>
 			<plugin>
+				<!-- Los tests no leen el .env local: apuntan su ruta a un archivo que no existe -->
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<systemPropertyVariables>
+						<turnos.env-file>${project.build.directory}/tests-do-not-read-the-local-env</turnos.env-file>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+			<plugin>
 				<!-- Mide la cobertura de los tests y deja el reporte que lee SonarQube (target/site/jacoco/jacoco.xml) -->
 				<groupId>org.jacoco</groupId>
 				<artifactId>jacoco-maven-plugin</artifactId>

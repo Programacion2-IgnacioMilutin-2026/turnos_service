@@ -2,8 +2,9 @@ spring:
   application:
     name: turnos-service
   config:
-    # Lee el mismo .env que usa docker compose; si no existe, se usan las variables de entorno
-    import: optional:file:.env[.properties]
+    # Lee el mismo .env que usa docker compose; si no existe, se usan las variables de entorno.
+    # Los tests de Maven apuntan turnos.env-file a un archivo inexistente: nunca leen el .env local
+    import: optional:file:${turnos.env-file:.env}[.properties]
   datasource:
     url: jdbc:postgresql://${TURNOS_DB_HOST:localhost}:${TURNOS_DB_PORT:5432}/${TURNOS_DB_NAME:turnos}
     username: ${TURNOS_DB_USER:turnos}
@@ -19,3 +20,9 @@ turnos:
     # Sin valor por defecto: si falta, la aplicación no arranca y el log nombra la propiedad
     private-key-location: ${TURNOS_JWT_PRIVATE_KEY_LOCATION:}
     token-validity: ${TURNOS_JWT_TOKEN_VALIDITY:24h}
+  catedra:
+    # Vacíos por defecto: si falta alguno, la aplicación arranca, avisa con un warning y no intenta el login técnico.
+    # Timeouts y reintentos tienen valores por defecto en CatedraProperties (turnos.catedra.connect-timeout, turnos.catedra.login.*)
+    base-url: ${TURNOS_CATEDRA_BASE_URL:}
+    username: ${TURNOS_CATEDRA_USERNAME:}
+    password: ${TURNOS_CATEDRA_PASSWORD:}
