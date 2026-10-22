@@ -43,5 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests del slice Integracion. Incluy servidor HTTP para simular la catedra.
 
 ## 2026-10-22
+### Added
+- Documentacion de decision tomada acerca de porque se desactiva el CSRF
 ### Changed
-- En userController se cambio el orden de llamada a toDomain para que sonarqube no marque el error 'A NULL object should not be accessed'.
+- En UserController se cambio el orden de llamada a toDomain para que sonarqube no marque el error 'A NULL object should not be accessed'.
+- Expresion regular de UserRequest para pasar solucionar los issues de sonarqube. Se cambiaron las alternativas de esta y se soluciono para evitar StackOverflow en un input largo

@@ -183,6 +183,17 @@ class UserControllerTest {
         verifyNoInteractions(userService);
     }
 
+    // La validación evalúa todas las reglas del campo, también la expresión regular, aunque el largo ya falle
+    @Test
+    void aHugeLoginAnswersValidationErrorInsteadOfOverflowingTheStack() throws Exception {
+        Map<String, String> body = validBody();
+        body.put("login", "a@" + "b.".repeat(500_000) + "c");
+
+        expectProblem(register(body), 400, "Bad Request", "VALIDATION_ERROR")
+                .andExpect(jsonPath("$.fieldErrors[*].field").value(hasItem("login")));
+        verifyNoInteractions(userService);
+    }
+
     @Test
     void aMissingBodyAnswersValidationErrorWithoutCallingTheService() throws Exception {
         ResultActions result = mockMvc.perform(post("/api/register").contentType(MediaType.APPLICATION_JSON));
