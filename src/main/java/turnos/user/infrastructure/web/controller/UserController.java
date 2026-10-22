@@ -32,9 +32,10 @@ public class UserController {
 
     @PostMapping("/register")
     public ResponseEntity<UserResponse> registerUser(@Valid @RequestBody UserRequest userRequest) {
+        String password = userRequest.getPassword();
         User user = userDtoMapper.toDomain(userRequest);
         try {
-            User registeredUser = userService.registerUser(user, userRequest.getPassword());
+            User registeredUser = userService.registerUser(user, password);
             return new ResponseEntity<>(userDtoMapper.toResponse(registeredUser), HttpStatus.CREATED);
         } catch (UserLoginAlreadyExistsException e) {
             throw error(HttpStatus.BAD_REQUEST, "USERNAME_ALREADY_EXISTS", e);

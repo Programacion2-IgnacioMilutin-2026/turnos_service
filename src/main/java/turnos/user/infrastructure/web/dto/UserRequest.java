@@ -14,9 +14,9 @@ import lombok.*;
 @AllArgsConstructor
 public class UserRequest {
 
-    // La misma expresión que el login de JHipster: letras, números y _ . @ -, o un login con forma de email
+    // La misma regla que el login de JHipster: letras, números y _ . @ -, o un login con forma de email.
     private static final String LOGIN_REGEX =
-            "^(?>[a-zA-Z0-9!$&*+=?^_`{|}~.-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*)|(?>[_.@A-Za-z0-9-]+)$";
+            "^(?:[a-zA-Z0-9!$&*+=?^_`{|}~.-]+@[a-zA-Z0-9-]+(?:\\.[a-zA-Z0-9-]+)*+|[_.@A-Za-z0-9-]+)$";
 
     @NotBlank(message = "Login is mandatory")
     @Size(min = 3, max = 50, message = "Login must be between 3 and 50 characters")
