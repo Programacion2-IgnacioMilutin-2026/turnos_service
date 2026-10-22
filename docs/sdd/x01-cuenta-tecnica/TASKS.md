@@ -1,0 +1,77 @@
+# TASKS: X01 — Autenticar cuenta técnica y obtener configuración
+
+**SPEC:** `docs/sdd/x01-cuenta-tecnica/SPEC.md` (aprobada el 2026-10-21)
+**PLAN:** `docs/sdd/x01-cuenta-tecnica/PLAN.md` (aprobado el 2026-10-21)
+
+Las tareas siguen el "Orden de implementación" del PLAN, con un cambio de orden avisado al usuario el 2026-10-21: TASK-04 se hace antes que TASK-02, porque el caso de uso del login inicial necesita el cliente de la cátedra para que la aplicación arranque. Orden real: TASK-01 y TASK-04, TASK-02, TASK-03, TASK-05, TASK-06 y TASK-07. Rutas relativas a `src/main/java/turnos/` y `src/test/java/turnos/`, salvo indicación.
+
+- [x] **TASK-01 · Dominio del slice `integration`**
+  - Alcance: crea en `integration/domain/model/` los `record` `TechnicalIntegration`, `TechnicalSession` y `TechnicalLoginPolicy`, los enum `ProvisioningStatus` e `IntegrationState`, y la interfaz sellada `TechnicalLoginResult` con `Success`, `ConfigurationError` y `Unavailable`; en `integration/domain/ports/` los puertos de entrada `StartTechnicalSessionUseCase`, `GetTechnicalSessionUseCase` y `RenewTechnicalSessionUseCase`, y los de salida `TechnicalLoginClient` y `TechnicalSessionRepository`. Sin implementaciones.
+  - Depende de: ninguna
+  - Resuelve: base de CA-02, CA-04, CA-10, CA-11 y CA-13
+  - Validación: `./mvnw test -Dtest='TechnicalSessionTest,TechnicalLoginPolicyTest'`: `canAttemptLogin` es falso siempre en `CONFIGURATION_ERROR`, y en `ENABLED` y `DEGRADED` solo es verdadero si pasó el intervalo; las esperas son 1, 2, 4 y 8 s y nunca superan 30 s. Chequeo 1 de la skill
+  - Resultado: 2026-10-21. `TechnicalSessionTest`: 6 tests en verde (error de configuración nunca permite otro login; conectando tampoco; degradada y habilitada solo después de 60 s; solo `ENABLED` está habilitada; el JWT no aparece en el `toString` de la sesión ni del resultado). `TechnicalLoginPolicyTest`: 2 en verde (esperas 0, 1, 2, 4 y 8 s; tope de 30 s). Agregado sobre el PLAN: `CONNECTING` tampoco permite un login a pedido, porque el login inicial ya está en curso; y los `toString` ocultan el JWT. Prueba en negativo: permitir reintentar con error de configuración hace fallar un test; restaurado con hash idéntico. Chequeo 1 de la skill sin resultados.
+
+- [x] **TASK-02 · Login inicial con reintentos**
+  - Alcance: crea `integration/application/usecases/StartTechnicalSessionUseCaseImpl`, `integration/application/service/TechnicalSessionService` (con el método de arranque), `integration/infrastructure/persistence/adapter/InMemoryTechnicalSessionRepositoryAdapter` y `config/ClockConfig`.
+  - Depende de: TASK-01
+  - Resuelve: CA-02, CA-03 y CA-04 (lógica)
+  - Validación: `./mvnw test -Dtest=StartTechnicalSessionUseCaseImplTest`, con un cliente falso que devuelve una secuencia de resultados y esperas de milisegundos:
+    - `Success` con `PROVISIONED` → `ENABLED` con el JWT y la integración.
+    - Cada estado distinto de `PROVISIONED` → tantos intentos como el máximo y `DEGRADED`.
+    - `ConfigurationError` → un solo intento y `CONFIGURATION_ERROR`.
+    - `Unavailable` dos veces y después `Success` → tres intentos y `ENABLED`.
+    - Chequeos 1 y 2 de la skill.
+  - Resultado: 2026-10-21. `StartTechnicalSessionUseCaseImplTest`: 11 tests en verde con un cliente falso de secuencias (`ScriptedLoginClient`) y esperas de milisegundos: `PROVISIONED` al primer intento → `ENABLED` con el JWT y la integración, guardada en el repositorio; `PENDING`, `FAILED`, `REVOKED` y `UNKNOWN` → 5 intentos y `DEGRADED` sin JWT; `ConfigurationError` → 1 intento y `CONFIGURATION_ERROR`; `Unavailable` dos veces y luego éxito → 3 intentos y `ENABLED`; siempre `Unavailable` → 5 intentos y `DEGRADED`; durante los intentos la sesión está en `CONNECTING`; cada intento se registra (`attempt 1/5 failed: HTTP 503`, `succeeded: groupId=…, provisioningStatus=PROVISIONED`) sin el JWT; el error de configuración se registra en `ERROR`. `InMemoryTechnicalSessionRepositoryAdapterTest`: 2 en verde. Agregado sobre el PLAN: `CatedraClientConfiguration` (en `infrastructure/client`) crea el bean `TechnicalLoginPolicy` a partir de las propiedades; y el login inicial no necesita compartir un candado con la renovación, porque solo corre en `CONNECTING`, estado en el que `canAttemptLogin` rechaza los logins a pedido. Prueba en negativo: tratar el error de configuración como reintentable hace fallar 2 tests; restaurado con hash idéntico. `./mvnw test`: 151 en verde (el contexto arranca con el caso de uso conectado); los cinco chequeos de la skill sin resultados.
+
+- [x] **TASK-03 · Consultar y renovar la sesión a pedido**
+  - Alcance: crea `GetTechnicalSessionUseCaseImpl` y `RenewTechnicalSessionUseCaseImpl` (candado compartido con el login inicial, intervalo mínimo y JWT vigente) y suma sus métodos al service.
+  - Depende de: TASK-02
+  - Resuelve: CA-06, CA-10, CA-11, CA-12 y CA-13
+  - Validación: `./mvnw test -Dtest='GetTechnicalSessionUseCaseImplTest,RenewTechnicalSessionUseCaseImplTest'`, con un `Clock` controlado y un cliente falso que cuenta llamadas:
+    - Habilitada: pedir la sesión no hace logins.
+    - 20 hilos piden renovar a la vez, con el cliente demorando hasta que todos pidieron: un solo login, y todos reciben el JWT nuevo.
+    - Degradada: ningún login antes de 60 s, uno después.
+    - Error de configuración: ningún login.
+    - JWT rechazado que ya no es el vigente: devuelve el vigente sin login.
+    - Habilitada y renovada hace menos del intervalo: ningún login.
+  - Resultado: 2026-10-21. `GetTechnicalSessionUseCaseImplTest`: 3 en verde (devuelve la sesión habilitada tal cual; lee la vigente en cada llamada; vacío en `CONNECTING`, `DEGRADED` y `CONFIGURATION_ERROR`). `RenewTechnicalSessionUseCaseImplTest`: 9 en verde con `MutableClock` y `ScriptedLoginClient`: degradada, ningún login a los 3 s ni a los 53 s y uno a los 60 s (CA-10); error de configuración, 10 pedidos y ningún login (CA-11); conectando, ningún login; JWT A renovado a B y un segundo pedido con A recibe B sin otro login (CA-12); JWT B rechazado a los 10 s de obtenerlo, ningún login (CA-13); 20 pedidos simultáneos, 1 login y los 20 reciben B (CA-06); renovación fallida → `DEGRADED`, sin provisión → `DEGRADED`, rechazo → `CONFIGURATION_ERROR` sin más logins. Regla de diseño: la renovación devuelve una sesión con un JWT distinto del rechazado, o vacío; nunca el mismo JWT rechazado. Pruebas en negativo: sin el candado (`lock` y `unlock`) la cátedra recibe 20 logins en lugar de 1; sin la regla del JWT ya renovado fallan 2 tests; restaurado con hash idéntico. Un primer intento de la prueba del candado sacó solo `lock()` y falló por otra causa; se repitió correctamente. El test de concurrencia pasó 5 corridas seguidas. `./mvnw test`: 163 en verde; los chequeos de la skill sin resultados.
+
+- [x] **TASK-04 · Cliente HTTP de la cátedra**
+  - Alcance: crea en `integration/infrastructure/client/` `CatedraLoginClientAdapter`, `CatedraProperties`, los DTO del login y de la integración, y su mapper. Traduce `200` a `Success`, `4xx` a `ConfigurationError` y `5xx`, timeout o conexión rechazada a `Unavailable`; con configuración faltante, warning con las propiedades y `ConfigurationError` sin request.
+  - Depende de: TASK-01
+  - Resuelve: CA-01, CA-03, CA-04, CA-07 y CA-08 (adaptador)
+  - Validación: `./mvnw test -Dtest=CatedraLoginClientAdapterTest`, contra el servidor HTTP del JDK en un puerto aleatorio:
+    - El request a `/api/authenticate` lleva `test-login`, `test-password` y `rememberMe: true`.
+    - La respuesta del anexo se traduce a `Success` con los cinco datos; los campos `redis*` y `kafkaCatalogTopic` se descartan.
+    - `401`, `403` y `404` con `STUDENT_INTEGRATION_NOT_FOUND` → `ConfigurationError`.
+    - `503`, `500`, una demora mayor al timeout de lectura y un puerto cerrado → `Unavailable`.
+    - Sin cada una de las tres propiedades: warning que la nombra y ningún request.
+    - Con `OutputCaptureExtension`: la salida no contiene el JWT de test ni `test-password`.
+  - Resultado: 2026-10-21. `CatedraLoginClientAdapterTest`: 16 tests en verde contra el servidor HTTP del JDK (`FakeCatedraServer`, reutilizable en TASK-05): request `POST /api/authenticate` con `test-login`, `test-password` y `rememberMe: true`; respuesta del anexo → `Success` con los cinco datos (Redis descartado); `PENDING` sigue siendo `Success` con ese estado; `401`, `403` y `404` `STUDENT_INTEGRATION_NOT_FOUND` y `400` → `ConfigurationError` con el `code`; `500`, `502` y `503`, demora mayor al timeout de lectura (500 ms) y puerto cerrado → `Unavailable`; sin cada propiedad, warning que la nombra y ningún request; la salida y los resultados no contienen el JWT ni `test-password`. `TechnicalIntegrationMapperTest`: 9 en verde (estados desconocidos, en minúscula o nulos → `UNKNOWN`). Prueba en negativo: con `rememberMe: false` falla un test; restaurado con hash idéntico. `./mvnw test`: 138 en verde; los cinco chequeos de la skill sin resultados.
+
+- [x] **TASK-05 · Arranque, configuración e integración**
+  - Alcance: crea `integration/infrastructure/startup/TechnicalSessionStartup` (escucha `ApplicationReadyEvent` y corre el login inicial en un hilo virtual); suma `turnos.catedra.*` a `application.yaml`, las tres variables sin valores a `.env.example` y la documentación a `CLAUDE.md`.
+  - Depende de: TASK-02, TASK-04
+  - Resuelve: CA-01, CA-05, CA-07 y CA-08 (aplicación completa)
+  - Validación: `./mvnw test -Dtest=TechnicalSessionIntegrationTest`, con la aplicación completa, Postgres de Testcontainers y la cátedra simulada:
+    - Al arrancar, la sesión queda `ENABLED` con los datos de la respuesta.
+    - Con la cátedra caída, la aplicación arranca, y registrarse e iniciar sesión por HTTP responden `201` y `200`.
+    - Sin configuración de la cátedra: arranca, warning con las propiedades, ningún request a la cátedra simulada.
+    - La salida no contiene el JWT de test ni la `password` de test.
+    - Regresión: `./mvnw test` completo en verde.
+  - Resultado: 2026-10-21. Tres clases de integración con la aplicación completa, Postgres de Testcontainers y `FakeCatedraServer`: `TechnicalSessionIntegrationTest` (al arrancar la sesión queda habilitada con el JWT de test y la integración de la respuesta; un solo request con `test-login` y `rememberMe: true`; el log dice `Technical login succeeded: groupId=proyecto-juan-perez, provisioningStatus=PROVISIONED` sin el JWT ni la contraseña), `TechnicalSessionCatedraDownIntegrationTest` (cátedra con `503`: 5 intentos, `DEGRADED`, cada intento en el log; registrar `201` e iniciar sesión `200` por HTTP) y `TechnicalSessionWithoutConfigurationIntegrationTest` (sin usuario ni contraseña: arranca, warning con las dos propiedades, `CONFIGURATION_ERROR` y ningún request). Agregado sobre el PLAN, avisado al usuario: los tests de Maven no leen el `.env` local (`spring.config.import` usa `${turnos.env-file:.env}` y surefire apunta `turnos.env-file` a un archivo inexistente), para que las credenciales reales de TASK-06 nunca se usen en los tests; `TurnosServiceApplicationTests` lo comprueba. Cambio menor sobre el PLAN: `application.yaml` declara solo las tres propiedades obligatorias; timeouts y reintentos quedan con sus valores por defecto de `CatedraProperties`, documentados en un comentario. Pruebas en negativo: sin la protección del `.env` (y con el `.env` local presente) falla `testsDoNotReadTheLocalEnvFile`; sin `@EventListener` la sesión nunca se habilita (timeout de 10 s); restaurados con hash idéntico. La app real (`./mvnw spring-boot:run` con el compose) sigue leyendo el `.env`: arranca en 2,7 s y registra el warning de las tres propiedades de la cátedra faltantes. `./mvnw clean verify`: 167 en verde; los cinco chequeos de la skill sin resultados.
+
+- [x] **TASK-06 · Prueba manual con la cátedra real**
+  - Alcance: el usuario carga `TURNOS_CATEDRA_BASE_URL`, `TURNOS_CATEDRA_USERNAME` y `TURNOS_CATEDRA_PASSWORD` en su `.env` local, sin pasarlos por el chat; se levanta la aplicación con `./mvnw spring-boot:run` y el compose. Sin cambios de código.
+  - Depende de: TASK-05
+  - Resuelve: CA-09
+  - Validación: el log muestra el login técnico exitoso con el `groupId` y `PROVISIONED`; buscar en el log que no aparezcan el JWT técnico ni la `password`. Si la cátedra no está disponible, queda como no verificado
+  - Resultado: 2026-10-21. Primer intento: las tres variables estaban entre comillas en el `.env`. La aplicación arrancaba, pero el login lanzaba `InvalidUrlException: Bad authority` sin atrapar en el hilo `technical-login` y la sesión quedaba en `CONNECTING` para siempre. Defecto corregido con aprobación del usuario (SPEC D8, RF-01 ampliado, RF-13, CA-14): el adaptador valida que `base-url` sea `http`/`https` con host y, si no, avisa (con la pista de quitar las comillas) y responde `ConfigurationError`; cualquier excepción no prevista es `Unavailable`, en el adaptador y en los dos casos de uso. Tests nuevos: 5 URLs inválidas y un error inesperado en `CatedraLoginClientAdapterTest` (22 en verde), 2 en `StartTechnicalSessionUseCaseImplTest` (13) y 1 en `RenewTechnicalSessionUseCaseImplTest` (10). Prueba en negativo: sin la protección del caso de uso fallan 2 tests; restaurado con hash idéntico. `.env.example` aclara que los valores van sin comillas. Verificación en la app real con la URL entre comillas (solo por variable de entorno): sin excepciones sin atrapar, warning `turnos.catedra.base-url is not a valid http or https URL (remove the quotes from the .env value)` y error de configuración. Prueba con la cátedra real, con el `.env` ya sin comillas: `./mvnw spring-boot:run` arrancó en 2,76 s y el log mostró `INFO [technical-login] Technical login succeeded: groupId=proyecto-ignacio-milutin, provisioningStatus=PROVISIONED`. La contraseña aparece 0 veces en el log; ningún JWT (`eyJ…`); 0 excepciones sin atrapar. App detenida y compose apagado.
+
+- [ ] **TASK-07 · Regresión, chequeos y SonarQube**
+  - Alcance: corrida completa, chequeos de la skill y revisión del análisis del PR. Sin cambios de código, salvo correcciones que surjan, que se anotan aquí.
+  - Depende de: TASK-01 a TASK-06
+  - Resuelve: regresión de T01 y T02, y comprobación de todos los CA
+  - Validación: `./mvnw clean verify` en verde y con el reporte de JaCoCo; los cinco chequeos de la sección 12 de la skill sin resultados, salvo las excepciones autorizadas; cuando el usuario abra el PR, issues, hotspots y cobertura del código nuevo leídos con la API de SonarQube Cloud; revisión de que cada CA tiene su evidencia
+  - Resultado: parcial, 2026-10-21. `./mvnw clean verify`: 176 tests en verde y reporte de JaCoCo (41 clases; líneas 368/384, 95,8 %; ramas 111/124, 89,5 %). Los cinco chequeos de la skill sin resultados. `.env` y `secrets/` fuera de git. Evidencia por criterio: CA-01 TASK-04, 05 y 06; CA-02 TASK-02; CA-03 TASK-02 y 04; CA-04 TASK-02, 04 y 05; CA-05 TASK-05; CA-06 TASK-03; CA-07 TASK-04, 05 y 06; CA-08 TASK-04, 05 y 06; CA-09 TASK-06; CA-10 a CA-13 TASK-03; CA-14 TASK-06. Pendiente: la revisión de SonarQube del PR, cuando el usuario lo abra.
