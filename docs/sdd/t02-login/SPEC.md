@@ -215,10 +215,10 @@ Ninguna.
 
 Decisiones tomadas (2026-10-20):
 
-- **D1 · Validación del JWT en endpoints protegidos:** fuera de T02; se hace con la primera funcionalidad que tenga un endpoint protegido.
+- **D1 · Validación del JWT en endpoints protegidos:** fuera de T02; se hace con la primera funcionalidad que tenga un endpoint protegido. Se hizo en `docs/sdd/validacion-jwt/` (2026-10-23), como funcionalidad propia antes de T03, por indicación del usuario.
 - **D2 · Cuenta no activa:** `401` `INVALID_CREDENTIALS`, mismo cuerpo que un `login` inexistente.
 - **D3 · Clave privada faltante o inválida:** el servicio no arranca y registra un error de configuración claro.
 - **D4 · Vigencia del token:** configurable, 24 horas (86 400 segundos) por defecto.
 - **D5 · Campo faltante:** ausente, `null` o texto vacío responde `400`; un `username` de solo espacios responde `401`.
 - **D6 · Cierre de sesión:** se mantiene local en la app, como definen A03 y el contrato común §1.6. El backend no participa y no se cambia documentación.
-- **D7 · Clave pública:** no se expone por endpoint. T02 solo configura la clave privada; la pública se configura en turnos y en catálogo cuando cada uno empiece a validar el token.
+- **D7 · Clave pública:** no se expone por endpoint. T02 solo configura la clave privada; la pública se configura en turnos y en catálogo cuando cada uno empiece a validar el token. Aclaración (2026-10-23, `validacion-jwt`, DA): en turnos la clave pública no se configura; se obtiene de la privada, igual que para firmar (decisión 004). Configurarla aparte queda solo para catálogo.
