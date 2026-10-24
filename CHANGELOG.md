@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests de la validacion del jwt.
 - Tests para el CORS.
 - Documentacion de decisiones sobre la validacion del jwt y configuracion de CORS.
+- Se maneja error 'no resource' para que no revelar informacion.
 ### Changed
 - SecurityConfig ahora funciona con la cadena de seguridad, sumando el CORS.
 - La configuracion del CORS se suma al application.yaml. Le agrega los orgines permitidos.
