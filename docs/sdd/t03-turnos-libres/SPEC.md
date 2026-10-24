@@ -199,7 +199,7 @@ No conviertas una preferencia del agente en una restricción. -->
 - El JWT técnico nunca sale hacia la app ni hacia catálogo; el del usuario se reenvía a catálogo sin modificarlo.
 - La suite normal de tests (`./mvnw test`) no llama a la cátedra real ni al catálogo: los simula, con respuestas grabadas de la cátedra real y limpiadas antes de versionarse. La cátedra real se prueba en una suite E2E separada (`src/test/java/e2e/`, `./mvnw test -Pe2e`), que lee las credenciales del `.env` local y queda salteada si no están (decisión 010, por indicación del usuario del 2026-10-24).
 - Los controllers obtienen la identidad y el token con la convención de la decisión 008.
-- Aplicar la skill `hexagonal-vertical-slicing` con las excepciones autorizadas; la dependencia con `integration` se decide en el PLAN (skill §9).
+- Aplicar la skill `hexagonal-vertical-slicing` con las excepciones autorizadas; la dependencia con `catedra` (antes `integration`) se decide en el PLAN (skill §9).
 - No cambiar el comportamiento de T01, T02, X01 ni la validación del JWT.
 
 ## Criterios de aceptación

@@ -40,7 +40,7 @@ Se aplica la skill `hexagonal-vertical-slicing` (`documentacion/.claude/skills/h
 | Paquete | Qué contiene |
 | --- | --- |
 | `turnos.user` | Usuarios finales: T01 (`POST /api/register`) y T02 (`POST /api/authenticate`, emite el JWT RS256). Además, las piezas que validan ese JWT (`infrastructure/security`, decisión 008) |
-| `turnos.integration` | Sesión técnica con la cátedra (X01): login técnico al arrancar, estado en memoria, renovación a pedido |
+| `turnos.catedra` | Pasarela hacia la cátedra. Sesión técnica (X01): login técnico al arrancar, estado en memoria, renovación a pedido. Hasta T03 se llamaba `integration` (decisión 009) |
 | `turnos.config` | Configuración transversal, sin lógica de negocio: `SecurityConfig`, `SecurityProblemHandler`, `CorsProperties`, `ApiExceptionHandler`, `JpaAuditingConfig`, `ClockConfig` |
 
 ### Excepciones a la skill autorizadas por el usuario
@@ -85,8 +85,8 @@ Cada una lleva un comentario corto en el código. Una excepción nueva se consul
 
 - En cada operación, pedir la sesión con `GetTechnicalSessionUseCase` (JWT técnico e integración). Nunca guardar una copia en un campo: así siempre se usa la última.
 - Si la cátedra responde `401`, llamar a `RenewTechnicalSessionUseCase.renewTechnicalSession(jwtRechazado)` y repetir la operación una sola vez con la sesión que devuelve; si devuelve vacío, la integración no está disponible (según el contrato, `503` `SERVICE_DEGRADED`).
-- El control de los logins (uno a la vez, intervalo mínimo de 60 s, error de configuración sin reintentos) vive en `integration` (decisión 005). Los demás slices nunca llaman al login de la cátedra.
-- Usar `integration` desde otro slice es una dependencia entre slices: se decide con el usuario (skill §9).
+- El control de los logins (uno a la vez, intervalo mínimo de 60 s, error de configuración sin reintentos) vive en `catedra` (decisión 005). Los demás slices nunca llaman al login de la cátedra.
+- Usar `catedra` desde otro slice es una dependencia entre slices: se decide con el usuario (skill §9).
 
 ## Tests
 
@@ -95,7 +95,7 @@ Cada una lleva un comentario corto en el código. Una excepción nueva se consul
 - `TestSecurityConfiguration`: la seguridad real (cadena, validación, claves y CORS) con la clave de test, para los `@WebMvcTest`. Los tests web la importan en lugar de `SecurityConfig`.
 - `TestTokens`: arma tokens de prueba (válidos, vencidos, sin `exp`, de otra clave, `HS256`, sin firma o alterados), firmados con `TestRsaKeys`.
 - `ProbeController` (`src/test/java/turnos/config/`): `GET /api/probe`, un endpoint protegido que existe solo en los tests que lo importan (`@TestComponent`). Sirve para probar la seguridad mientras no haya endpoints protegidos reales.
-- `FakeCatedraServer` (`src/test/java/turnos/integration/`): cátedra simulada con el servidor HTTP del JDK, en un puerto aleatorio. Responde lo que indica el test y guarda los requests.
+- `FakeCatedraServer` (`src/test/java/turnos/catedra/`): cátedra simulada con el servidor HTTP del JDK, en un puerto aleatorio. Responde lo que indica el test y guarda los requests.
 - Dobles de test escritos a mano: `ScriptedLoginClient`, `MutableClock`, `FakePasswordHasher`, `InMemoryUserRepository`.
 - Integración con la app completa: clases `*IntegrationTest` con `@SpringBootTest(webEnvironment = RANDOM_PORT)` y `RestTestClient`.
 - Capa web: `@WebMvcTest` del controller con `@Import({TestSecurityConfiguration.class, ...})` y el service simulado con `@MockitoBean`.

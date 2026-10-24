@@ -43,18 +43,18 @@ Rutas relativas a `src/main/java/turnos/`, salvo indicación.
 | Componente o archivo existente | Ruta verificada | Responsabilidad y uso previsto |
 | --- | --- | --- |
 | Slice `integration` (X01) | `integration/` (24 archivos en `src/main`, 14 en `src/test`; ningún otro archivo lo importa) | Sesión técnica con la cátedra. Se renombra a `catedra` (P1) y suma la operación "consultar ocupaciones" |
-| `TechnicalSessionRepository`, `RenewTechnicalSessionUseCase` | `integration/domain/ports/` | La operación nueva lee el estado de la sesión (para D1) y pide un login nuevo con las reglas de la decisión 005 |
-| `CatedraProperties`, `CatedraLoginClientAdapter` | `integration/infrastructure/client/` | Ya tienen la URL base, su validación (`http`/`https`, comillas) y los timeouts del login. La operación nueva usa la misma URL con sus propios timeouts y reintentos (D2) |
-| `TechnicalLoginPolicy` | `integration/domain/model/` | Modelo de reintentos de X01; la política de las operaciones de usuario sigue la misma forma con otros valores |
+| `TechnicalSessionRepository`, `RenewTechnicalSessionUseCase` | `catedra/domain/ports/` (antes `integration/`) | La operación nueva lee el estado de la sesión (para D1) y pide un login nuevo con las reglas de la decisión 005 |
+| `CatedraProperties`, `CatedraLoginClientAdapter` | `catedra/infrastructure/client/` (antes `integration/`) | Ya tienen la URL base, su validación (`http`/`https`, comillas) y los timeouts del login. La operación nueva usa la misma URL con sus propios timeouts y reintentos (D2) |
+| `TechnicalLoginPolicy` | `catedra/domain/model/` (antes `integration/`) | Modelo de reintentos de X01; la política de las operaciones de usuario sigue la misma forma con otros valores |
 | `SecurityConfig`, convención del controller | `config/`, decisión 008 | `/api/free-slots` ya queda protegido; el controller recibe el `Jwt` con `@AuthenticationPrincipal` y pasa el token como `String` |
 | `ApiExceptionHandler` | `config/ApiExceptionHandler.java` | Hoy arma `VALIDATION_ERROR` con `fieldErrors` solo para cuerpos JSON. Los errores de parámetros de la URL (faltante, tipo, restricción) salen sin `code` (observado el 2026-10-24 con `415` y `405`); se extiende (P3) |
 | `ClockConfig` | `config/ClockConfig.java` | Reloj en UTC para "hoy", los turnos ya comenzados, `dataAsOf` y la antigüedad del caché |
-| `FakeCatedraServer` | `src/test/java/turnos/integration/` | Responde lo mismo a cualquier ruta y no guarda la consulta ni el `Authorization`. Se generaliza (ver Estrategia de validación); su comentario de la línea 68 cita el anexo y se corrige |
+| `FakeCatedraServer` | `src/test/java/turnos/catedra/` (antes `integration/`) | Responde lo mismo a cualquier ruta y no guarda la consulta ni el `Authorization`. Se generaliza (ver Estrategia de validación); su comentario de la línea 68 cita el anexo y se corrige |
 | `TestSecurityConfiguration`, `TestTokens` | `src/test/java/turnos/` | Seguridad real y tokens de prueba para los tests web e integración |
 | Dependencias | `pom.xml` | Nada nuevo: `RestClient` y `JdkClientHttpRequestFactory` (`spring-web` 7.0.9), Bean Validation, `@EnableScheduling` y `@Scheduled` (`spring-context` 7.0.9) |
 | APIs verificadas con `javap` | `spring-webmvc` 7.0.9 | `ResponseEntityExceptionHandler` tiene `handleMissingServletRequestParameter`, `handleTypeMismatch` y `handleHandlerMethodValidationException` para sobrescribir |
 
-**Convenciones y slice de referencia:** el slice `integration` (cliente HTTP en `infrastructure/client`, resultados como interfaz sellada de `record`, política de reintentos como `record` del dominio, repositorio en memoria en `persistence/adapter`) y el slice `user` (controller, DTO y mapper). Comentarios y nombres de tests sin citar documentos (`CLAUDE.md`).
+**Convenciones y slice de referencia:** el slice `catedra`, antes `integration` (cliente HTTP en `infrastructure/client`, resultados como interfaz sellada de `record`, política de reintentos como `record` del dominio, repositorio en memoria en `persistence/adapter`) y el slice `user` (controller, DTO y mapper). Comentarios y nombres de tests sin citar documentos (`CLAUDE.md`).
 
 ## Solución propuesta
 

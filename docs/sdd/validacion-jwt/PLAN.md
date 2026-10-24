@@ -52,7 +52,7 @@ Rutas relativas a `src/main/java/turnos/`, salvo indicación.
 | Dependencias | `pom.xml` | Ya están `spring-boot-starter-security-oauth2-resource-server` y su starter de test. Versiones verificadas: Spring Security 7.1.1, Spring Framework 7.0.9, Nimbus JOSE 10.9.1, Jackson 3.1.5 (`tools.jackson`) |
 | APIs verificadas con `javap` | `spring-security-oauth2-jose` y `-resource-server` 7.1.1 | `NimbusJwtDecoder.withPublicKey(...).signatureAlgorithm(...)`, `setJwtValidator`, `JwtTimestampValidator(Duration)` con `setClock`, `JwtClaimValidator`, `JwtTypeValidator`, `JwtGrantedAuthoritiesConverter` con `setAuthoritiesClaimName`, `setAuthorityPrefix` y `setAuthoritiesClaimDelimiter`, `DefaultBearerTokenResolver`. `JwtValidators.createDefault()` incluye una tolerancia de 60 s, así que no se usa (DD) |
 
-**Convenciones y slice de referencia:** el slice `user` y las excepciones autorizadas: paquete `config`, `infrastructure/security` (decisiones 001 y 004), `@Configuration` dentro de un slice para armar beans técnicos (precedente: `integration/infrastructure/client/CatedraClientConfiguration`). Comentarios del código sin citar documentos.
+**Convenciones y slice de referencia:** el slice `user` y las excepciones autorizadas: paquete `config`, `infrastructure/security` (decisiones 001 y 004), `@Configuration` dentro de un slice para armar beans técnicos (precedente: `catedra/infrastructure/client/CatedraClientConfiguration`). Comentarios del código sin citar documentos.
 
 ## Solución propuesta
 
