@@ -90,6 +90,10 @@ sequenceDiagram
     break Professional disabled
         Service-->>App: 409 (PROFESSIONAL_DISABLED, Central API not queried)
     end
+    Service->>Service: Take the enabled weekly schedules of the date's day of week
+    break No enabled schedule that day
+        Service-->>App: 200 (empty list, professional does not attend that day, Central API not queried)
+    end
 
     Service->>Central: Get occupancies (professionalId, from = to = date), technical JWT
     Central-->>Service: Occupancies, or error
@@ -116,10 +120,6 @@ sequenceDiagram
         Note over Service,Cache: Continues with the cached occupancies, response flagged as stale with their dataAsOf
     end
 
-    Service->>Service: Take the enabled weekly schedules of the date's day of week
-    break No enabled schedule that day
-        Service-->>App: 200 (empty list, professional does not attend that day)
-    end
     Service->>Service: Generate possible slots (slotDurationMinutes), discard started ones if date is today
     Service->>Service: Discard slots occupied as CONFIRMED or HELD
     break No free slot left

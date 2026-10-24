@@ -57,6 +57,11 @@ Cada una lleva un comentario corto en el código. Una excepción nueva se consul
 - Varios formatos de request o response en un slice, con nombres propios (`AuthenticateRequest`, `TokenResponse`): los nombres de la skill salen del ejemplo `product`.
 - `@Configuration` dentro de la infraestructura de un slice para armar beans técnicos que usa otra parte del servicio por una interfaz de Spring: `CatedraClientConfiguration` y `JwtValidationConfiguration` (decisión 008).
 
+### Comentarios y nombres en el código
+
+- El código, sus comentarios y los nombres de los tests no citan documentos: ni el contrato, ni el anexo de la cátedra, ni el enunciado, ni secciones, reglas o IDs de requisitos (`§`, `RF-`, `CA-`). Un comentario explica el porqué o avisa algo, con palabras propias. Un test se nombra por el comportamiento que comprueba (no "según el contrato").
+- Las referencias a documentos van en `docs/sdd/` (SPEC, PLAN y TASKS) y en `docs/decisiones/`.
+
 ### Errores HTTP
 
 - El controller atrapa las excepciones de su slice y relanza `ResponseStatusException` con el estado y la propiedad `code` del contrato (por ejemplo `USERNAME_ALREADY_EXISTS`, `INVALID_CREDENTIALS`).
