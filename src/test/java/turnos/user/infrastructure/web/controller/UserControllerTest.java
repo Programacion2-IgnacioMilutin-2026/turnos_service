@@ -4,15 +4,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import turnos.config.SecurityConfig;
+import turnos.TestSecurityConfiguration;
+import turnos.TestTokens;
 import turnos.user.application.exception.UserEmailAlreadyExistsException;
 import turnos.user.application.exception.UserLoginAlreadyExistsException;
 import turnos.user.application.service.UserService;
@@ -43,7 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UserController.class)
-@Import({SecurityConfig.class, UserDtoMapper.class})
+@Import({TestSecurityConfiguration.class, UserDtoMapper.class})
 class UserControllerTest {
 
     @Autowired
@@ -208,6 +211,44 @@ class UserControllerTest {
 
         expectProblem(register(validBody()), 500, "Internal Server Error", "INTERNAL_ERROR")
                 .andExpect(jsonPath("$.detail").value(not(containsString("database"))));
+    }
+
+    // El registro es público: cualquier Authorization se ignora, sea válido, inválido o vencido
+    @ParameterizedTest
+    @ValueSource(strings = {"valid", "invalid", "expired"})
+    void anAuthorizationHeaderDoesNotChangeTheRegistration(String kind) throws Exception {
+        given(userService.registerUser(any(), anyString())).willAnswer(invocation -> savedVersionOf(invocation.getArgument(0)));
+
+        mockMvc.perform(post("/api/register")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenOfKind(kind))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(toJson(validBody())))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1042));
+    }
+
+    @Test
+    void anAuthorizationHeaderDoesNotHideAValidationError() throws Exception {
+        Map<String, String> body = validBody();
+        body.remove("email");
+
+        ResultActions result = mockMvc.perform(post("/api/register")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer xxx")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(toJson(body)));
+
+        expectProblem(result, 400, "Bad Request", "VALIDATION_ERROR");
+        verifyNoInteractions(userService);
+    }
+
+    private String tokenOfKind(String kind) {
+        Instant now = Instant.now();
+        return switch (kind) {
+            case "valid" -> TestTokens.forUser("42", "ROLE_USER");
+            case "expired" -> TestTokens.signed(claims -> claims.subject("42").claim("auth", "ROLE_USER")
+                    .issuedAt(now.minusSeconds(3600)).expiresAt(now.minusSeconds(60)));
+            default -> "xxx";
+        };
     }
 
     private ResultActions register(Map<String, String> body) throws Exception {

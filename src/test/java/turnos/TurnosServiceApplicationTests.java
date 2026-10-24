@@ -3,8 +3,10 @@ package turnos;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.Environment;
+import turnos.config.ProbeController;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -14,6 +16,12 @@ class TurnosServiceApplicationTests {
 
 	@Test
 	void contextLoads() {
+	}
+
+	// El endpoint de prueba de la seguridad solo existe en los tests que lo importan
+	@Test
+	void theTestOnlyProbeEndpointIsNotPartOfTheApplication(@Autowired ApplicationContext context) {
+		assertThat(context.getBeansOfType(ProbeController.class)).isEmpty();
 	}
 
 	// Con un .env local, esta variable estaría definida: los tests nunca deben usar credenciales reales

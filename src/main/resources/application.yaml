@@ -26,3 +26,6 @@ turnos:
     base-url: ${TURNOS_CATEDRA_BASE_URL:}
     username: ${TURNOS_CATEDRA_USERNAME:}
     password: ${TURNOS_CATEDRA_PASSWORD:}
+  cors:
+    # Orígenes de navegador permitidos, separados por comas. Vacío por defecto: ningún navegador puede usar la API
+    allowed-origins: ${TURNOS_CORS_ALLOWED_ORIGINS:}
