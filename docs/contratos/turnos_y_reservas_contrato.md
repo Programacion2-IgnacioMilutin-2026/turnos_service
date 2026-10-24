@@ -409,7 +409,7 @@ Respuesta `200`: proceso de reserva (sección 2) en estado `CANCELLED`, con `can
 
 ### 4.1 Servicio de catálogo
 
-Turnos usa una sola ruta de catálogo, C06. Su contrato completo está en `contrato_catalogo.md`; aquí se indica cómo la usa turnos. Catálogo no guarda nada de turnos y turnos no guarda copia del catálogo: se consulta en cada operación (T03 y T04).
+Turnos usa una sola ruta de catálogo, C06. Su contrato completo está en `catalogo_y_sincronizacion_contrato.md`; aquí se indica cómo la usa turnos. Catálogo no guarda nada de turnos y turnos no guarda copia del catálogo: se consulta en cada operación (T03 y T04).
 
 `GET /api/professionals/{professionalId}`
 

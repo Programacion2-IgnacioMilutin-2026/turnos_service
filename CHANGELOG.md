@@ -47,4 +47,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentacion de decision tomada acerca de porque se desactiva el CSRF
 ### Changed
 - En UserController se cambio el orden de llamada a toDomain para que sonarqube no marque el error 'A NULL object should not be accessed'.
-- Expresion regular de UserRequest para pasar solucionar los issues de sonarqube. Se cambiaron las alternativas de esta y se soluciono para evitar StackOverflow en un input largo
+- Expresion regular de UserRequest para pasar solucionar los issues de sonarqube. Se cambiaron las alternativas de esta y se soluciono para evitar StackOverflow en un input largo.
+
+## 2026-10-24
+### Added
+- Documentacion de SDD para la validacion de jwt, utlizado pra proteger endpoints.
+- Archivos relacionados con la validacion del jwt.
+- Tests de la validacion del jwt.
+- Tests para el CORS.
+- Documentacion de decisiones sobre la validacion del jwt y configuracion de CORS.
+- Se maneja error 'no resource' para que no revelar informacion.
+### Changed
+- SecurityConfig ahora funciona con la cadena de seguridad, sumando el CORS.
+- La configuracion del CORS se suma al application.yaml. Le agrega los orgines permitidos.
+- Se modificaron los test de otras funciones pra que funcionen a corde a esta actualizacion.
