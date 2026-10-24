@@ -1,45 +1,25 @@
 package turnos.catedra;
 
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
+import turnos.FakeHttpServer;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.io.UncheckedIOException;
-import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.concurrent.Executors;
 
-// Cátedra simulada para los tests: un servidor HTTP real en un puerto aleatorio que responde lo que el test le indique
+// Cátedra simulada para los tests, sobre el servidor HTTP de test.
+// Por defecto responde a cualquier ruta con un login técnico exitoso; http() da acceso a las respuestas por ruta
 public final class FakeCatedraServer implements AutoCloseable {
 
     public static final String TOKEN = "eyJhbGciOiJIUzUxMiJ9.token-tecnico-de-test.firma";
 
-    private final HttpServer server;
-    private final List<ReceivedRequest> receivedRequests = new CopyOnWriteArrayList<>();
-    private volatile int status = 200;
-    private volatile String body = provisionedLoginResponse("PROVISIONED");
-    private volatile Duration delay = Duration.ZERO;
+    private final FakeHttpServer server;
 
-    public record ReceivedRequest(String method, String path, String contentType, String body) {
-    }
-
-    private FakeCatedraServer() throws IOException {
-        server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-        server.setExecutor(Executors.newVirtualThreadPerTaskExecutor());
-        server.createContext("/", this::handle);
-        server.start();
+    private FakeCatedraServer() {
+        server = FakeHttpServer.start();
+        server.respondToAnyPath(FakeHttpServer.Response.of(200, provisionedLoginResponse("PROVISIONED")));
     }
 
     public static FakeCatedraServer start() {
-        try {
-            return new FakeCatedraServer();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
+        return new FakeCatedraServer();
     }
 
     public void respond(int status, String body) {
@@ -47,22 +27,24 @@ public final class FakeCatedraServer implements AutoCloseable {
     }
 
     public void respondAfter(Duration delay, int status, String body) {
-        this.delay = delay;
-        this.status = status;
-        this.body = body;
+        server.respondToAnyPath(FakeHttpServer.Response.of(status, body).after(delay));
+    }
+
+    public FakeHttpServer http() {
+        return server;
     }
 
     public String baseUrl() {
-        return "http://localhost:" + server.getAddress().getPort();
+        return server.baseUrl();
     }
 
-    public List<ReceivedRequest> receivedRequests() {
-        return List.copyOf(receivedRequests);
+    public List<FakeHttpServer.ReceivedRequest> receivedRequests() {
+        return server.receivedRequests();
     }
 
     @Override
     public void close() {
-        server.stop(0);
+        server.close();
     }
 
     // La respuesta del login técnico, incluidos los campos de Redis que turnos debe descartar
@@ -83,22 +65,5 @@ public final class FakeCatedraServer implements AutoCloseable {
         return code == null
                 ? "{\"status\":%d}".formatted(status)
                 : "{\"status\":%d,\"code\":\"%s\"}".formatted(status, code);
-    }
-
-    private void handle(HttpExchange exchange) throws IOException {
-        String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
-        receivedRequests.add(new ReceivedRequest(exchange.getRequestMethod(), exchange.getRequestURI().getPath(),
-                exchange.getRequestHeaders().getFirst("Content-Type"), requestBody));
-        try {
-            Thread.sleep(delay);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-        byte[] response = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", status < 400 ? "application/json" : "application/problem+json");
-        exchange.sendResponseHeaders(status, response.length);
-        try (OutputStream output = exchange.getResponseBody()) {
-            output.write(response);
-        }
     }
 }
