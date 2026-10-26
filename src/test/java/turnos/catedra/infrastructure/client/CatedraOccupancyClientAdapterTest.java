@@ -1,0 +1,178 @@
+package turnos.catedra.infrastructure.client;
+
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import turnos.FakeHttpServer;
+import turnos.catedra.domain.model.OccupanciesResult;
+import turnos.catedra.domain.model.Occupancy;
+import turnos.catedra.domain.model.OccupancyStatus;
+import turnos.catedra.infrastructure.client.mapper.OccupancyMapper;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@ExtendWith(OutputCaptureExtension.class)
+class CatedraOccupancyClientAdapterTest {
+
+    private static final String TOKEN = "eyJ.jwt-tecnico.firma";
+    private static final String PATH = "/api/appointment-occupancies";
+    private static final LocalDate DATE = LocalDate.of(2026, 10, 26);
+    // Una lista con ocupaciones, armada a mano: el día de la grabación no había ninguna
+    private static final String TWO_OCCUPANCIES = """
+            {"professionalId":201,"from":"2026-10-26","to":"2026-10-26","occupancies":[
+              {"date":"2026-10-26","startTime":"12:00:00","status":"CONFIRMED","expiresAt":null},
+              {"date":"2026-10-26","startTime":"12:30","status":"HELD","expiresAt":"2026-10-26T11:50:00Z"}]}
+            """;
+    private static final String MISSING_INTEGRATION = """
+            {"status":403,"title":"Forbidden","code":"STUDENT_INTEGRATION_NOT_FOUND"}
+            """;
+
+    private final FakeHttpServer catedra = FakeHttpServer.start();
+
+    @AfterEach
+    void stop() {
+        catedra.close();
+    }
+
+    @Test
+    void oneDayIsQueriedWithTheTechnicalToken() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(200, recording("occupancies-200-empty.json")));
+
+        adapter().fetchOccupancies(201L, DATE, TOKEN);
+
+        FakeHttpServer.ReceivedRequest request = catedra.receivedRequests().getFirst();
+        assertThat(request.method()).isEqualTo("GET");
+        assertThat(request.path()).isEqualTo(PATH);
+        assertThat(request.query()).isEqualTo("professionalId=201&from=2026-10-26&to=2026-10-26");
+        assertThat(request.header("Authorization")).isEqualTo("Bearer " + TOKEN);
+    }
+
+    @Test
+    void theRecordedEmptyListsAreFoundWithoutOccupancies() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(200, recording("occupancies-200-empty.json")),
+                FakeHttpServer.Response.of(200, recording("occupancies-200-unknown-professional.json")));
+
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isEqualTo(new OccupanciesResult.Found(List.of()));
+        assertThat(adapter().fetchOccupancies(999999L, DATE, TOKEN)).isEqualTo(new OccupanciesResult.Found(List.of()));
+    }
+
+    @Test
+    void occupanciesAreReadWithTheirTimeAndStatus() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(200, TWO_OCCUPANCIES));
+
+        List<Occupancy> occupancies = ((OccupanciesResult.Found) adapter().fetchOccupancies(201L, DATE, TOKEN)).occupancies();
+
+        assertThat(occupancies).extracting(Occupancy::getStartTime, Occupancy::getStatus).containsExactly(
+                org.assertj.core.groups.Tuple.tuple(LocalTime.of(12, 0), OccupancyStatus.CONFIRMED),
+                org.assertj.core.groups.Tuple.tuple(LocalTime.of(12, 30), OccupancyStatus.HELD));
+    }
+
+    @Test
+    void theRecordedRejectionWithoutBodyIsATokenRejection() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(401, recording("occupancies-401-invalid-token.json")).withContentType(null));
+
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.TokenRejected.class);
+    }
+
+    @Test
+    void aMissingStudentIntegrationIsAConfigurationError() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(403, MISSING_INTEGRATION));
+
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.ConfigurationError.class);
+    }
+
+    @Test
+    void anyOtherForbiddenAnswerIsAFailure() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(403, "{\"status\":403,\"code\":\"OTHER\"}"),
+                FakeHttpServer.Response.of(403, ""));
+
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Failed.class);
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Failed.class);
+    }
+
+    @Test
+    void theRecordedBadRequestIsAnUnexpectedAnswer() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(400, recording("occupancies-400-invalid-date-range.json")));
+
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Failed.class);
+    }
+
+    @Test
+    void serverErrorsASlowAnswerAndAClosedPortAreUnavailable() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(503, "{}"), FakeHttpServer.Response.of(500, "{}"),
+                FakeHttpServer.Response.of(200, TWO_OCCUPANCIES).after(Duration.ofMillis(800)));
+        CatedraOccupancyClientAdapter adapter = adapter();
+
+        assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Unavailable.class);
+        assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Unavailable.class);
+        assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Unavailable.class);
+
+        FakeHttpServer closed = FakeHttpServer.start();
+        String closedUrl = closed.baseUrl();
+        closed.close();
+        assertThat(adapter(closedUrl).fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Unavailable.class);
+    }
+
+    @Test
+    void otherServerErrorsAreUnexpectedAnswers() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(502, "{}"));
+
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Failed.class);
+    }
+
+    @Test
+    void unreadableOrIncompleteAnswersAreFailures() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(200, "not json"), FakeHttpServer.Response.of(200, "{}"),
+                FakeHttpServer.Response.of(200, "{\"occupancies\":[{\"startTime\":\"12:00\",\"status\":\"CANCELLED\"}]}"),
+                FakeHttpServer.Response.of(200, "{\"occupancies\":[{\"startTime\":\"12:00\"}]}"));
+        CatedraOccupancyClientAdapter adapter = adapter();
+
+        for (int i = 0; i < 4; i++) {
+            assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Failed.class);
+        }
+    }
+
+    @Test
+    void theTokenNeverReachesTheOutput(CapturedOutput output) {
+        catedra.respond(PATH, FakeHttpServer.Response.of(401, ""), FakeHttpServer.Response.of(503, "{}"),
+                FakeHttpServer.Response.of(200, TWO_OCCUPANCIES));
+        CatedraOccupancyClientAdapter adapter = adapter();
+
+        for (int i = 0; i < 3; i++) {
+            adapter.fetchOccupancies(201L, DATE, TOKEN);
+        }
+
+        assertThat(output.getAll()).doesNotContain(TOKEN);
+    }
+
+    private CatedraOccupancyClientAdapter adapter() {
+        return adapter(catedra.baseUrl());
+    }
+
+    private static CatedraOccupancyClientAdapter adapter(String baseUrl) {
+        CatedraProperties properties = new CatedraProperties(baseUrl, "user", "pass", Duration.ofSeconds(5),
+                Duration.ofSeconds(10), new CatedraProperties.Login(5, Duration.ofSeconds(1), 2, Duration.ofSeconds(30),
+                Duration.ofSeconds(60)),
+                new CatedraProperties.Operations(Duration.ofMillis(500), Duration.ofMillis(500), 3, Duration.ofMillis(5), 2));
+        return new CatedraOccupancyClientAdapter(properties, new OccupancyMapper());
+    }
+
+    private static String recording(String name) {
+        try (InputStream input = CatedraOccupancyClientAdapterTest.class.getResourceAsStream("/catedra/" + name)) {
+            return new String(input.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+}

@@ -1,0 +1,18 @@
+{
+  "id_token": "eyJhbGciOiJIUzUxMiJ9.token-tecnico-de-prueba.firma",
+  "integration": {
+    "groupId": "proyecto-de-prueba",
+    "kafkaAppointmentActionsTopic": "alumnos.turnos.acciones.proyecto-de-prueba",
+    "kafkaAppointmentPhoneTopic": "catedra.turnos.telefono.proyecto-de-prueba",
+    "kafkaBootstrapServers": "kafka.catedra.example:9092",
+    "kafkaCatalogTopic": "catedra.catalog.proyecto-de-prueba",
+    "kafkaConsumerGroupId": "alumnos-proyecto-de-prueba",
+    "provisioningStatus": "PROVISIONED",
+    "redisHost": "redis.catedra.example",
+    "redisPassword": "secreto-redis-de-prueba",
+    "redisPort": 6379,
+    "redisReadNamespace": "catedra:sync:*",
+    "redisUsername": "grp_proyecto-de-prueba",
+    "redisWriteNamespace": "alumnos:proyecto-de-prueba:*"
+  }
+}

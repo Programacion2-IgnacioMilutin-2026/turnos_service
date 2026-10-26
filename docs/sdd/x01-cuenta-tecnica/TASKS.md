@@ -1,5 +1,7 @@
 # TASKS: X01 — Autenticar cuenta técnica y obtener configuración
 
+> **Nota (2026-10-24):** en este documento, el slice `integration` (paquete `turnos.integration`, carpeta `integration/`) es el que desde T03 se llama `catedra` (decisión 009). El contenido se conserva como se escribió, porque registra lo que se hizo en su momento. Cuando aparece como campo JSON de la respuesta de la cátedra (`integration`), no es el paquete y no cambió.
+
 **SPEC:** `docs/sdd/x01-cuenta-tecnica/SPEC.md` (aprobada el 2026-10-21)
 **PLAN:** `docs/sdd/x01-cuenta-tecnica/PLAN.md` (aprobado el 2026-10-21)
 

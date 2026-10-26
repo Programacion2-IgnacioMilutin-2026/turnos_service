@@ -459,7 +459,7 @@ Turnos acepta las horas en `HH:mm` y en `HH:mm:ss`. Un profesional sin horarios 
 - Salvo el login técnico, todas las rutas llevan `Authorization: Bearer <jwt-tecnico>` y exigen `ROLE_STUDENT_CLIENT`.
 - La integración se obtiene siempre del JWT; ninguna operación acepta `groupId`.
 - El JWT técnico se guarda solo en memoria. Nunca se envía a la app ni a catálogo.
-- Los errores usan `application/problem+json`. Se decide por `status` y `code`, nunca por el texto de `detail`. Los `503` y `500` no garantizan `code`.
+- Los errores usan `application/problem+json`. Se decide por `status` y `code`, nunca por el texto de `detail`. Los `503` y `500` no garantizan `code`. El `401` es la excepción: llega sin cuerpo y sin `Content-Type`, solo con `WWW-Authenticate: Bearer error="invalid_token"`, así que se decide únicamente por el estado.
 - Un `401` en cualquier ruta ejecuta el login técnico (4.2.2) y repite la operación una sola vez.
 - Un `403` `STUDENT_INTEGRATION_NOT_FOUND` es un error de configuración: se registra y se responde `503` `SERVICE_DEGRADED` sin exponer detalles.
 - Ante timeout, corte de conexión, `503` o `500`, se reintenta con espera creciente y un máximo de intentos.
