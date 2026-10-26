@@ -12,7 +12,6 @@ Los datos de profesionales y fechas son los ficticios de la cátedra.
 | `occupancies-200-empty.json` | `GET /api/appointment-occupancies?professionalId=201&from=2026-10-26&to=2026-10-26` | `200`, `application/json` | Sin ocupaciones. El día de la grabación no había ninguna reserva ni hold en la cátedra: diez consultas a profesionales y fechas distintas devolvieron la lista vacía |
 | `occupancies-200-unknown-professional.json` | Igual, con `professionalId=999999` | `200`, `application/json` | Un profesional inexistente no da `404`: devuelve la lista vacía |
 | `occupancies-400-invalid-date-range.json` | Igual, con `from=2026-10-27&to=2026-10-26` | `400`, `application/problem+json` | `code` `INVALID_DATE_RANGE`, con los campos propios del formato de errores de la cátedra (`type`, `message`, `path`) |
-| `occupancies-400-missing-parameter.json` | Igual, sin `professionalId` | `400`, `application/problem+json` | `code` `VALIDATION_ERROR` |
 | `occupancies-401-invalid-token.json` | Igual, con `Authorization: Bearer token-invalido` | `401`, **sin `Content-Type`** | **Cuerpo vacío** (por eso el archivo está vacío). Trae `WWW-Authenticate: Bearer error="invalid_token"` |
 
 Tiempo de respuesta observado: unos 0,5 s por consulta.
