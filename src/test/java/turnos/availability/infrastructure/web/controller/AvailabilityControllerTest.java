@@ -112,6 +112,21 @@ class AvailabilityControllerTest {
     }
 
     @ParameterizedTest
+    @ValueSource(strings = {"0", "-1"})
+    void aProfessionalIdThatIsNotPositiveHasItsOwnMessage(String professionalId) throws Exception {
+        request("professionalId=" + professionalId + "&date=2026-10-26")
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("Professional id must be a positive number"));
+    }
+
+    @Test
+    void missingParametersHaveTheirOwnMessages() throws Exception {
+        request("")
+                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'professionalId')].message").value(org.hamcrest.Matchers.hasItem("Professional id is mandatory")))
+                .andExpect(jsonPath("$.fieldErrors[?(@.field == 'date')].message").value(org.hamcrest.Matchers.hasItem("Date is mandatory")));
+    }
+
+    @ParameterizedTest
     @ValueSource(strings = {"20-10-2026", "2026-02-30", "2026-10-26T10:00", "hoy"})
     void anInvalidDateIsAValidationErrorWithoutJavaTypes(String date) throws Exception {
         request("professionalId=201&date=" + date)
@@ -121,6 +136,16 @@ class AvailabilityControllerTest {
                 .andExpect(jsonPath("$.fieldErrors[0].message").value("invalid value"))
                 .andExpect(content().string(not(containsString("java."))));
         verifyNoInteractions(availabilityService);
+    }
+
+    // El idioma del cliente o del servidor no cambia los mensajes: siempre en inglés
+    @Test
+    void validationMessagesAreInEnglishWhateverLanguageTheClientAsksFor() throws Exception {
+        mockMvc.perform(get("/api/free-slots?professionalId=201").header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
+                        .header(HttpHeaders.ACCEPT_LANGUAGE, "es-AR,es;q=0.9"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("date"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("Date is mandatory"));
     }
 
     @Test

@@ -8,17 +8,18 @@ import org.springframework.format.annotation.DateTimeFormat;
 import java.time.LocalDate;
 
 // Los parámetros de la URL. Un valor que no se puede convertir (texto, número fuera de rango, fecha imposible)
-// también se informa como error de validación del campo
+// también se informa como error de validación del campo. Los mensajes son propios: los de Bean Validation
+// cambian según el idioma del servidor o del cliente
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 public class FreeSlotsRequest {
-    @NotNull
-    @Positive
+    @NotNull(message = "Professional id is mandatory")
+    @Positive(message = "Professional id must be a positive number")
     private Long professionalId;
 
-    @NotNull
+    @NotNull(message = "Date is mandatory")
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate date;
 }
