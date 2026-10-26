@@ -62,7 +62,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - La configuracion del CORS se suma al application.yaml. Le agrega los orgines permitidos.
 - Se modificaron los test de otras funciones pra que funcionen a corde a esta actualizacion.
 
-## 2026-10-25
+## 2026-10-26
 ### Added
 - Servidor http para tests simulando el servicio de catedra y de catalogo.
 - Slice 'Catalog'. Maneja las comunicaciones con el servicio de catalogo. 
