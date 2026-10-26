@@ -186,7 +186,8 @@ class CatedraLoginClientAdapterTest {
     private CatedraLoginClientAdapter adapter(String baseUrl, String username, String password, TechnicalIntegrationMapper mapper) {
         CatedraProperties properties = new CatedraProperties(baseUrl, username, password,
                 Duration.ofSeconds(2), READ_TIMEOUT, new CatedraProperties.Login(5, Duration.ofSeconds(1), 2,
-                Duration.ofSeconds(30), Duration.ofSeconds(60)));
+                Duration.ofSeconds(30), Duration.ofSeconds(60)),
+                new CatedraProperties.Operations(Duration.ofSeconds(2), Duration.ofSeconds(3), 3, Duration.ofMillis(500), 2));
         return new CatedraLoginClientAdapter(properties, mapper);
     }
 }
