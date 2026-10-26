@@ -19,6 +19,6 @@ public class AgendaSchedule {
     private boolean enabled;
 
     public boolean appliesTo(DayOfWeek day) {
-        return enabled && dayOfWeek == day;
+        return enabled && day.equals(dayOfWeek);
     }
 }
