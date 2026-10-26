@@ -61,3 +61,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SecurityConfig ahora funciona con la cadena de seguridad, sumando el CORS.
 - La configuracion del CORS se suma al application.yaml. Le agrega los orgines permitidos.
 - Se modificaron los test de otras funciones pra que funcionen a corde a esta actualizacion.
+
+## 2026-10-25
+### Added
+- Servidor http para tests simulando el servicio de catedra y de catalogo.
+- Slice 'Catalog'. Maneja las comunicaciones con el servicio de catalogo. 
+- Archivos para la comunicacion con la catedra. Dentro de slice 'Catedra'.
+- Slice 'Availability'. Maneja los turnos libres.
+- Tests para lo añadido en 'Catalog', 'Catedra' y 'Availability'.
+- Cache de 'Availability'.
+- Endpoint para obtener 'free-slots'.
+- Test End to End que incluye solo la consulta de turnos libres (T03). Solo llamados con el servicio de catedra ya que en este momento el servicio de catalogo no existe. 
+### Changed
+- Se cambio el nombre de el slice 'Integration' a 'Catedra', representando y manejando las comunicaciones con la catedra.
+- application.yaml actualizado con lo incluido en el slice 'Availability'.
