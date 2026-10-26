@@ -10,6 +10,6 @@ public class AvailabilityConfiguration {
 
     @Bean
     AvailabilityPolicy availabilityPolicy(AvailabilityProperties availabilityProperties) {
-        return new AvailabilityPolicy(availabilityProperties.zone(), availabilityProperties.cacheMaxAge());
+        return new AvailabilityPolicy(availabilityProperties.zoneId(), availabilityProperties.occupancyCacheMaxAge());
     }
 }

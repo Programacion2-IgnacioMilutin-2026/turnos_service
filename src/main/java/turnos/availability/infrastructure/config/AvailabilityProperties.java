@@ -9,6 +9,6 @@ import java.time.ZoneId;
 // Paquete infrastructure/config: excepción a la skill autorizada por el usuario
 @ConfigurationProperties("turnos.availability")
 public record AvailabilityProperties(
-        @DefaultValue("America/Argentina/Mendoza") ZoneId zone,
-        @DefaultValue("60m") Duration cacheMaxAge) {
+        @DefaultValue("America/Argentina/Mendoza") ZoneId zoneId,
+        @DefaultValue("60m") Duration occupancyCacheMaxAge) {
 }

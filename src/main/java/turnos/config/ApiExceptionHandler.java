@@ -7,6 +7,7 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -26,7 +27,7 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
     protected ResponseEntity<Object> handleMethodArgumentNotValid(
             MethodArgumentNotValidException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
         List<FieldErrorItem> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
-                .map(error -> new FieldErrorItem(error.getField(), error.getDefaultMessage()))
+                .map(error -> new FieldErrorItem(error.getField(), messageOf(error)))
                 .toList();
         ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "One or more fields are invalid");
         body.setProperty("code", "VALIDATION_ERROR");
@@ -56,6 +57,11 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
         body.setProperty("code", "INTERNAL_ERROR");
         return body;
+    }
+
+    // Un valor que no se pudo convertir trae un texto de Spring con tipos de Java: se reemplaza por uno neutro
+    private static String messageOf(FieldError error) {
+        return error.isBindingFailure() ? "invalid value" : error.getDefaultMessage();
     }
 
     record FieldErrorItem(String field, String message) {

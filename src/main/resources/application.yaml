@@ -22,10 +22,30 @@ turnos:
     token-validity: ${TURNOS_JWT_TOKEN_VALIDITY:24h}
   catedra:
     # Vacíos por defecto: si falta alguno, la aplicación arranca, avisa con un warning y no intenta el login técnico.
-    # Timeouts y reintentos tienen valores por defecto en CatedraProperties (turnos.catedra.connect-timeout, turnos.catedra.login.*)
+    # Los timeouts y reintentos del login tienen valores por defecto en CatedraProperties (turnos.catedra.connect-timeout, turnos.catedra.login.*)
     base-url: ${TURNOS_CATEDRA_BASE_URL:}
     username: ${TURNOS_CATEDRA_USERNAME:}
     password: ${TURNOS_CATEDRA_PASSWORD:}
+    operations:
+      # Consultas hechas durante el request de un usuario: esperas más cortas que las del login
+      connect-timeout: ${TURNOS_CATEDRA_OPERATIONS_CONNECT_TIMEOUT:2s}
+      read-timeout: ${TURNOS_CATEDRA_OPERATIONS_READ_TIMEOUT:3s}
+      max-attempts: ${TURNOS_CATEDRA_OPERATIONS_MAX_ATTEMPTS:3}
+      initial-delay: ${TURNOS_CATEDRA_OPERATIONS_INITIAL_DELAY:500ms}
+      multiplier: ${TURNOS_CATEDRA_OPERATIONS_DELAY_MULTIPLIER:2}
+  catalog:
+    # Vacía por defecto: la aplicación arranca, avisa con un warning y la consulta de turnos responde 503
+    base-url: ${TURNOS_CATALOG_BASE_URL:}
+    connect-timeout: ${TURNOS_CATALOG_CONNECT_TIMEOUT:2s}
+    read-timeout: ${TURNOS_CATALOG_READ_TIMEOUT:3s}
+    max-attempts: ${TURNOS_CATALOG_MAX_ATTEMPTS:3}
+    initial-delay: ${TURNOS_CATALOG_INITIAL_DELAY:500ms}
+    multiplier: ${TURNOS_CATALOG_DELAY_MULTIPLIER:2}
+  availability:
+    # Zona en la que atienden los profesionales: define "hoy" y qué turnos ya comenzaron
+    zone-id: ${TURNOS_ATTENTION_ZONE:America/Argentina/Mendoza}
+    # Cuánto se puede usar la última respuesta de la cátedra si deja de responder
+    occupancy-cache-max-age: ${TURNOS_OCCUPANCY_CACHE_MAX_AGE:60m}
   cors:
     # Orígenes de navegador permitidos, separados por comas. Vacío por defecto: ningún navegador puede usar la API
     allowed-origins: ${TURNOS_CORS_ALLOWED_ORIGINS:}
