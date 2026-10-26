@@ -1,5 +1,6 @@
 package turnos.catedra.application.usecases;
 
+import turnos.MutableClock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;

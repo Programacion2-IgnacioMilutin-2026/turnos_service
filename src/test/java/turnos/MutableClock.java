@@ -1,4 +1,4 @@
-package turnos.catedra.application.usecases;
+package turnos;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -7,15 +7,15 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 
 // Reloj de test que se adelanta a mano: permite probar el intervalo de 60 s sin esperarlo
-class MutableClock extends Clock {
+public class MutableClock extends Clock {
 
     private volatile Instant now;
 
-    MutableClock(Instant start) {
+    public MutableClock(Instant start) {
         this.now = start;
     }
 
-    void advance(Duration duration) {
+    public void advance(Duration duration) {
         now = now.plus(duration);
     }
 
