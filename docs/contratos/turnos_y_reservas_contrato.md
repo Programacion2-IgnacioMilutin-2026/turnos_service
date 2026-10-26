@@ -234,7 +234,7 @@ Respuesta `201`: proceso de reserva (sección 2) en estado `HELD`, con `expiresA
 | `400` | `INVALID_SLOT` | El turno no cae en un horario habilitado del profesional (T04 4.2 y 5.5). |
 | `404` | `PROFESSIONAL_NOT_FOUND` | El profesional no existe (T04 4.1 y 5.3). |
 | `409` | `OPEN_PROCESS_EXISTS` | El usuario ya tiene un proceso abierto (T04 3.2). |
-| `409` | `PROFESSIONAL_DISABLED` | El profesional ya no acepta turnos (T04 5.4). |
+| `409` | `PROFESSIONAL_DISABLED` | El profesional ya no acepta turnos (T04 4.5 y 5.4). |
 | `409` | `SLOT_NOT_AVAILABLE` | El turno ya está confirmado o bloqueado por otro (T04 5.6 y 5.7). |
 | `503` | `CATALOG_UNAVAILABLE` | Catálogo no responde tras los reintentos (T04 4.3). |
 | `503` | `SERVICE_DEGRADED` | Error de configuración con la cátedra (T04 5.2). |
@@ -445,7 +445,7 @@ Turnos acepta las horas en `HH:mm` y en `HH:mm:ss`. Un profesional sin horarios 
 
 | Respuesta de catálogo | Qué hace turnos |
 | --- | --- |
-| `200` | Usa los datos. En T03, si `enabled` es falso, responde `409` `PROFESSIONAL_DISABLED` (T03 4.4). |
+| `200` | Usa los datos. En T03 y T04, si `enabled` es falso, responde `409` `PROFESSIONAL_DISABLED` sin llamar a la cátedra (T03 4.4, T04 4.5). |
 | `401` o `403` | Error de integración interna: se registra y se responde `500` `INTERNAL_ERROR` (T03 4.1, T04 4.4). |
 | `404` `PROFESSIONAL_NOT_FOUND` | Responde `404` `PROFESSIONAL_NOT_FOUND` (T03 4.2, T04 4.1). |
 | `503` (incluye `CATALOG_NOT_INITIALIZED`), timeout o corte de conexión | Reintenta con espera creciente y un máximo de intentos. Agotados, responde `503` `CATALOG_UNAVAILABLE` sin llamar a la cátedra (T03 4.3, T04 4.3). |
@@ -462,7 +462,7 @@ Turnos acepta las horas en `HH:mm` y en `HH:mm:ss`. Un profesional sin horarios 
 - Los errores usan `application/problem+json`. Se decide por `status` y `code`, nunca por el texto de `detail`. Los `503` y `500` no garantizan `code`. El `401` es la excepción: llega sin cuerpo y sin `Content-Type`, solo con `WWW-Authenticate: Bearer error="invalid_token"`, así que se decide únicamente por el estado.
 - Un `401` en cualquier ruta ejecuta el login técnico (4.2.2) y repite la operación una sola vez.
 - Un `403` `STUDENT_INTEGRATION_NOT_FOUND` es un error de configuración: se registra y se responde `503` `SERVICE_DEGRADED` sin exponer detalles.
-- Ante timeout, corte de conexión, `503` o `500`, se reintenta con espera creciente y un máximo de intentos.
+- Ante timeout, corte de conexión, `503` o `500`, se reintenta con espera creciente y un máximo de intentos. La creación de un hold es la excepción: ver 4.2.4.
 - `externalPatientId` es el `sub` del JWT del usuario, como texto.
 
 #### 4.2.2 Login técnico
@@ -612,7 +612,8 @@ El hold es temporal. La vigencia real se determina por `expiresAt`; una copia lo
 | `400` `PROFESSIONAL_DISABLED` | Responde `409` `PROFESSIONAL_DISABLED` (T04 5.4). |
 | `400` `INVALID_SLOT` | Responde `400` `INVALID_SLOT` (T04 5.5). |
 | `409` `SLOT_ALREADY_RESERVED` o `SLOT_ALREADY_HELD` | Responde `409` `SLOT_NOT_AVAILABLE` (T04 5.6 y 5.7). |
-| Timeout, corte, `503` o `500` | Reintenta. Agotados, responde `503` `CENTRAL_UNAVAILABLE` y no crea ningún proceso (T04 5.8). |
+| Conexión rechazada, timeout de conexión o `503` | Reintenta. Agotados, responde `503` `CENTRAL_UNAVAILABLE` y no crea ningún proceso (T04 5.8). |
+| Timeout de respuesta, corte durante la respuesta o `500` | No reintenta, porque el hold pudo crearse. Registra y responde `503` `CENTRAL_UNAVAILABLE`, sin crear ningún proceso (T04 5.8). |
 
 #### 4.2.5 Confirmar un hold
 

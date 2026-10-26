@@ -72,6 +72,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache de 'Availability'.
 - Endpoint para obtener 'free-slots'.
 - Test End to End que incluye solo la consulta de turnos libres (T03). Solo llamados con el servicio de catedra ya que en este momento el servicio de catalogo no existe. 
+- Documentacion para el SDD de T04-CrearHold y las decisiones tomadas.
 ### Changed
 - Se cambio el nombre de el slice 'Integration' a 'Catedra', representando y manejando las comunicaciones con la catedra.
 - application.yaml actualizado con lo incluido en el slice 'Availability'.
+- Documentacion de contratos, casos de uso y secuencias debido a decisiones tomadas para aplicar T04-CrearHold.
