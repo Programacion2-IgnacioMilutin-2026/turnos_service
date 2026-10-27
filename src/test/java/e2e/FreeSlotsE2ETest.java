@@ -22,17 +22,12 @@ import turnos.TestcontainersConfiguration;
 import turnos.TurnosServiceApplication;
 import turnos.catedra.domain.ports.out.TechnicalSessionRepository;
 
-import java.io.IOException;
-import java.io.Reader;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
-import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -40,18 +35,18 @@ import static org.awaitility.Awaitility.await;
 // Contra la cátedra real, con la cuenta técnica del .env local: solo con ./mvnw test -Pe2e.
 // Sin credenciales se saltea. El catálogo es simulado mientras no exista el real; la base es de Testcontainers
 @Tag("e2e")
-@EnabledIf(value = "credentialsAvailable", disabledReason = "No catedra credentials in the local .env: E2E tests skipped")
+@EnabledIf(value = "e2e.E2ECredentials#available", disabledReason = "No catedra credentials in the local .env: E2E tests skipped")
 @SpringBootTest(classes = TurnosServiceApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureRestTestClient
 @Import(TestcontainersConfiguration.class)
 @ExtendWith(OutputCaptureExtension.class)
 class FreeSlotsE2ETest {
 
-    private static final List<String> CREDENTIALS = List.of("TURNOS_CATEDRA_BASE_URL", "TURNOS_CATEDRA_USERNAME", "TURNOS_CATEDRA_PASSWORD");
     private static final FakeHttpServer CATALOG = FakeHttpServer.start();
     // El profesional de referencia de la cátedra: lunes de 12:00 a 15:00 cada 30 minutos
     private static final String PROFESSIONAL = """
-            {"id":201,"enabled":true,"weeklySchedules":[
+            {"id":201,"firstName":"Ana","lastName":"Gomez","enabled":true,"category":{"id":1,"name":"Clinica medica","enabled":true},
+             "weeklySchedules":[
              {"dayOfWeek":"MONDAY","startTime":"12:00:00","endTime":"15:00:00","slotDurationMinutes":30,"enabled":true}]}
             """;
     private static final String REGISTER_BODY = """
@@ -68,22 +63,6 @@ class FreeSlotsE2ETest {
     @AfterAll
     static void stopCatalog() {
         CATALOG.close();
-    }
-
-    // Lee el mismo archivo que la aplicación; solo comprueba que las tres variables tengan valor, sin mostrarlas
-    static boolean credentialsAvailable() {
-        String envFile = System.getProperty("turnos.env-file", ".env");
-        Path path = Path.of(envFile);
-        if (!Files.isReadable(path)) {
-            return false;
-        }
-        Properties properties = new Properties();
-        try (Reader reader = Files.newBufferedReader(path)) {
-            properties.load(reader);
-        } catch (IOException e) {
-            return false;
-        }
-        return CREDENTIALS.stream().allMatch(name -> !properties.getProperty(name, "").isBlank());
     }
 
     @Autowired

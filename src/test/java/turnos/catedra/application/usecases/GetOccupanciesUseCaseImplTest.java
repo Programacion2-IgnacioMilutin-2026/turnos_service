@@ -5,7 +5,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
+import turnos.catedra.application.support.CatedraOperationRunner;
 import turnos.catedra.domain.model.CatedraOperationPolicy;
+import turnos.catedra.domain.model.CatedraResponse;
 import turnos.catedra.domain.model.OccupanciesResult;
 import turnos.catedra.domain.model.Occupancy;
 import turnos.catedra.domain.model.OccupancyStatus;
@@ -31,9 +33,11 @@ class GetOccupanciesUseCaseImplTest {
 
     private static final Instant START = Instant.parse("2026-10-25T12:00:00Z");
     private static final LocalDate DATE = LocalDate.of(2026, 10, 26);
-    private static final OccupanciesResult FOUND = new OccupanciesResult.Found(List.of(
-            Occupancy.builder().startTime(LocalTime.of(12, 0)).status(OccupancyStatus.CONFIRMED).build()));
-    private static final OccupanciesResult UNAVAILABLE = new OccupanciesResult.Unavailable("Catedra answered HTTP 503");
+    private static final List<Occupancy> OCCUPANCIES = List.of(
+            Occupancy.builder().startTime(LocalTime.of(12, 0)).status(OccupancyStatus.CONFIRMED).build());
+    private static final OccupanciesResult FOUND = new OccupanciesResult.Found(OCCUPANCIES);
+    private static final CatedraResponse<List<Occupancy>> ANSWERED = new CatedraResponse.Answered<>(OCCUPANCIES);
+    private static final CatedraResponse<List<Occupancy>> UNAVAILABLE = new CatedraResponse.Unavailable<>("Catedra answered HTTP 503");
 
     private final MutableClock clock = new MutableClock(START);
     private final InMemoryTechnicalSessionRepositoryAdapter repository = new InMemoryTechnicalSessionRepositoryAdapter();
@@ -41,13 +45,13 @@ class GetOccupanciesUseCaseImplTest {
     private final ScriptedOccupancyClient occupancyClient = new ScriptedOccupancyClient();
     private final RenewTechnicalSessionUseCaseImpl renew = new RenewTechnicalSessionUseCaseImpl(loginClient, repository,
             new TechnicalLoginPolicy(1, Duration.ofMillis(1), 2, Duration.ofMillis(1), Duration.ofSeconds(60)), clock);
-    private final GetOccupanciesUseCaseImpl useCase = new GetOccupanciesUseCaseImpl(occupancyClient, repository, renew,
-            new CatedraOperationPolicy(3, Duration.ofMillis(1), 2));
+    private final GetOccupanciesUseCaseImpl useCase = new GetOccupanciesUseCaseImpl(occupancyClient,
+            new CatedraOperationRunner(repository, renew, new CatedraOperationPolicy(3, Duration.ofMillis(1), 2)));
 
     @Test
     void anEnabledSessionUsesItsCurrentToken() {
         repository.save(enabled("jwt-a"));
-        occupancyClient.then(FOUND);
+        occupancyClient.then(ANSWERED);
 
         assertThat(useCase.getOccupancies(201L, DATE)).isEqualTo(FOUND);
         assertThat(occupancyClient.tokens()).containsExactly("jwt-a");
@@ -68,7 +72,7 @@ class GetOccupanciesUseCaseImplTest {
     void aDegradedSessionLogsInFirstAndUsesTheNewToken() {
         repository.save(TechnicalSession.degraded(START.minusSeconds(120)));
         loginClient.then(ScriptedLoginClient.success("jwt-b", ProvisioningStatus.PROVISIONED));
-        occupancyClient.then(FOUND);
+        occupancyClient.then(ANSWERED);
 
         assertThat(useCase.getOccupancies(201L, DATE)).isEqualTo(FOUND);
         assertThat(loginClient.calls()).isEqualTo(1);
@@ -97,7 +101,7 @@ class GetOccupanciesUseCaseImplTest {
     void aRejectedTokenRenewsTheSessionAndRepeatsOnceWithTheNewToken() {
         repository.save(enabled("jwt-a"));
         loginClient.then(ScriptedLoginClient.success("jwt-b", ProvisioningStatus.PROVISIONED));
-        occupancyClient.then(new OccupanciesResult.TokenRejected()).then(FOUND);
+        occupancyClient.then(new CatedraResponse.TokenRejected<>()).then(ANSWERED);
 
         assertThat(useCase.getOccupancies(201L, DATE)).isEqualTo(FOUND);
         assertThat(loginClient.calls()).isEqualTo(1);
@@ -108,7 +112,7 @@ class GetOccupanciesUseCaseImplTest {
     void aSecondRejectionIsNotRepeatedAgainAndIsUnavailable() {
         repository.save(enabled("jwt-a"));
         loginClient.then(ScriptedLoginClient.success("jwt-b", ProvisioningStatus.PROVISIONED));
-        occupancyClient.then(new OccupanciesResult.TokenRejected());
+        occupancyClient.then(new CatedraResponse.TokenRejected<>());
 
         assertThat(useCase.getOccupancies(201L, DATE)).isInstanceOf(OccupanciesResult.Unavailable.class);
         assertThat(loginClient.calls()).isEqualTo(1);
@@ -119,7 +123,7 @@ class GetOccupanciesUseCaseImplTest {
     void aRejectedTokenWithoutARenewedSessionIsUnavailable() {
         repository.save(enabled("jwt-a"));
         loginClient.then(new TechnicalLoginResult.Unavailable("Catedra is not reachable"));
-        occupancyClient.then(new OccupanciesResult.TokenRejected());
+        occupancyClient.then(new CatedraResponse.TokenRejected<>());
 
         assertThat(useCase.getOccupancies(201L, DATE)).isInstanceOf(OccupanciesResult.Unavailable.class);
         assertThat(occupancyClient.tokens()).containsExactly("jwt-a");
@@ -128,7 +132,7 @@ class GetOccupanciesUseCaseImplTest {
     @Test
     void aMissingStudentIntegrationIsAConfigurationErrorWithoutRetrying(CapturedOutput output) {
         repository.save(enabled("jwt-a"));
-        occupancyClient.then(new OccupanciesResult.ConfigurationError("Catedra answered STUDENT_INTEGRATION_NOT_FOUND"));
+        occupancyClient.then(new CatedraResponse.ConfigurationError<>("Catedra answered STUDENT_INTEGRATION_NOT_FOUND"));
 
         assertThat(useCase.getOccupancies(201L, DATE)).isInstanceOf(OccupanciesResult.ConfigurationError.class);
         assertThat(occupancyClient.tokens()).hasSize(1);
@@ -147,7 +151,7 @@ class GetOccupanciesUseCaseImplTest {
     @Test
     void aLaterSuccessfulAttemptEndsTheRetries() {
         repository.save(enabled("jwt-a"));
-        occupancyClient.then(UNAVAILABLE).then(FOUND);
+        occupancyClient.then(UNAVAILABLE).then(ANSWERED);
 
         assertThat(useCase.getOccupancies(201L, DATE)).isEqualTo(FOUND);
         assertThat(occupancyClient.tokens()).hasSize(2);
@@ -156,9 +160,18 @@ class GetOccupanciesUseCaseImplTest {
     @Test
     void anUnexpectedAnswerIsAFailureWithoutRetrying() {
         repository.save(enabled("jwt-a"));
-        occupancyClient.then(new OccupanciesResult.Failed("Catedra answered HTTP 400"));
+        occupancyClient.then(new CatedraResponse.Failed<>("Catedra answered HTTP 400"));
 
         assertThat(useCase.getOccupancies(201L, DATE)).isInstanceOf(OccupanciesResult.Failed.class);
+        assertThat(occupancyClient.tokens()).hasSize(1);
+    }
+
+    @Test
+    void aQueryThatMayHaveBeenProcessedIsUnavailableWithoutRetrying() {
+        repository.save(enabled("jwt-a"));
+        occupancyClient.then(new CatedraResponse.Uncertain<>("Catedra answered HTTP 500"));
+
+        assertThat(useCase.getOccupancies(201L, DATE)).isInstanceOf(OccupanciesResult.Unavailable.class);
         assertThat(occupancyClient.tokens()).hasSize(1);
     }
 
@@ -195,15 +208,15 @@ class GetOccupanciesUseCaseImplTest {
     // Responde en orden lo indicado (la última respuesta se repite) y guarda cada consulta y el token usado
     private static final class ScriptedOccupancyClient implements CatedraOccupancyClient {
 
-        private final List<Supplier<OccupanciesResult>> script = new ArrayList<>();
+        private final List<Supplier<CatedraResponse<List<Occupancy>>>> script = new ArrayList<>();
         private final List<String> tokens = new ArrayList<>();
         private final List<String> calls = new ArrayList<>();
 
-        ScriptedOccupancyClient then(OccupanciesResult result) {
+        ScriptedOccupancyClient then(CatedraResponse<List<Occupancy>> result) {
             return then(() -> result);
         }
 
-        ScriptedOccupancyClient then(Supplier<OccupanciesResult> result) {
+        ScriptedOccupancyClient then(Supplier<CatedraResponse<List<Occupancy>>> result) {
             script.add(result);
             return this;
         }
@@ -217,7 +230,7 @@ class GetOccupanciesUseCaseImplTest {
         }
 
         @Override
-        public OccupanciesResult fetchOccupancies(Long professionalId, LocalDate date, String technicalToken) {
+        public CatedraResponse<List<Occupancy>> fetchOccupancies(Long professionalId, LocalDate date, String technicalToken) {
             tokens.add(technicalToken);
             calls.add(professionalId + " " + date);
             return script.get(Math.min(tokens.size(), script.size()) - 1).get();

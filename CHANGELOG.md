@@ -72,6 +72,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Cache de 'Availability'.
 - Endpoint para obtener 'free-slots'.
 - Test End to End que incluye solo la consulta de turnos libres (T03). Solo llamados con el servicio de catedra ya que en este momento el servicio de catalogo no existe. 
+- Documentacion para el SDD de T04-CrearHold y las decisiones tomadas.
 ### Changed
 - Se cambio el nombre de el slice 'Integration' a 'Catedra', representando y manejando las comunicaciones con la catedra.
 - application.yaml actualizado con lo incluido en el slice 'Availability'.
+- Documentacion de contratos, casos de uso y secuencias debido a decisiones tomadas para aplicar T04-CrearHold.
+
+## 2026-10-27
+### Added
+- Mas atributos en slice 'Catalog'. Los que se agregan porque los utiliza el caso de uso T04-CrearHold.
+- Pieza comun a slice 'Catedra'.
+- Archivos para la creacion del hold en slice 'Catedra'. Es la comunicacion y pedrile al servicio de catedra.
+- En slice 'User', saber si existe un usuario, para utliarlo en el caso de uso T04-CrearHold.
+- Nuevo slice 'Reservation'. Todos sus archivos principales y los creados debido al caso de uso T04-CrearHold.
+- Tests para todo lo añadido en el dia de la fecha.
+- Se incluyela creacion del hold en el test E2E.
+### Changed
+- Application.yaml para que se adapte al caso de uso T04-CrearHold.

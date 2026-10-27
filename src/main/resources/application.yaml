@@ -46,6 +46,11 @@ turnos:
     zone-id: ${TURNOS_ATTENTION_ZONE:America/Argentina/Mendoza}
     # Cuánto se puede usar la última respuesta de la cátedra si deja de responder
     occupancy-cache-max-age: ${TURNOS_OCCUPANCY_CACHE_MAX_AGE:60m}
+  reservation:
+    # La misma variable que availability: la zona de atención se configura una sola vez y define qué turnos ya pasaron
+    zone-id: ${TURNOS_ATTENTION_ZONE:America/Argentina/Mendoza}
+    # Cuánto se espera después del vencimiento de un hold antes de dar el proceso por vencido
+    safety-margin: ${TURNOS_RESERVATION_SAFETY_MARGIN:30s}
   cors:
     # Orígenes de navegador permitidos, separados por comas. Vacío por defecto: ningún navegador puede usar la API
     allowed-origins: ${TURNOS_CORS_ALLOWED_ORIGINS:}

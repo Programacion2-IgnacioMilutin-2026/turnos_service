@@ -8,10 +8,6 @@ public sealed interface OccupanciesResult {
     record Found(List<Occupancy> occupancies) implements OccupanciesResult {
     }
 
-    // La cátedra rechazó el JWT técnico. Solo lo devuelve el cliente: el caso de uso renueva la sesión y repite
-    record TokenRejected() implements OccupanciesResult {
-    }
-
     // La integración del estudiante no existe o está en error de configuración: repetir no lo arregla
     record ConfigurationError(String reason) implements OccupanciesResult {
     }

@@ -18,6 +18,9 @@ public class ProfessionalMapper {
         }
         return Professional.builder()
                 .id(response.getId())
+                .firstName(response.getFirstName())
+                .lastName(response.getLastName())
+                .categoryName(response.getCategory() == null ? null : response.getCategory().getName())
                 .enabled(response.isEnabled())
                 .weeklySchedules(toDomain(response.getWeeklySchedules()))
                 .build();

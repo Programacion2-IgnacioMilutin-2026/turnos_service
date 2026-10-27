@@ -24,7 +24,7 @@ class CatalogAgendaAdapterTest {
     @Test
     void theProfessionalAndTheUserTokenAreForwardedAndTheAgendaKeepsEverySchedule() {
         WeeklySchedule schedule = new WeeklySchedule(DayOfWeek.MONDAY, LocalTime.of(12, 0), LocalTime.of(15, 0), 30, false);
-        CatalogAgendaAdapter adapter = adapter(new ProfessionalResult.Found(new Professional(201L, true, List.of(schedule))));
+        CatalogAgendaAdapter adapter = adapter(new ProfessionalResult.Found(Professional.builder().id(201L).enabled(true).weeklySchedules(List.of(schedule)).build()));
 
         ProfessionalAgenda agenda = adapter.getAgenda(201L, "user-jwt");
 
@@ -35,7 +35,7 @@ class CatalogAgendaAdapterTest {
 
     @Test
     void aDisabledProfessionalKeepsItsFlag() {
-        assertThat(adapter(new ProfessionalResult.Found(new Professional(201L, false, List.of()))).getAgenda(201L, "user-jwt").isEnabled())
+        assertThat(adapter(new ProfessionalResult.Found(Professional.builder().id(201L).enabled(false).weeklySchedules(List.of()).build())).getAgenda(201L, "user-jwt").isEnabled())
                 .isFalse();
     }
 

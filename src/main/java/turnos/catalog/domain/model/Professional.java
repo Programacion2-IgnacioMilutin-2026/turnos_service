@@ -12,6 +12,9 @@ import java.util.List;
 @AllArgsConstructor
 public class Professional {
     private Long id;
+    private String firstName;
+    private String lastName;
+    private String categoryName;
     private boolean enabled;
     private List<WeeklySchedule> weeklySchedules;
 }

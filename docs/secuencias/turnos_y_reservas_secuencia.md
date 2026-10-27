@@ -172,6 +172,9 @@ sequenceDiagram
     break Catalog unavailable after retries (timeout, 503, connection lost, growing wait, max attempts)
         Service-->>App: 503 (operation cannot start, Central API not called)
     end
+    break Professional disabled
+        Service-->>App: 409 (PROFESSIONAL_DISABLED, Central API not called)
+    end
     Service->>Service: Check the slot falls inside an enabled weekly schedule of that day
     break Slot outside the enabled schedules
         Service-->>App: 400 (own functional code, Central API not called)
@@ -201,7 +204,7 @@ sequenceDiagram
     break 409 SLOT_ALREADY_RESERVED or SLOT_ALREADY_HELD
         Service-->>App: 409 (same functional code for both, slot no longer available)
     end
-    break Central API unavailable after retries (timeout, connection lost, 503, 500, growing wait, max attempts)
+    break Central API unavailable after retries (connection refused, connect timeout, 503, growing wait, max attempts), or answer lost (read timeout, 500), not retried
         Service-->>App: 503 (hold could not be created, no local process)
     end
     Service->>DB: Create process HELD (user, holdId, reservationProcessId, slot, expiresAt, professional name and category)

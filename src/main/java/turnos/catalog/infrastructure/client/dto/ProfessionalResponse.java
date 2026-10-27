@@ -5,7 +5,7 @@ import lombok.*;
 
 import java.util.List;
 
-// Catálogo devuelve más datos (nombre, categoría, ids de los horarios); se leen solo los que se usan
+// Catálogo devuelve más datos (ids y estado de la categoría, ids de los horarios); se leen solo los que se usan
 @Getter
 @Setter
 @Builder
@@ -14,6 +14,9 @@ import java.util.List;
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ProfessionalResponse {
     private Long id;
+    private String firstName;
+    private String lastName;
+    private CategoryResponse category;
     private boolean enabled;
     private List<WeeklyScheduleResponse> weeklySchedules;
 }

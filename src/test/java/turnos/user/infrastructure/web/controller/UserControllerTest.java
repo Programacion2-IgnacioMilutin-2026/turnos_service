@@ -182,7 +182,21 @@ class UserControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"login\":\"maria.gomez\","));
 
-        expectProblem(result, 400, "Bad Request", "VALIDATION_ERROR");
+        expectProblem(result, 400, "Bad Request", "VALIDATION_ERROR")
+                .andExpect(jsonPath("$.fieldErrors").doesNotExist());
+        verifyNoInteractions(userService);
+    }
+
+    @Test
+    void aFieldThatCannotBeReadAsTextAnswersValidationErrorOnThatField() throws Exception {
+        ResultActions result = mockMvc.perform(post("/api/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"login\":{\"nested\":1},\"password\":\"secreta123\"}"));
+
+        expectProblem(result, 400, "Bad Request", "VALIDATION_ERROR")
+                .andExpect(jsonPath("$.fieldErrors.length()").value(1))
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("login"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("invalid value"));
         verifyNoInteractions(userService);
     }
 

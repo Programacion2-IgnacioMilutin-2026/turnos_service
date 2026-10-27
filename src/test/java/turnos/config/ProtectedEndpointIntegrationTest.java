@@ -69,14 +69,14 @@ class ProtectedEndpointIntegrationTest {
                 .expectHeader().valueEquals(HttpHeaders.WWW_AUTHENTICATE, "Bearer");
     }
 
-    // Una ruta protegida que todavía no existe: sin token no se revela nada; con token pasa la seguridad
+    // Una ruta protegida que no existe: sin token no se revela nada; con token pasa la seguridad
     @Test
     void aRouteThatDoesNotExistAnswersUnauthorizedWithoutTokenAndNotFoundWithIt() {
         register(null).expectStatus().isCreated();
         String token = loginToken();
 
-        restTestClient.get().uri("/api/reservation-processes").exchange().expectStatus().isUnauthorized();
-        restTestClient.get().uri("/api/reservation-processes")
+        restTestClient.get().uri("/api/no-existe").exchange().expectStatus().isUnauthorized();
+        restTestClient.get().uri("/api/no-existe")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                 .exchange().expectStatus().isNotFound();
     }

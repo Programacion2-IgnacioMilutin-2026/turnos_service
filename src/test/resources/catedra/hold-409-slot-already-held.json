@@ -1,0 +1,1 @@
+{"detail":"Slot already held","instance":"/api/appointment-holds","status":409,"title":"Conflict","type":"https://www.jhipster.tech/problem/problem-with-message","message":"error.http.409","path":"/api/appointment-holds","code":"SLOT_ALREADY_HELD"}

@@ -1,0 +1,1 @@
+{"detail":"Professional is disabled","instance":"/api/appointment-holds","status":400,"title":"Bad Request","type":"https://www.jhipster.tech/problem/problem-with-message","message":"error.http.400","path":"/api/appointment-holds","code":"PROFESSIONAL_DISABLED"}
