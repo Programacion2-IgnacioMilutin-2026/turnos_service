@@ -163,6 +163,18 @@ class ReservationProcessIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM reservation_processes", Long.class)).isEqualTo(1);
     }
 
+    // Solo cuenta si el profesional está habilitado: una categoría deshabilitada no impide bloquear
+    @Test
+    void aProfessionalOfADisabledCategoryCanBeBlocked() {
+        CATALOG.respondToAnyPath(FakeHttpServer.Response.of(200,
+                PROFESSIONAL.replace("\"name\":\"Clinica medica\",\"enabled\":true", "\"name\":\"Clinica medica\",\"enabled\":false")));
+
+        String body = block(userToken, "12:30").expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
+
+        assertThat(JsonPath.<String>read(body, "$.status")).isEqualTo("HELD");
+        assertThat(JsonPath.<String>read(body, "$.professionalCategoryName")).isEqualTo("Clinica medica");
+    }
+
     @Test
     void aTokenOfAUserThatDoesNotExistIsRejectedWithoutCallingOutside() {
         int catalogBefore = CATALOG.receivedRequests().size();
