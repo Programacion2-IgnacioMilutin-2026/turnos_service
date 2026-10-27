@@ -28,11 +28,11 @@ class CatedraOccupancyClientAdapterTest {
     private static final String TOKEN = "eyJ.jwt-tecnico.firma";
     private static final String PATH = "/api/appointment-occupancies";
     private static final LocalDate DATE = LocalDate.of(2026, 10, 26);
-    // Una lista con ocupaciones, armada a mano: el día de la grabación no había ninguna
-    private static final String TWO_OCCUPANCIES = """
-            {"professionalId":201,"from":"2026-10-26","to":"2026-10-26","occupancies":[
-              {"date":"2026-10-26","startTime":"12:00:00","status":"CONFIRMED","expiresAt":null},
-              {"date":"2026-10-26","startTime":"12:30","status":"HELD","expiresAt":"2026-10-26T11:50:00Z"}]}
+    // Armada a mano: hace falta una reserva confirmada para grabar una ocupación CONFIRMED real. La hora sin segundos
+    // comprueba que se aceptan las dos formas
+    private static final String CONFIRMED_OCCUPANCY = """
+            {"professionalId":201,"from":"2026-11-02","to":"2026-11-02","occupancies":[
+              {"date":"2026-11-02","startTime":"12:30","status":"CONFIRMED","expiresAt":null}]}
             """;
     private static final String MISSING_INTEGRATION = """
             {"status":403,"title":"Forbidden","code":"STUDENT_INTEGRATION_NOT_FOUND"}
@@ -68,14 +68,23 @@ class CatedraOccupancyClientAdapterTest {
     }
 
     @Test
-    void occupanciesAreReadWithTheirTimeAndStatus() {
-        catedra.respond(PATH, FakeHttpServer.Response.of(200, TWO_OCCUPANCIES));
+    void theRecordedHeldOccupancyIsReadWithItsTimeAndStatus() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(200, recording("occupancies-200-held.json")));
 
         List<Occupancy> occupancies = ((CatedraResponse.Answered<List<Occupancy>>) adapter().fetchOccupancies(201L, DATE, TOKEN)).content();
 
         assertThat(occupancies).extracting(Occupancy::getStartTime, Occupancy::getStatus).containsExactly(
-                org.assertj.core.groups.Tuple.tuple(LocalTime.of(12, 0), OccupancyStatus.CONFIRMED),
-                org.assertj.core.groups.Tuple.tuple(LocalTime.of(12, 30), OccupancyStatus.HELD));
+                org.assertj.core.groups.Tuple.tuple(LocalTime.of(12, 0), OccupancyStatus.HELD));
+    }
+
+    @Test
+    void aConfirmedOccupancyIsReadWithItsTimeAndStatus() {
+        catedra.respond(PATH, FakeHttpServer.Response.of(200, CONFIRMED_OCCUPANCY));
+
+        List<Occupancy> occupancies = ((CatedraResponse.Answered<List<Occupancy>>) adapter().fetchOccupancies(201L, DATE, TOKEN)).content();
+
+        assertThat(occupancies).extracting(Occupancy::getStartTime, Occupancy::getStatus).containsExactly(
+                org.assertj.core.groups.Tuple.tuple(LocalTime.of(12, 30), OccupancyStatus.CONFIRMED));
     }
 
     @Test
@@ -111,7 +120,7 @@ class CatedraOccupancyClientAdapterTest {
     @Test
     void serverErrorsASlowAnswerAndAClosedPortAreUnavailable() {
         catedra.respond(PATH, FakeHttpServer.Response.of(503, "{}"), FakeHttpServer.Response.of(500, "{}"),
-                FakeHttpServer.Response.of(200, TWO_OCCUPANCIES).after(Duration.ofMillis(800)));
+                FakeHttpServer.Response.of(200, recording("occupancies-200-held.json")).after(Duration.ofMillis(800)));
         CatedraOccupancyClientAdapter adapter = adapter();
 
         assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.Unavailable.class);
@@ -146,7 +155,7 @@ class CatedraOccupancyClientAdapterTest {
     @Test
     void theTokenNeverReachesTheOutput(CapturedOutput output) {
         catedra.respond(PATH, FakeHttpServer.Response.of(401, ""), FakeHttpServer.Response.of(503, "{}"),
-                FakeHttpServer.Response.of(200, TWO_OCCUPANCIES));
+                FakeHttpServer.Response.of(200, recording("occupancies-200-held.json")));
         CatedraOccupancyClientAdapter adapter = adapter();
 
         for (int i = 0; i < 3; i++) {

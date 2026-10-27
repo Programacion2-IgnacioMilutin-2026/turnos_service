@@ -49,3 +49,5 @@ Alternativas descartadas:
 ## Qué no cambia
 
 La suite normal sigue sin leer el `.env` ni usar credenciales reales, y el test que lo comprueba sigue valiendo. La prueba manual con la aplicación levantada sigue siendo útil para ver el servicio completo, pero ya no es la única evidencia contra la cátedra real.
+
+Excepción (2026-10-27, T04): la cátedra no permite cancelar un hold, así que el E2E de T04 intenta deshacerlo y, si no puede, lo informa y deja que venza solo (D9 de la SPEC de T04).
