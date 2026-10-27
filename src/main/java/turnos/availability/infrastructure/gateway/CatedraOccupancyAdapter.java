@@ -31,8 +31,6 @@ public class CatedraOccupancyAdapter implements OccupancyProvider {
             case OccupanciesResult.Found found -> found.occupancies().stream().map(Occupancy::getStartTime).toList();
             case OccupanciesResult.ConfigurationError error -> throw new AvailabilityServiceDegradedException(error.reason());
             case OccupanciesResult.Unavailable unavailable -> throw new AvailabilityCentralUnavailableException(unavailable.reason());
-            // El caso de uso de catedra renueva la sesión ante un rechazo; si igual llegara uno, la cátedra no está disponible
-            case OccupanciesResult.TokenRejected _ -> throw new AvailabilityCentralUnavailableException("Technical token rejected");
             case OccupanciesResult.Failed failed -> {
                 log.error("Catedra occupancies request for professional {} failed: {}", professionalId, failed.reason());
                 throw new AvailabilityIntegrationException(failed.reason());

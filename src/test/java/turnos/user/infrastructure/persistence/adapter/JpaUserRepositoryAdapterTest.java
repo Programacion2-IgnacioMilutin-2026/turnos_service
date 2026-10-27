@@ -88,6 +88,15 @@ class JpaUserRepositoryAdapterTest {
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
 
+    @Test
+    void existsByIdTellsWhetherTheUserIsInTheDatabase() {
+        User created = userRepository.create(newUser("maria.gomez", "maria.gomez@example.com"));
+        entityManager.flush();
+
+        assertThat(userRepository.existsById(created.getId())).isTrue();
+        assertThat(userRepository.existsById(created.getId() + 1000)).isFalse();
+    }
+
     private User newUser(String login, String email) {
         return User.builder()
                 .login(login)

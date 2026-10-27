@@ -2,6 +2,7 @@ package turnos.catalog.infrastructure.client.mapper;
 
 import org.junit.jupiter.api.Test;
 import turnos.catalog.domain.model.Professional;
+import turnos.catalog.infrastructure.client.dto.CategoryResponse;
 import turnos.catalog.infrastructure.client.dto.ProfessionalResponse;
 import turnos.catalog.infrastructure.client.dto.WeeklyScheduleResponse;
 
@@ -19,14 +20,22 @@ class ProfessionalMapperTest {
     void everyFieldReachesTheDomain() {
         WeeklyScheduleResponse schedule = WeeklyScheduleResponse.builder().dayOfWeek(DayOfWeek.MONDAY)
                 .startTime(LocalTime.of(9, 0)).endTime(LocalTime.of(12, 0)).slotDurationMinutes(30).enabled(true).build();
-        ProfessionalResponse response = ProfessionalResponse.builder().id(15L).enabled(true)
+        ProfessionalResponse response = ProfessionalResponse.builder().id(15L).firstName("Ana").lastName("Gomez")
+                .category(CategoryResponse.builder().name("Clinica medica").build()).enabled(true)
                 .weeklySchedules(List.of(schedule)).build();
         assertThat(response).hasNoNullFieldsOrProperties();
         assertThat(schedule).hasNoNullFieldsOrProperties();
 
         Professional professional = mapper.toDomain(response);
 
-        assertThat(professional).usingRecursiveComparison().isEqualTo(response);
+        assertThat(professional).hasNoNullFieldsOrProperties();
+        assertThat(professional).usingRecursiveComparison().ignoringFields("categoryName").isEqualTo(response);
+        assertThat(professional.getCategoryName()).isEqualTo("Clinica medica");
+    }
+
+    @Test
+    void aProfessionalWithoutCategoryHasNoCategoryName() {
+        assertThat(mapper.toDomain(ProfessionalResponse.builder().id(15L).build()).getCategoryName()).isNull();
     }
 
     @Test

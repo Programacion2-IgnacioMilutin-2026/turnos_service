@@ -60,6 +60,9 @@ class CatalogClientAdapterTest {
 
         Professional professional = ((ProfessionalResult.Found) result).professional();
         assertThat(professional.getId()).isEqualTo(15L);
+        assertThat(professional.getFirstName()).isEqualTo("Ana");
+        assertThat(professional.getLastName()).isEqualTo("Gomez");
+        assertThat(professional.getCategoryName()).isEqualTo("Clinica medica");
         assertThat(professional.isEnabled()).isTrue();
         WeeklySchedule monday = professional.getWeeklySchedules().get(0);
         assertThat(monday.getDayOfWeek()).isEqualTo(DayOfWeek.MONDAY);

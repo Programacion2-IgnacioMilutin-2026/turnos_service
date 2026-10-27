@@ -39,4 +39,9 @@ public class JpaUserRepositoryAdapter implements UserRepository {
     public boolean existsByEmail(String email) {
         return jpaUserRepository.existsByEmail(email);
     }
+
+    @Override
+    public boolean existsById(Long id) {
+        return jpaUserRepository.existsById(id);
+    }
 }

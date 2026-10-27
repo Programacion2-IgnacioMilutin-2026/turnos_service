@@ -38,8 +38,6 @@ class CatedraOccupancyAdapterTest {
                 .isInstanceOf(AvailabilityServiceDegradedException.class);
         assertThatThrownBy(() -> adapter(new OccupanciesResult.Unavailable("down")).getOccupiedStartTimes(201L, DATE))
                 .isInstanceOf(AvailabilityCentralUnavailableException.class);
-        assertThatThrownBy(() -> adapter(new OccupanciesResult.TokenRejected()).getOccupiedStartTimes(201L, DATE))
-                .isInstanceOf(AvailabilityCentralUnavailableException.class);
         assertThatThrownBy(() -> adapter(new OccupanciesResult.Failed("HTTP 400")).getOccupiedStartTimes(201L, DATE))
                 .isInstanceOf(AvailabilityIntegrationException.class);
     }

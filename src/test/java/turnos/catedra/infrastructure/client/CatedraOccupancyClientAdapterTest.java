@@ -6,7 +6,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import turnos.FakeHttpServer;
-import turnos.catedra.domain.model.OccupanciesResult;
+import turnos.catedra.domain.model.CatedraResponse;
 import turnos.catedra.domain.model.Occupancy;
 import turnos.catedra.domain.model.OccupancyStatus;
 import turnos.catedra.infrastructure.client.mapper.OccupancyMapper;
@@ -63,15 +63,15 @@ class CatedraOccupancyClientAdapterTest {
         catedra.respond(PATH, FakeHttpServer.Response.of(200, recording("occupancies-200-empty.json")),
                 FakeHttpServer.Response.of(200, recording("occupancies-200-unknown-professional.json")));
 
-        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isEqualTo(new OccupanciesResult.Found(List.of()));
-        assertThat(adapter().fetchOccupancies(999999L, DATE, TOKEN)).isEqualTo(new OccupanciesResult.Found(List.of()));
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isEqualTo(new CatedraResponse.Answered<>(List.of()));
+        assertThat(adapter().fetchOccupancies(999999L, DATE, TOKEN)).isEqualTo(new CatedraResponse.Answered<>(List.of()));
     }
 
     @Test
     void occupanciesAreReadWithTheirTimeAndStatus() {
         catedra.respond(PATH, FakeHttpServer.Response.of(200, TWO_OCCUPANCIES));
 
-        List<Occupancy> occupancies = ((OccupanciesResult.Found) adapter().fetchOccupancies(201L, DATE, TOKEN)).occupancies();
+        List<Occupancy> occupancies = ((CatedraResponse.Answered<List<Occupancy>>) adapter().fetchOccupancies(201L, DATE, TOKEN)).content();
 
         assertThat(occupancies).extracting(Occupancy::getStartTime, Occupancy::getStatus).containsExactly(
                 org.assertj.core.groups.Tuple.tuple(LocalTime.of(12, 0), OccupancyStatus.CONFIRMED),
@@ -82,14 +82,14 @@ class CatedraOccupancyClientAdapterTest {
     void theRecordedRejectionWithoutBodyIsATokenRejection() {
         catedra.respond(PATH, FakeHttpServer.Response.of(401, recording("occupancies-401-invalid-token.json")).withContentType(null));
 
-        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.TokenRejected.class);
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.TokenRejected.class);
     }
 
     @Test
     void aMissingStudentIntegrationIsAConfigurationError() {
         catedra.respond(PATH, FakeHttpServer.Response.of(403, MISSING_INTEGRATION));
 
-        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.ConfigurationError.class);
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.ConfigurationError.class);
     }
 
     @Test
@@ -97,15 +97,15 @@ class CatedraOccupancyClientAdapterTest {
         catedra.respond(PATH, FakeHttpServer.Response.of(403, "{\"status\":403,\"code\":\"OTHER\"}"),
                 FakeHttpServer.Response.of(403, ""));
 
-        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Failed.class);
-        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Failed.class);
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.Failed.class);
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.Failed.class);
     }
 
     @Test
     void theRecordedBadRequestIsAnUnexpectedAnswer() {
         catedra.respond(PATH, FakeHttpServer.Response.of(400, recording("occupancies-400-invalid-date-range.json")));
 
-        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Failed.class);
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.Failed.class);
     }
 
     @Test
@@ -114,21 +114,21 @@ class CatedraOccupancyClientAdapterTest {
                 FakeHttpServer.Response.of(200, TWO_OCCUPANCIES).after(Duration.ofMillis(800)));
         CatedraOccupancyClientAdapter adapter = adapter();
 
-        assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Unavailable.class);
-        assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Unavailable.class);
-        assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Unavailable.class);
+        assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.Unavailable.class);
+        assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.Unavailable.class);
+        assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.Unavailable.class);
 
         FakeHttpServer closed = FakeHttpServer.start();
         String closedUrl = closed.baseUrl();
         closed.close();
-        assertThat(adapter(closedUrl).fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Unavailable.class);
+        assertThat(adapter(closedUrl).fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.Unavailable.class);
     }
 
     @Test
     void otherServerErrorsAreUnexpectedAnswers() {
         catedra.respond(PATH, FakeHttpServer.Response.of(502, "{}"));
 
-        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Failed.class);
+        assertThat(adapter().fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.Failed.class);
     }
 
     @Test
@@ -139,7 +139,7 @@ class CatedraOccupancyClientAdapterTest {
         CatedraOccupancyClientAdapter adapter = adapter();
 
         for (int i = 0; i < 4; i++) {
-            assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(OccupanciesResult.Failed.class);
+            assertThat(adapter.fetchOccupancies(201L, DATE, TOKEN)).isInstanceOf(CatedraResponse.Failed.class);
         }
     }
 
