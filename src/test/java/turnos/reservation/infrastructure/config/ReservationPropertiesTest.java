@@ -36,6 +36,13 @@ class ReservationPropertiesTest {
         });
     }
 
+    // Así queda si la variable del .env existe pero está vacía
+    @Test
+    void anEmptyMarginKeepsTheDefault() {
+        contextRunner.withPropertyValues("turnos.reservation.safety-margin=").run(context ->
+                assertThat(context.getBean(ReservationPolicy.class).safetyMargin()).isEqualTo(Duration.ofSeconds(30)));
+    }
+
     @Test
     void anUnknownZoneStopsTheStartup() {
         contextRunner.withPropertyValues("turnos.reservation.zone-id=Mendoza").run(context ->

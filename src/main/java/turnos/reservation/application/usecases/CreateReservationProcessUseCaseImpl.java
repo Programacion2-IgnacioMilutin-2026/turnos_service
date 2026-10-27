@@ -22,6 +22,7 @@ import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 import turnos.reservation.domain.ports.out.UserDirectory;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -121,14 +122,20 @@ public class CreateReservationProcessUseCaseImpl implements CreateReservationPro
                     process.getExpiresAt());
             ReservationProcess existing = reservationProcessRepository.findOpenByUserId(process.getUserId()).stream()
                     .findFirst()
-                    .orElseThrow(() -> new ReservationHoldNotSavedException(process.getReservationProcessId(),
-                            process.getExpiresAt(), e));
+                    .orElseThrow(() -> holdNotSaved(process, e));
             throw new ReservationOpenProcessExistsException(existing);
         } catch (RuntimeException e) {
             log.error("Hold {} of reservation process {} was granted but could not be saved; it expires at {}",
                     process.getHoldId(), process.getReservationProcessId(), process.getExpiresAt(), e);
-            throw new ReservationHoldNotSavedException(process.getReservationProcessId(), process.getExpiresAt(), e);
+            throw holdNotSaved(process, e);
         }
+    }
+
+    // Cuánto falta para que el turno se libere solo, redondeado hacia arriba: antes de eso no conviene reintentar
+    private ReservationHoldNotSavedException holdNotSaved(ReservationProcess process, RuntimeException cause) {
+        long millis = Duration.between(clock.instant(), process.getExpiresAt()).toMillis();
+        long seconds = Math.max(0, (millis + 999) / 1000);
+        return new ReservationHoldNotSavedException(process.getReservationProcessId(), process.getExpiresAt(), seconds, cause);
     }
 
     private <T> T exclusivelyFor(Long userId, Supplier<T> work) {

@@ -14,8 +14,14 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.exc.InputCoercionException;
+import tools.jackson.databind.exc.MismatchedInputException;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 // @ControllerAdvice global en config: excepción a la skill autorizada por el usuario.
 // Solo da formato a los errores; los estados y códigos de cada slice los decide su controller.
@@ -35,11 +41,16 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, body, headers, status, request);
     }
 
+    // Si el JSON está bien escrito pero un campo no se puede convertir (texto en lugar de número, una fecha imposible),
+    // se dice cuál; un JSON mal escrito no tiene un campo al que atribuirle el error
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(
             HttpMessageNotReadableException ex, HttpHeaders headers, HttpStatusCode status, WebRequest request) {
-        ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Malformed request body");
+        Optional<String> field = unconvertibleField(ex);
+        ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST,
+                field.isPresent() ? "One or more fields are invalid" : "Malformed request body");
         body.setProperty("code", "VALIDATION_ERROR");
+        field.ifPresent(name -> body.setProperty("fieldErrors", List.of(new FieldErrorItem(name, "invalid value"))));
         return handleExceptionInternal(ex, body, headers, status, request);
     }
 
@@ -57,6 +68,19 @@ public class ApiExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail body = ProblemDetail.forStatusAndDetail(HttpStatus.INTERNAL_SERVER_ERROR, "Internal server error");
         body.setProperty("code", "INTERNAL_ERROR");
         return body;
+    }
+
+    private static Optional<String> unconvertibleField(Throwable error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (cause instanceof MismatchedInputException || cause instanceof InputCoercionException) {
+                String path = ((JacksonException) cause).getPath().stream()
+                        .map(JacksonException.Reference::getPropertyName)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.joining("."));
+                return path.isEmpty() ? Optional.empty() : Optional.of(path);
+            }
+        }
+        return Optional.empty();
     }
 
     // Un valor que no se pudo convertir trae un texto de Spring con tipos de Java: se reemplaza por uno neutro

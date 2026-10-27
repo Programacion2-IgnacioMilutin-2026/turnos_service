@@ -191,7 +191,10 @@ class CreateReservationProcessUseCaseImplTest {
         repository.failOnCreate(new IllegalStateException("database down"));
 
         assertThatThrownBy(() -> create(MONDAY, TEN_THIRTY)).isInstanceOfSatisfying(ReservationHoldNotSavedException.class,
-                e -> assertThat(e.getExpiresAt()).isEqualTo(HOLD_EXPIRES_AT));
+                e -> {
+                    assertThat(e.getExpiresAt()).isEqualTo(HOLD_EXPIRES_AT);
+                    assertThat(e.getSecondsUntilExpiration()).isEqualTo(600);
+                });
         assertThat(output.getAll()).contains("ERROR").contains("Hold hold-1 of reservation process process-1")
                 .contains("could not be saved");
     }
