@@ -70,6 +70,19 @@ class JpaReservationProcessRepositoryAdapterTest {
     }
 
     @Test
+    void updatingWithoutAProcessFailsAndLeavesTheSavedOneAsItWas() {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess original = repository.create(held("process-1", userId));
+        entityManager.clear();
+
+        assertThatThrownBy(() -> repository.update("process-1", null))
+                .isInstanceOf(NullPointerException.class)
+                .hasMessage("reservationProcess must not be null");
+        entityManager.clear();
+        assertThat(repository.findOpenByUserId(userId)).singleElement().usingRecursiveComparison().isEqualTo(original);
+    }
+
+    @Test
     void anExpiredProcessDoesNotPreventANewOpenOne() {
         Long userId = newUser("maria.gomez");
         ReservationProcess first = repository.create(held("process-1", userId));

@@ -52,6 +52,7 @@ Se aplica la skill `hexagonal-vertical-slicing` (`documentacion/.claude/skills/h
 - Cada slice tiene solo las piezas que alguien usa; no se copian piezas de otro slice para que se parezcan (por ejemplo, un service sin controller). El modelo empieza con los datos que usa el caso de uso actual.
 - En los casos de uso siguientes se amplían los archivos existentes (sumar `date` o `expiresAt` a `Occupancy`, nombre y categoría a `Professional`) en lugar de crear piezas paralelas, y se actualizan los tests afectados.
 - La lógica de sesión técnica, renovación ante `401` y reintentos ya está extraída en `catedra/application/support/CatedraOperationRunner` (T04, decisión 011). Toda operación nueva con la cátedra (T05, T11, T13) la usa; no se copia. Reintentar un `POST` que crea algo no es seguro: solo se repite lo que seguro no llegó (ver "Cómo usar la integración con la cátedra").
+- Un `update(id, modelo)` de un adaptador de persistencia exige el modelo al entrar con `Objects.requireNonNull`: el mapper de la skill devuelve `null` si recibe `null`, y SonarQube marca el acceso a la entidad que sigue (como en `JpaReservationProcessRepositoryAdapter.update`).
 - Las restricciones de Bean Validation llevan siempre su mensaje propio en inglés: el mensaje por defecto cambia con el idioma del servidor o el `Accept-Language` del cliente (MockMvc usa inglés por defecto y no lo detecta).
 
 ### Excepciones a la skill autorizadas por el usuario

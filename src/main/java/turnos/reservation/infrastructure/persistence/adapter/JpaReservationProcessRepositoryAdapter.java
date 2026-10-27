@@ -17,6 +17,7 @@ import turnos.reservation.infrastructure.persistence.repository.JpaReservationPr
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Component
@@ -50,10 +51,12 @@ public class JpaReservationProcessRepositoryAdapter implements ReservationProces
 
     // En una sola transacción: la lectura deja la entidad en memoria y guardar solo agrega el UPDATE. El flush lo
     // manda enseguida: si no, dentro de una transacción mayor Hibernate haría antes los INSERT pendientes, y un proceso
-    // nuevo chocaría con el índice antes de que el viejo dejara de estar abierto
+    // nuevo chocaría con el índice antes de que el viejo dejara de estar abierto. Actualizar sin proceso es un error de
+    // programación: falla al entrar, antes de leer la base
     @Override
     @Transactional
     public Optional<ReservationProcess> update(String reservationProcessId, ReservationProcess reservationProcess) {
+        Objects.requireNonNull(reservationProcess, "reservationProcess must not be null");
         if (jpaReservationProcessRepository.findById(reservationProcessId).isEmpty()) {
             return Optional.empty();
         }
