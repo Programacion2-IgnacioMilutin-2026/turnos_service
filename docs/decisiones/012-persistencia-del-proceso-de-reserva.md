@@ -49,7 +49,7 @@ Alternativas descartadas:
 - **Solo el id del usuario, sin clave foránea:** borrar un usuario dejaría sus procesos sin dueño, y un token viejo podría dejar procesos que heredaría el próximo usuario con ese id.
 - **Solo el índice de la base, sin candado:** en cada doble toque se crearía un hold de más, que le ocupa el turno a otro usuario hasta que vence.
 - **Solo el candado, sin índice:** la regla dependería de que haya una única instancia del servicio.
-- **Un candado detrás de un puerto de salida, con su adaptador:** permitiría cambiarlo por un candado distribuido, pero son más piezas para un solo uso. Se extrae si otra operación lo necesita.
+- **Un candado detrás de un puerto de salida, con su adaptador:** permitiría cambiarlo por un candado distribuido, pero son más piezas para un solo uso. Se extrae si otra operación lo necesita. *(Actualización 2026-10-28: T05 lo necesitó; el candado salió del caso de uso a `reservation/application/support`, decisión 013.)*
 - **Todas las columnas del dominio desde T04:** la mayoría quedaría vacía hasta los casos de uso siguientes.
 
 ## Qué no cambia

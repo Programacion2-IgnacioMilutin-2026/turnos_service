@@ -89,3 +89,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Se incluyela creacion del hold en el test E2E.
 ### Changed
 - Application.yaml para que se adapte al caso de uso T04-CrearHold.
+
+## 2026-10-28
+### Added
+- Documentacion de SDD para el caso de uso T05-ConfirmarReserva
+### Changed
+- Documentacion actualizada debido a que se descubrio que una confrimacion no reincia el contador expiresAt de un proceso abierto.

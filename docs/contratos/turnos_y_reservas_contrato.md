@@ -279,7 +279,7 @@ Un `401` o `403` de catálogo al JWT reenviado responde `500` `INTERNAL_ERROR` (
 
 `POST /api/reservation-processes/{reservationProcessId}/confirm`, sin body. El nombre y apellido del paciente salen del perfil del usuario.
 
-Respuesta `200`: proceso de reserva (sección 2) en estado `WAITING_FOR_PHONE`, con el nuevo `expiresAt`. Si la cátedra ya lo había confirmado antes (reintento de la app), también responde `200` con el estado actual (T05 4.7).
+Respuesta `200`: proceso de reserva (sección 2) en estado `WAITING_FOR_PHONE`, con el `expiresAt` que informa la cátedra, que es el mismo del hold (confirmar no extiende el plazo). Si la cátedra ya lo había confirmado antes (reintento de la app), también responde `200` con el estado actual (T05 4.7).
 
 | Estado | `code` | Cuándo |
 | --- | --- | --- |
@@ -653,7 +653,7 @@ La cátedra crea una reserva `PHONE_PENDING` y publica `AdditionalInformationReq
 
 | Respuesta de la cátedra | Qué hace turnos |
 | --- | --- |
-| `202` | Pasa el proceso local a `WAITING_FOR_PHONE` con el nuevo `expiresAt` (T05 6). |
+| `202` | Pasa el proceso local a `WAITING_FOR_PHONE` con el `expiresAt` recibido, que es el mismo del hold (T05 6). |
 | `401` | Login técnico y una sola repetición (T05 4.1). |
 | `403` `STUDENT_INTEGRATION_NOT_FOUND` | Responde `503` `SERVICE_DEGRADED` (T05 4.2). |
 | `404` `HOLD_NOT_FOUND` | Responde `404` `HOLD_NOT_FOUND` (T05 4.3). |

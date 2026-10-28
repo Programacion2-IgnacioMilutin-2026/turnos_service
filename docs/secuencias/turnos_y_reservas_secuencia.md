@@ -233,7 +233,7 @@ sequenceDiagram
         Service-->>App: 409 (HOLD_EXPIRED, Central API not called)
     end
     Service->>Central: Confirm hold (externalPatientId, patientFirstName and patientLastName from the user profile), technical JWT
-    Central-->>Service: reservationProcessId, WAITING_FOR_PHONE and new expiresAt, or error
+    Central-->>Service: reservationProcessId, WAITING_FOR_PHONE and expiresAt (same as the hold), or error
     opt 401 (technical JWT expired or rejected)
         Service->>Service: Run X01 (authenticate again), once
         Service->>Central: Confirm hold again
@@ -271,7 +271,7 @@ sequenceDiagram
         Service->>DB: Mark process for reconciliation (T13), it stays HELD
         Service-->>App: 503
     end
-    Service->>DB: Update process to WAITING_FOR_PHONE with the new expiresAt
+    Service->>DB: Update process to WAITING_FOR_PHONE with the expiresAt from Central API
     break Local persistence fails (Central API already advanced the process)
         Service->>Service: Log critical error and mark for reconciliation (T13)
         Service-->>App: 500 (functional code)
