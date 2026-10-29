@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.ErrorResponseException;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,9 +17,15 @@ import org.springframework.web.bind.annotation.RestController;
 import turnos.reservation.application.exception.ReservationCatalogUnavailableException;
 import turnos.reservation.application.exception.ReservationCentralUnavailableException;
 import turnos.reservation.application.exception.ReservationException;
+import turnos.reservation.application.exception.ReservationHoldExpiredException;
+import turnos.reservation.application.exception.ReservationHoldNotFoundException;
 import turnos.reservation.application.exception.ReservationHoldNotSavedException;
+import turnos.reservation.application.exception.ReservationInvalidProcessStateException;
 import turnos.reservation.application.exception.ReservationInvalidSlotException;
+import turnos.reservation.application.exception.ReservationLocalStateOutOfSyncException;
 import turnos.reservation.application.exception.ReservationOpenProcessExistsException;
+import turnos.reservation.application.exception.ReservationPatientMismatchException;
+import turnos.reservation.application.exception.ReservationProcessNotFoundException;
 import turnos.reservation.application.exception.ReservationProfessionalDisabledException;
 import turnos.reservation.application.exception.ReservationProfessionalNotFoundException;
 import turnos.reservation.application.exception.ReservationServiceDegradedException;
@@ -93,6 +100,46 @@ public class ReservationProcessController {
             exception.getBody().setProperty("expiresAt", e.getExpiresAt().truncatedTo(ChronoUnit.SECONDS));
             exception.getHeaders().set(HttpHeaders.RETRY_AFTER, String.valueOf(e.getSecondsUntilExpiration()));
             throw exception;
+        } catch (ReservationException e) {
+            throw error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
+        }
+    }
+
+    // Sin body: el paciente es el dueño del token y su nombre sale del perfil. El proceso se busca entre los suyos,
+    // así que uno ajeno responde igual que uno inexistente
+    @PostMapping("/reservation-processes/{reservationProcessId}/confirm")
+    public ResponseEntity<ReservationProcessResponse> confirmReservationProcess(@PathVariable String reservationProcessId,
+                                                                                @AuthenticationPrincipal Jwt jwt) {
+        try {
+            ReservationProcess confirmed = reservationService.confirmReservationProcess(Long.valueOf(jwt.getSubject()),
+                    reservationProcessId);
+            return ResponseEntity.ok(reservationProcessDtoMapper.toResponse(confirmed));
+        } catch (ReservationProcessNotFoundException e) {
+            throw error(HttpStatus.NOT_FOUND, "RESERVATION_PROCESS_NOT_FOUND", "Reservation process not found");
+        } catch (ReservationInvalidProcessStateException e) {
+            ErrorResponseException exception = error(HttpStatus.CONFLICT, "INVALID_PROCESS_STATE",
+                    "The reservation process is not in the required state");
+            exception.getBody().setProperty("currentStatus", e.getCurrentStatus().name());
+            throw exception;
+        } catch (ReservationHoldExpiredException e) {
+            throw error(HttpStatus.CONFLICT, "HOLD_EXPIRED", "The hold has expired");
+        } catch (ReservationHoldNotFoundException e) {
+            throw error(HttpStatus.NOT_FOUND, "HOLD_NOT_FOUND", "Hold not found");
+        } catch (ReservationPatientMismatchException e) {
+            throw error(HttpStatus.CONFLICT, "PATIENT_MISMATCH", "The patient does not match the hold");
+        } catch (ReservationProfessionalNotFoundException e) {
+            throw error(HttpStatus.NOT_FOUND, "PROFESSIONAL_NOT_FOUND", "Professional not found");
+        } catch (ReservationInvalidSlotException e) {
+            throw error(HttpStatus.BAD_REQUEST, "INVALID_SLOT", "Slot is not part of the professional's schedules");
+        } catch (ReservationSlotNotAvailableException e) {
+            throw error(HttpStatus.CONFLICT, "SLOT_NOT_AVAILABLE", "Slot is no longer available");
+        } catch (ReservationServiceDegradedException e) {
+            throw error(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_DEGRADED", "Service is degraded");
+        } catch (ReservationCentralUnavailableException e) {
+            throw error(HttpStatus.SERVICE_UNAVAILABLE, "CENTRAL_UNAVAILABLE", "Central system is unavailable");
+        } catch (ReservationLocalStateOutOfSyncException e) {
+            throw error(HttpStatus.INTERNAL_SERVER_ERROR, "LOCAL_STATE_OUT_OF_SYNC",
+                    "The reservation process was confirmed but its state could not be saved");
         } catch (ReservationException e) {
             throw error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
         }

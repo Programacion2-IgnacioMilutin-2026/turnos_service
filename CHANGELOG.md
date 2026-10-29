@@ -89,3 +89,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Se incluyela creacion del hold en el test E2E.
 ### Changed
 - Application.yaml para que se adapte al caso de uso T04-CrearHold.
+
+## 2026-10-28
+### Added
+- Documentacion de SDD para el caso de uso T05-ConfirmarReserva
+### Changed
+- Documentacion actualizada debido a que se descubrio que una confrimacion no reincia el contador expiresAt de un proceso abierto.
+
+## 2026-10-29
+### Added
+- Archivos a slice 'User' para poder realizar la consulta por a traves de un UsaerName.
+- Archivos a slice 'Catedra' para manejar la confirmacion de un hold con el servicio de catedra.
+- En slice 'Reservation', se sumo el atributo needsReconciliation, por lo que se agrega a todos los archivos que nombren a los atributos. Ademas de funciones para cambiar el valor de este atributo.
+- Lock o candado general en slice 'Reservation', de esta forma el hold y luego de confirmar utlizan el mismo lock. 
+- Caso de uso de confirmacion de hold en slice 'Reservation', con su gateway para poder realizar estos hablar con el slice 'Catedra'.
+- Endpoint para confirmar el hold en slice 'Reservation' e integracion con la applicacion.
+- Tests para todos los archivos agregados en este dia. 
+- Se agregan las nuevas funcionalidades al test E2E.
+### Changed
+- Se descubrio que la catedra devuelve HOLD_NOT_FOUND cuiando este vence, por lo que se actualizo la documentacion para que sea consistente con la realidad.
+- Ahora el candado del hold del slice 'Reservation' es general, por lo que se lo quito y modifico del CreateReservationProcessUseCaseImpl.

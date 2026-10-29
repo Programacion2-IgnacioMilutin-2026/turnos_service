@@ -8,10 +8,13 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import turnos.catedra.domain.model.CatedraResponse;
+import turnos.catedra.domain.model.HoldConfirmationResult;
 import turnos.catedra.domain.model.HoldResult;
 import turnos.catedra.domain.ports.out.CatedraHoldClient;
 import turnos.catedra.infrastructure.client.dto.CatedraErrorResponse;
+import turnos.catedra.infrastructure.client.dto.ConfirmHoldRequest;
 import turnos.catedra.infrastructure.client.dto.CreateHoldRequest;
+import turnos.catedra.infrastructure.client.dto.HoldConfirmationResponse;
 import turnos.catedra.infrastructure.client.dto.HoldResponse;
 import turnos.catedra.infrastructure.client.mapper.HoldMapper;
 
@@ -22,10 +25,12 @@ import java.net.http.HttpConnectTimeoutException;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.function.Function;
 
 // Paquete infrastructure/client: excepción a la skill autorizada por el usuario.
 // Hace un solo intento y traduce la respuesta. Como pedir un hold lo crea, distingue lo que seguro no llegó a la
-// cátedra (se puede repetir) de lo que pudo haber llegado sin que volviera la respuesta (no se debe repetir)
+// cátedra (se puede repetir) de lo que pudo haber llegado sin que volviera la respuesta (no se debe repetir).
+// Confirmar, en cambio, se puede repetir siempre: la cátedra responde que ya estaba confirmado
 @Component
 public class CatedraHoldClientAdapter implements CatedraHoldClient {
 
@@ -69,7 +74,8 @@ public class CatedraHoldClientAdapter implements CatedraHoldClient {
                             case 201 -> created(response.bodyTo(HoldResponse.class));
                             // El 401 llega sin cuerpo ni Content-Type: no se lee
                             case 401 -> new CatedraResponse.TokenRejected<HoldResult>();
-                            case 400, 403, 404, 409 -> rejected(status, response.bodyTo(CatedraErrorResponse.class));
+                            case 400, 403, 404, 409 -> rejected(status, response.bodyTo(CatedraErrorResponse.class),
+                                    CatedraHoldClientAdapter::holdRejection);
                             case 503 -> new CatedraResponse.Unavailable<HoldResult>("Catedra answered HTTP 503");
                             // Un error interno pudo ocurrir después de crear el hold
                             case 500 -> new CatedraResponse.Uncertain<HoldResult>("Catedra answered HTTP 500");
@@ -80,6 +86,42 @@ public class CatedraHoldClientAdapter implements CatedraHoldClient {
             return wasNotSent(e)
                     ? new CatedraResponse.Unavailable<>("Catedra is not reachable")
                     : new CatedraResponse.Uncertain<>("Catedra did not answer in time or the connection was cut");
+        } catch (RestClientException e) {
+            return new CatedraResponse.Failed<>("Catedra answered an unreadable response");
+        }
+    }
+
+    @Override
+    public CatedraResponse<HoldConfirmationResult> confirmHold(String holdId, String externalPatientId,
+                                                               String patientFirstName, String patientLastName,
+                                                               String technicalToken) {
+        ConfirmHoldRequest body = ConfirmHoldRequest.builder()
+                .externalPatientId(externalPatientId)
+                .patientFirstName(patientFirstName)
+                .patientLastName(patientLastName)
+                .build();
+        try {
+            return restClient.post()
+                    .uri(catedraProperties.baseUrl() + HOLDS_PATH + "/{holdId}/confirm", holdId)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + technicalToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(body)
+                    .exchange((request, response) -> {
+                        int status = response.getStatusCode().value();
+                        return switch (status) {
+                            case 202 -> accepted(response.bodyTo(HoldConfirmationResponse.class));
+                            // El 401 llega sin cuerpo ni Content-Type: no se lee
+                            case 401 -> new CatedraResponse.TokenRejected<HoldConfirmationResult>();
+                            case 400, 403, 404, 409 -> rejected(status, response.bodyTo(CatedraErrorResponse.class),
+                                    CatedraHoldClientAdapter::confirmationRejection);
+                            case 500, 503 -> new CatedraResponse.Unavailable<HoldConfirmationResult>(
+                                    "Catedra answered HTTP " + status);
+                            default -> new CatedraResponse.Failed<HoldConfirmationResult>("Catedra answered HTTP " + status);
+                        };
+                    });
+        } catch (ResourceAccessException e) {
+            return new CatedraResponse.Unavailable<>("Catedra is not reachable, did not answer in time or the connection was cut");
         } catch (RestClientException e) {
             return new CatedraResponse.Failed<>("Catedra answered an unreadable response");
         }
@@ -106,15 +148,44 @@ public class CatedraHoldClientAdapter implements CatedraHoldClient {
         return new CatedraResponse.Answered<>(new HoldResult.Created(holdMapper.toDomain(response)));
     }
 
-    private static CatedraResponse<HoldResult> rejected(int status, CatedraErrorResponse error) {
-        String code = error == null ? null : error.getCode();
-        HoldResult result = switch (status + " " + code) {
+    // Un 202 sin el proceso, el vencimiento o el estado esperado no se puede usar: queda como respuesta no prevista
+    private CatedraResponse<HoldConfirmationResult> accepted(HoldConfirmationResponse response) {
+        if (response == null || response.getReservationProcessId() == null || response.getExpiresAt() == null
+                || !"WAITING_FOR_PHONE".equals(response.getStatus())) {
+            return new CatedraResponse.Failed<>("Catedra answered an incomplete confirmation");
+        }
+        return new CatedraResponse.Answered<>(new HoldConfirmationResult.Confirmed(holdMapper.toDomain(response)));
+    }
+
+    private static HoldResult holdRejection(String statusAndCode) {
+        return switch (statusAndCode) {
             case "404 PROFESSIONAL_NOT_FOUND" -> new HoldResult.ProfessionalNotFound();
             case "400 PROFESSIONAL_DISABLED" -> new HoldResult.ProfessionalDisabled();
             case "400 INVALID_SLOT" -> new HoldResult.InvalidSlot();
             case "409 SLOT_ALREADY_HELD", "409 SLOT_ALREADY_RESERVED" -> new HoldResult.SlotNotAvailable();
             default -> null;
         };
+    }
+
+    private static HoldConfirmationResult confirmationRejection(String statusAndCode) {
+        return switch (statusAndCode) {
+            case "409 RESERVATION_PROCESS_ALREADY_CONFIRMED" -> new HoldConfirmationResult.AlreadyConfirmed();
+            case "404 HOLD_NOT_FOUND" -> new HoldConfirmationResult.HoldNotFound();
+            case "404 HOLD_EXPIRED" -> new HoldConfirmationResult.HoldExpired();
+            case "403 HOLD_OWNER_MISMATCH" -> new HoldConfirmationResult.OwnerMismatch();
+            case "400 EXTERNAL_PATIENT_MISMATCH" -> new HoldConfirmationResult.PatientMismatch();
+            case "404 PROFESSIONAL_NOT_FOUND" -> new HoldConfirmationResult.ProfessionalNotFound();
+            case "400 INVALID_SLOT" -> new HoldConfirmationResult.InvalidSlot();
+            case "409 SLOT_ALREADY_RESERVED" -> new HoldConfirmationResult.SlotNotAvailable();
+            default -> null;
+        };
+    }
+
+    // Un rechazo conocido de la operación es una respuesta definitiva; la integración inexistente, un error de
+    // configuración; cualquier otro, una respuesta no prevista
+    private static <T> CatedraResponse<T> rejected(int status, CatedraErrorResponse error, Function<String, T> knownRejection) {
+        String code = error == null ? null : error.getCode();
+        T result = knownRejection.apply(status + " " + code);
         if (result != null) {
             return new CatedraResponse.Answered<>(result);
         }

@@ -33,6 +33,7 @@ public class ReservationProcessEntity implements Persistable<String> {
     @Enumerated(EnumType.STRING)
     private ReservationStatus status;
     private Instant expiresAt;
+    private boolean needsReconciliation;
 
     @Transient
     @Builder.Default

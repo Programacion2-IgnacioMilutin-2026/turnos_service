@@ -23,6 +23,7 @@ public class ReservationProcessMapper {
                 .startTime(reservationProcess.getStartTime())
                 .status(reservationProcess.getStatus())
                 .expiresAt(reservationProcess.getExpiresAt())
+                .needsReconciliation(reservationProcess.isNeedsReconciliation())
                 .build();
     }
 
@@ -42,6 +43,7 @@ public class ReservationProcessMapper {
                 .startTime(entity.getStartTime())
                 .status(entity.getStatus())
                 .expiresAt(entity.getExpiresAt())
+                .needsReconciliation(entity.isNeedsReconciliation())
                 .build();
     }
 }

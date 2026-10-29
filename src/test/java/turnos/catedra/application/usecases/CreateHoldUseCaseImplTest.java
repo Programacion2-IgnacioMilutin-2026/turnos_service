@@ -9,6 +9,7 @@ import turnos.catedra.application.support.CatedraOperationRunner;
 import turnos.catedra.domain.model.CatedraOperationPolicy;
 import turnos.catedra.domain.model.CatedraResponse;
 import turnos.catedra.domain.model.Hold;
+import turnos.catedra.domain.model.HoldConfirmationResult;
 import turnos.catedra.domain.model.HoldResult;
 import turnos.catedra.domain.model.ProvisioningStatus;
 import turnos.catedra.domain.model.TechnicalLoginPolicy;
@@ -149,6 +150,13 @@ class CreateHoldUseCaseImplTest {
                                                       String externalPatientId, String technicalToken) {
             calls.add(professionalId + " " + date + " " + startTime + " " + externalPatientId + " " + technicalToken);
             return script.get(Math.min(calls.size(), script.size()) - 1);
+        }
+
+        @Override
+        public CatedraResponse<HoldConfirmationResult> confirmHold(String holdId, String externalPatientId,
+                                                                   String patientFirstName, String patientLastName,
+                                                                   String technicalToken) {
+            throw new UnsupportedOperationException("Creating a hold never confirms one");
         }
     }
 }

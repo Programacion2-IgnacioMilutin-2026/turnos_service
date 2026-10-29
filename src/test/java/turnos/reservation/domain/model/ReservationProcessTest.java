@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class ReservationProcessTest {
 
@@ -57,6 +58,57 @@ class ReservationProcessTest {
 
         assertThat(process.expireIfOverdue(EXPIRES_AT.plusSeconds(3600), MARGIN)).isFalse();
         assertThat(process.getStatus()).isEqualTo(ReservationStatus.PHONE_SUBMITTED);
+    }
+
+    @Test
+    void aHeldProcessConfirmedWaitsForThePhoneUntilTheExpirationOfTheCatedra() {
+        ReservationProcess process = process(ReservationStatus.HELD);
+        Instant confirmedExpiresAt = EXPIRES_AT.plusSeconds(5);
+
+        process.confirm(confirmedExpiresAt);
+
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
+        assertThat(process.getExpiresAt()).isEqualTo(confirmedExpiresAt);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"WAITING_FOR_PHONE", "PHONE_SUBMITTED", "EXPIRED"})
+    void onlyAHeldProcessCanBeConfirmed(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        assertThatThrownBy(() -> process.confirm(EXPIRES_AT.plusSeconds(5))).isInstanceOf(IllegalStateException.class);
+        assertThat(process.getStatus()).isEqualTo(status);
+        assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE"})
+    void aProcessWaitingForTheUserExpiresWhenTheCatedraSaysSo(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        process.expire();
+
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.EXPIRED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "EXPIRED"})
+    void aProcessThatIsNotWaitingForTheUserDoesNotExpire(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        assertThatThrownBy(process::expire).isInstanceOf(IllegalStateException.class);
+        assertThat(process.getStatus()).isEqualTo(status);
+    }
+
+    @Test
+    void aProcessIsNotMarkedForReconciliationUntilAskedTo() {
+        ReservationProcess process = process(ReservationStatus.HELD);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+
+        process.markForReconciliation();
+
+        assertThat(process.isNeedsReconciliation()).isTrue();
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.HELD);
     }
 
     private static ReservationProcess process(ReservationStatus status) {

@@ -3,6 +3,7 @@ package turnos.reservation.application.usecases;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import turnos.reservation.application.support.UserOperationLock;
 import turnos.reservation.application.exception.ReservationHoldNotSavedException;
 import turnos.reservation.application.exception.ReservationInvalidSlotException;
 import turnos.reservation.application.exception.ReservationOpenProcessConflictException;
@@ -28,10 +29,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Supplier;
 
 @Slf4j
 @Component
@@ -44,9 +41,8 @@ public class CreateReservationProcessUseCaseImpl implements CreateReservationPro
     private final HoldProvider holdProvider;
     private final ReservationPolicy reservationPolicy;
     private final Clock clock;
-    // Un candado por usuario: sus pedidos se atienden de a uno, y los de usuarios distintos no se esperan.
-    // Cada candado se descarta cuando nadie lo usa, para que el mapa no crezca con cada usuario
-    private final Map<Long, UserLock> userLocks = new ConcurrentHashMap<>();
+    // El mismo candado que usa la confirmación: un bloqueo nunca corre a la vez que otra operación del mismo usuario
+    private final UserOperationLock userOperationLock;
 
     // Primero lo que no necesita a nadie de afuera: el turno no pasó y el usuario existe. Lo demás, de a un pedido
     // por usuario, porque ver que no tiene un proceso abierto y guardar el nuevo tienen que ocurrir sin otro en el medio
@@ -57,7 +53,7 @@ public class CreateReservationProcessUseCaseImpl implements CreateReservationPro
         if (!userDirectory.exists(userId)) {
             throw new ReservationUserNotFoundException(userId);
         }
-        return exclusivelyFor(userId, () -> holdAndSave(userId, professionalId, date, startTime, userToken));
+        return userOperationLock.exclusivelyFor(userId, () -> holdAndSave(userId, professionalId, date, startTime, userToken));
     }
 
     private ReservationProcess holdAndSave(Long userId, Long professionalId, LocalDate date, LocalTime startTime,
@@ -136,36 +132,5 @@ public class CreateReservationProcessUseCaseImpl implements CreateReservationPro
         long millis = Duration.between(clock.instant(), process.getExpiresAt()).toMillis();
         long seconds = Math.max(0, (millis + 999) / 1000);
         return new ReservationHoldNotSavedException(process.getReservationProcessId(), process.getExpiresAt(), seconds, cause);
-    }
-
-    private <T> T exclusivelyFor(Long userId, Supplier<T> work) {
-        UserLock userLock = userLocks.compute(userId, (id, current) -> (current == null ? new UserLock() : current).take());
-        userLock.lock().lock();
-        try {
-            return work.get();
-        } finally {
-            userLock.lock().unlock();
-            userLocks.computeIfPresent(userId, (id, current) -> current.release());
-        }
-    }
-
-    // Cuántos pedidos usan el candado; solo se modifica dentro de compute, que el mapa ejecuta de a uno por usuario
-    private static final class UserLock {
-        private final ReentrantLock lock = new ReentrantLock();
-        private int users;
-
-        ReentrantLock lock() {
-            return lock;
-        }
-
-        UserLock take() {
-            users++;
-            return this;
-        }
-
-        UserLock release() {
-            users--;
-            return users == 0 ? null : this;
-        }
     }
 }

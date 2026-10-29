@@ -27,6 +27,11 @@ class InMemoryUserRepository implements UserRepository {
     }
 
     @Override
+    public Optional<User> findById(Long id) {
+        return users.stream().filter(user -> user.getId().equals(id)).findFirst();
+    }
+
+    @Override
     public boolean existsByLogin(String login) {
         return findByLogin(login).isPresent();
     }

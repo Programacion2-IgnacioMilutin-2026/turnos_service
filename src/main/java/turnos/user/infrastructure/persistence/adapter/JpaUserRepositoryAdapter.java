@@ -31,6 +31,12 @@ public class JpaUserRepositoryAdapter implements UserRepository {
     }
 
     @Override
+    public Optional<User> findById(Long id) {
+        return jpaUserRepository.findById(id)
+                .map(userMapper::toDomainModel);
+    }
+
+    @Override
     public boolean existsByLogin(String login) {
         return jpaUserRepository.existsByLogin(login);
     }

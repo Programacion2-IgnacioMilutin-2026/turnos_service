@@ -110,6 +110,68 @@ class JpaReservationProcessRepositoryAdapterTest {
     }
 
     @Test
+    void aProcessIsFoundOnlyForItsOwner() {
+        Long maria = newUser("maria.gomez");
+        Long juan = newUser("juan.perez");
+        ReservationProcess original = repository.create(held("process-1", maria));
+        entityManager.clear();
+
+        assertThat(repository.findByIdAndUserId("process-1", maria)).get().usingRecursiveComparison().isEqualTo(original);
+        assertThat(repository.findByIdAndUserId("process-1", juan)).isEmpty();
+        assertThat(repository.findByIdAndUserId("process-missing", maria)).isEmpty();
+    }
+
+    @Test
+    void markingForReconciliationChangesOnlyTheMark() {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess original = repository.create(held("process-1", userId));
+        entityManager.clear();
+
+        repository.markForReconciliation("process-1");
+        entityManager.clear();
+
+        ReservationProcess marked = repository.findByIdAndUserId("process-1", userId).orElseThrow();
+        assertThat(marked.isNeedsReconciliation()).isTrue();
+        assertThat(marked).usingRecursiveComparison().ignoringFields("needsReconciliation").isEqualTo(original);
+    }
+
+    @Test
+    void markingAMissingProcessChangesNothing() {
+        repository.markForReconciliation("process-missing");
+
+        assertThat(entityManager.getEntityManager().createNativeQuery("SELECT count(*) FROM reservation_processes")
+                .getSingleResult()).isEqualTo(0L);
+    }
+
+    @Test
+    void aMarkSavedWithTheWholeProcessIsReadBack() {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess process = repository.create(held("process-1", userId));
+        process.markForReconciliation();
+
+        repository.update("process-1", process);
+        entityManager.clear();
+
+        ReservationProcess read = repository.findByIdAndUserId("process-1", userId).orElseThrow();
+        assertThat(read.isNeedsReconciliation()).isTrue();
+        assertThat(read.getStatus()).isEqualTo(ReservationStatus.HELD);
+    }
+
+    // Así quedan los procesos que ya estaban en la base cuando se agregó la marca
+    @Test
+    void aProcessSavedWithoutTheMarkIsNotMarked() {
+        Long userId = newUser("maria.gomez");
+        entityManager.getEntityManager().createNativeQuery("""
+                        INSERT INTO reservation_processes (reservation_process_id, hold_id, user_id, professional_id,
+                                                           appointment_date, start_time, status, expires_at)
+                        VALUES ('process-old', 'hold-old', :userId, 201, DATE '2026-11-02', TIME '12:00', 'HELD', now())
+                        """)
+                .setParameter("userId", userId).executeUpdate();
+
+        assertThat(repository.findByIdAndUserId("process-old", userId).orElseThrow().isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
     void aProcessOfAUserThatDoesNotExistIsNotSaved() {
         assertThatThrownBy(() -> repository.create(held("process-1", 999_999L)))
                 .isInstanceOf(ReservationNotSavedException.class)
