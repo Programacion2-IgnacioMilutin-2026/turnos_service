@@ -18,11 +18,17 @@ import turnos.TestSecurityConfiguration;
 import turnos.TestTokens;
 import turnos.reservation.application.exception.ReservationCatalogUnavailableException;
 import turnos.reservation.application.exception.ReservationCentralUnavailableException;
+import turnos.reservation.application.exception.ReservationHoldExpiredException;
+import turnos.reservation.application.exception.ReservationHoldNotFoundException;
 import turnos.reservation.application.exception.ReservationHoldNotSavedException;
 import turnos.reservation.application.exception.ReservationIntegrationException;
+import turnos.reservation.application.exception.ReservationInvalidProcessStateException;
 import turnos.reservation.application.exception.ReservationInvalidSlotException;
+import turnos.reservation.application.exception.ReservationLocalStateOutOfSyncException;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.application.exception.ReservationOpenProcessExistsException;
+import turnos.reservation.application.exception.ReservationPatientMismatchException;
+import turnos.reservation.application.exception.ReservationProcessNotFoundException;
 import turnos.reservation.application.exception.ReservationProfessionalDisabledException;
 import turnos.reservation.application.exception.ReservationProfessionalNotFoundException;
 import turnos.reservation.application.exception.ReservationServiceDegradedException;
@@ -238,6 +244,87 @@ class ReservationProcessControllerTest {
         request("{\"professionalId\":201,\"date\":\"2026-11-02\",\"startTime\":\"10:30\",\"userId\":99}")
                 .andExpect(status().isCreated());
         verify(reservationService).createReservationProcess(42L, 201L, DATE, TEN_THIRTY, TOKEN);
+    }
+
+    // Marcado para reconciliar a propósito: la marca nunca aparece en la respuesta
+    private static final ReservationProcess WAITING = ReservationProcess.builder()
+            .reservationProcessId("process-1").holdId("hold-1").userId(42L).professionalId(201L)
+            .professionalFirstName("Ana").professionalLastName("Gomez").professionalCategoryName("Clinica medica")
+            .date(DATE).startTime(TEN_THIRTY).status(ReservationStatus.WAITING_FOR_PHONE)
+            .expiresAt(Instant.parse("2026-10-27T04:44:38.627744064Z")).needsReconciliation(true).build();
+
+    @Test
+    void aConfirmedProcessAnswersOkWithTheFieldsOfTheAnswerWithoutTheHoldNorTheMark() throws Exception {
+        when(reservationService.confirmReservationProcess(42L, "process-1")).thenReturn(WAITING);
+
+        MockHttpServletResponse response = confirm("process-1")
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andReturn().getResponse();
+
+        Map<String, Object> body = JsonPath.read(response.getContentAsString(), "$");
+        assertThat(body).containsOnlyKeys("reservationProcessId", "status", "professionalId", "professionalFirstName",
+                "professionalLastName", "professionalCategoryName", "date", "startTime", "expiresAt", "rejectionReason",
+                "reservationId", "confirmedAt", "cancelledAt", "cancellationReason");
+        assertThat(body).containsEntry("reservationProcessId", "process-1").containsEntry("status", "WAITING_FOR_PHONE")
+                .containsEntry("startTime", "10:30").containsEntry("expiresAt", "2026-10-27T04:44:38Z")
+                .containsEntry("rejectionReason", null).containsEntry("reservationId", null)
+                .containsEntry("confirmedAt", null).containsEntry("cancelledAt", null).containsEntry("cancellationReason", null);
+        assertThat(response.getContentAsString()).doesNotContain("hold-1").doesNotContain("econciliation");
+    }
+
+    @Test
+    void eachConfirmationErrorAnswersItsStatusAndCodeWithoutTheInternalReason() throws Exception {
+        Map<RuntimeException, List<Object>> expected = Map.ofEntries(
+                Map.entry(new ReservationProcessNotFoundException("process-1"), List.of(404, "RESERVATION_PROCESS_NOT_FOUND")),
+                Map.entry(new ReservationHoldExpiredException("hold-1"), List.of(409, "HOLD_EXPIRED")),
+                Map.entry(new ReservationHoldNotFoundException("hold-1"), List.of(404, "HOLD_NOT_FOUND")),
+                Map.entry(new ReservationPatientMismatchException("hold-1"), List.of(409, "PATIENT_MISMATCH")),
+                Map.entry(new ReservationProfessionalNotFoundException(201L), List.of(404, "PROFESSIONAL_NOT_FOUND")),
+                Map.entry(new ReservationInvalidSlotException(201L), List.of(400, "INVALID_SLOT")),
+                Map.entry(new ReservationSlotNotAvailableException(201L), List.of(409, "SLOT_NOT_AVAILABLE")),
+                Map.entry(new ReservationServiceDegradedException("config-internal-reason"), List.of(503, "SERVICE_DEGRADED")),
+                Map.entry(new ReservationCentralUnavailableException("catedra-internal-reason"), List.of(503, "CENTRAL_UNAVAILABLE")),
+                Map.entry(new ReservationLocalStateOutOfSyncException("process-1", new IllegalStateException("db-internal-reason")),
+                        List.of(500, "LOCAL_STATE_OUT_OF_SYNC")),
+                Map.entry(new ReservationIntegrationException("Hold owner mismatch"), List.of(500, "INTERNAL_ERROR")));
+
+        for (Map.Entry<RuntimeException, List<Object>> entry : expected.entrySet()) {
+            doThrow(entry.getKey()).when(reservationService).confirmReservationProcess(anyLong(), anyString());
+            String body = expectProblem(confirm("process-1"), (Integer) entry.getValue().get(0), (String) entry.getValue().get(1))
+                    .andReturn().getResponse().getContentAsString();
+            assertThat(body).doesNotContain("internal-reason").doesNotContain("hold-1").doesNotContain("mismatch");
+        }
+    }
+
+    @Test
+    void aProcessInAnotherStateAnswersConflictWithItsCurrentStatus() throws Exception {
+        doThrow(new ReservationInvalidProcessStateException("process-1", ReservationStatus.PHONE_SUBMITTED))
+                .when(reservationService).confirmReservationProcess(anyLong(), anyString());
+
+        expectProblem(confirm("process-1"), 409, "INVALID_PROCESS_STATE")
+                .andExpect(jsonPath("$.currentStatus").value("PHONE_SUBMITTED"));
+    }
+
+    @Test
+    void withoutTokenTheConfirmationIsNeverRequested() throws Exception {
+        mockMvc.perform(post(PATH + "/process-1/confirm")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void theOwnerComesFromTheTokenAndTheProcessFromThePathIgnoringAnyBody() throws Exception {
+        when(reservationService.confirmReservationProcess(anyLong(), anyString())).thenReturn(WAITING);
+
+        mockMvc.perform(post(PATH + "/process-1/confirm").header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":99,\"reservationProcessId\":\"process-9\"}"))
+                .andExpect(status().isOk());
+        verify(reservationService).confirmReservationProcess(42L, "process-1");
+    }
+
+    private ResultActions confirm(String reservationProcessId) throws Exception {
+        return mockMvc.perform(post(PATH + "/" + reservationProcessId + "/confirm")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN));
     }
 
     private void throwing(RuntimeException exception) {

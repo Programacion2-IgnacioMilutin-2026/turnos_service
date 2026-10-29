@@ -38,7 +38,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 // Contra la cátedra real, con la cuenta técnica del .env local: solo con ./mvnw test -Pe2e. Sin credenciales se saltea.
-// Crea un hold real en un turno libre y al terminar intenta cancelarlo directamente en la cátedra, para no dejarlo tomado.
+// Crea un hold real en un turno libre, lo confirma y al terminar intenta cancelarlo directamente en la cátedra, para no
+// dejarlo tomado.
 // Si la cátedra no lo permite, lo avisa sin fallar: lo que se prueba es la creación del hold, y el hold vence solo
 @Tag("e2e")
 @EnabledIf(value = "e2e.E2ECredentials#available", disabledReason = "No catedra credentials in the local .env: E2E tests skipped")
@@ -82,7 +83,7 @@ class ReservationProcessE2ETest {
     private Instant expiresAt;
 
     @Test
-    void aRegisteredUserBlocksAFreeSlotWithTheRealCatedra(CapturedOutput output) {
+    void aRegisteredUserBlocksAFreeSlotAndConfirmsItWithTheRealCatedra(CapturedOutput output) {
         await().atMost(Duration.ofSeconds(30)).until(() -> technicalSessionRepository.get().isEnabled());
         restTestClient.post().uri("/api/register").contentType(MediaType.APPLICATION_JSON).body(REGISTER_BODY)
                 .exchange().expectStatus().isCreated();
@@ -113,12 +114,22 @@ class ReservationProcessE2ETest {
         assertThat(expiresAt).isAfter(Instant.now());
         System.out.println("E2E hold " + reservationProcessId + " for professional 201 on " + monday + " at " + slot
                 + ", expires at " + expiresAt);
+
+        // Confirmar no extiende el vencimiento: la cátedra devuelve el mismo del hold
+        String confirmed = restTestClient.post().uri("/api/reservation-processes/{id}/confirm", reservationProcessId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).exchange()
+                .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+
+        assertThat(JsonPath.<String>read(confirmed, "$.reservationProcessId")).isEqualTo(reservationProcessId);
+        assertThat(JsonPath.<String>read(confirmed, "$.status")).isEqualTo("WAITING_FOR_PHONE");
+        assertThat(JsonPath.<String>read(confirmed, "$.expiresAt")).isEqualTo(JsonPath.<String>read(body, "$.expiresAt"));
+        System.out.println("E2E confirmation of " + reservationProcessId + ": WAITING_FOR_PHONE until " + expiresAt);
         assertThat(output.getAll()).doesNotContain(userToken).doesNotContain(technicalSessionRepository.get().token());
     }
 
     // Deshace en la cátedra real lo que creó el test. Nunca muestra la URL ni el token técnico
     @AfterEach
-    void cancelTheHold() {
+    void cancelTheProcess() {
         if (reservationProcessId == null) {
             return;
         }
@@ -132,9 +143,9 @@ class ReservationProcessE2ETest {
                 .toEntity(String.class);
         int status = response.getStatusCode().value();
         if (status == 200) {
-            System.out.println("E2E: hold " + reservationProcessId + " cancelled");
+            System.out.println("E2E: process " + reservationProcessId + " cancelled");
         } else {
-            System.out.println("E2E: hold " + reservationProcessId + " could not be cancelled (HTTP " + status
+            System.out.println("E2E: process " + reservationProcessId + " could not be cancelled (HTTP " + status
                     + "); it expires at " + expiresAt);
         }
     }

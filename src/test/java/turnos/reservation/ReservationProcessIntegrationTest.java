@@ -54,6 +54,9 @@ class ReservationProcessIntegrationTest {
     private static final FakeHttpServer CATALOG = FakeHttpServer.start();
     private static final FakeCatedraServer CATEDRA = FakeCatedraServer.start();
     private static final String HOLDS_PATH = "/api/appointment-holds";
+    // El hold de la grabación del hold
+    private static final String CONFIRM_PATH = HOLDS_PATH + "/hold-fbeebd61-9202-443f-ac9f-6d54ff090adc/confirm";
+    private static final String PROCESS = "process-445b6066-e657-40ad-9a7e-e87a0e803e54";
     // Lunes de 12:00 a 15:00 cada 30 minutos
     private static final String PROFESSIONAL = """
             {"id":201,"firstName":"Ana","lastName":"Gomez","enabled":true,
@@ -101,6 +104,8 @@ class ReservationProcessIntegrationTest {
 
     private String userToken;
     private Long userId;
+    // Confirmar no cambia el vencimiento: el hold y la confirmación traen el mismo
+    private Instant holdExpiresAt;
 
     // Los procesos se borran antes que los usuarios: la base no deja borrar un usuario con procesos
     @BeforeEach
@@ -114,7 +119,9 @@ class ReservationProcessIntegrationTest {
         userToken = JsonPath.read(body, "$.id_token");
         userId = jdbcTemplate.queryForObject("SELECT id FROM users WHERE login = 'maria.gomez'", Long.class);
         CATALOG.respondToAnyPath(FakeHttpServer.Response.of(200, PROFESSIONAL));
+        holdExpiresAt = Instant.now().plus(10, ChronoUnit.MINUTES);
         CATEDRA.http().respond(HOLDS_PATH, FakeHttpServer.Response.of(201, grantedHold()));
+        CATEDRA.http().respond(CONFIRM_PATH, FakeHttpServer.Response.of(202, acceptedConfirmation()));
     }
 
     @AfterEach
@@ -215,6 +222,69 @@ class ReservationProcessIntegrationTest {
     }
 
     @Test
+    void aLoggedInUserConfirmsTheBlockedSlotWithTheNameOfHerProfile() {
+        String blocked = block(userToken, "12:30").expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
+        long confirmationsBefore = confirmRequests();
+
+        String body = confirm(userToken, PROCESS).expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+
+        assertThat(JsonPath.<String>read(body, "$.reservationProcessId")).isEqualTo(PROCESS);
+        assertThat(JsonPath.<String>read(body, "$.status")).isEqualTo("WAITING_FOR_PHONE");
+        assertThat(JsonPath.<String>read(body, "$.expiresAt")).isEqualTo(JsonPath.<String>read(blocked, "$.expiresAt"));
+        assertThat(body).doesNotContain("hold-fbeebd61").doesNotContain("econciliation");
+
+        FakeHttpServer.ReceivedRequest request = CATEDRA.receivedRequests().stream()
+                .filter(r -> r.path().equals(CONFIRM_PATH)).toList().get((int) confirmationsBefore);
+        assertThat(request.header("Authorization")).isEqualTo("Bearer " + FakeCatedraServer.TOKEN);
+        assertThat(JsonMapper.builder().build().readValue(request.body(), Map.class)).isEqualTo(Map.of(
+                "externalPatientId", userId.toString(), "patientFirstName", "María", "patientLastName", "Gómez"));
+        Map<String, Object> saved = jdbcTemplate.queryForMap("SELECT * FROM reservation_processes");
+        assertThat(saved).containsEntry("status", "WAITING_FOR_PHONE").containsEntry("needs_reconciliation", false);
+    }
+
+    @Test
+    void aSecondConfirmationAnswersWithTheCurrentStatusWithoutCallingTheCatedra() {
+        block(userToken, "12:30").expectStatus().isCreated();
+        confirm(userToken, PROCESS).expectStatus().isOk();
+        long confirmationsBefore = confirmRequests();
+
+        String body = confirm(userToken, PROCESS).expectStatus().isEqualTo(409).expectBody(String.class).returnResult().getResponseBody();
+
+        assertThat(JsonPath.<String>read(body, "$.code")).isEqualTo("INVALID_PROCESS_STATE");
+        assertThat(JsonPath.<String>read(body, "$.currentStatus")).isEqualTo("WAITING_FOR_PHONE");
+        assertThat(confirmRequests()).isEqualTo(confirmationsBefore);
+    }
+
+    @Test
+    void theTokenOfAUserThatDoesNotExistFindsNoProcessToConfirm() {
+        block(userToken, "12:30").expectStatus().isCreated();
+        long confirmationsBefore = confirmRequests();
+
+        String body = confirm(TestTokens.forUser("999999", "ROLE_USER"), PROCESS).expectStatus().isNotFound()
+                .expectBody(String.class).returnResult().getResponseBody();
+
+        assertThat(JsonPath.<String>read(body, "$.code")).isEqualTo("RESERVATION_PROCESS_NOT_FOUND");
+        assertThat(confirmRequests()).isEqualTo(confirmationsBefore);
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM reservation_processes", String.class)).isEqualTo("HELD");
+    }
+
+    @Test
+    void aCatedraThatDoesNotAnswerTheConfirmationLeavesTheProcessHeldAndMarked(CapturedOutput output) {
+        block(userToken, "12:30").expectStatus().isCreated();
+        CATEDRA.http().respond(CONFIRM_PATH, FakeHttpServer.Response.of(500, "{}"));
+        long confirmationsBefore = confirmRequests();
+
+        String body = confirm(userToken, PROCESS).expectStatus().isEqualTo(503).expectBody(String.class).returnResult().getResponseBody();
+
+        assertThat(JsonPath.<String>read(body, "$.code")).isEqualTo("CENTRAL_UNAVAILABLE");
+        assertThat(confirmRequests()).isEqualTo(confirmationsBefore + 3);
+        Map<String, Object> saved = jdbcTemplate.queryForMap("SELECT * FROM reservation_processes");
+        assertThat(saved).containsEntry("status", "HELD").containsEntry("needs_reconciliation", true);
+        assertThat(output.getAll()).contains("confirmation of hold-fbeebd61-9202-443f-ac9f-6d54ff090adc attempt 3/3 failed")
+                .doesNotContain(userToken).doesNotContain(FakeCatedraServer.TOKEN);
+    }
+
+    @Test
     void theZoneAndTheMarginComeFromTheEnvironmentAndTheZoneIsSharedWithAvailability() {
         assertThat(reservationPolicy.zone()).isEqualTo(ZoneId.of("America/Argentina/Cordoba"));
         assertThat(availabilityPolicy.zone()).isEqualTo(reservationPolicy.zone());
@@ -234,9 +304,25 @@ class ReservationProcessIntegrationTest {
     }
 
     // La respuesta real grabada, con un vencimiento dentro de diez minutos para que el proceso siga abierto
-    private static String grantedHold() {
-        return recording("hold-201-created.json").replace("2026-10-27T04:44:38.627744064Z",
-                Instant.now().plus(10, ChronoUnit.MINUTES).toString());
+    private String grantedHold() {
+        return recording("hold-201-created.json").replace("2026-10-27T04:44:38.627744064Z", holdExpiresAt.toString());
+    }
+
+    // La confirmación real grabada, ajustada al proceso y al vencimiento del hold de este test
+    private String acceptedConfirmation() {
+        return recording("confirm-202-accepted.json")
+                .replace("2026-10-28T05:04:54.812004682Z", holdExpiresAt.toString())
+                .replace("process-bfcb30eb-6e39-402f-bd92-95e73bfec54d", PROCESS);
+    }
+
+    private RestTestClient.ResponseSpec confirm(String token, String reservationProcessId) {
+        return restTestClient.post().uri("/api/reservation-processes/{id}/confirm", reservationProcessId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange();
+    }
+
+    private long confirmRequests() {
+        return CATEDRA.receivedRequests().stream().filter(r -> r.path().equals(CONFIRM_PATH)).count();
     }
 
     private static String recording(String name) {
