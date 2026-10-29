@@ -73,6 +73,23 @@ public class JpaReservationProcessRepositoryAdapter implements ReservationProces
                 .toList();
     }
 
+    @Override
+    public Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId) {
+        return jpaReservationProcessRepository.findByReservationProcessIdAndUserId(reservationProcessId, userId)
+                .map(reservationProcessMapper::toDomainModel);
+    }
+
+    // Un UPDATE de una sola columna: si guardar el proceso completo acaba de fallar, esto no repite esa escritura
+    @Override
+    @Transactional
+    public void markForReconciliation(String reservationProcessId) {
+        try {
+            jpaReservationProcessRepository.markForReconciliation(reservationProcessId);
+        } catch (DataAccessException e) {
+            throw new ReservationNotSavedException(reservationProcessId, e);
+        }
+    }
+
     private static boolean violates(Throwable error, String constraint) {
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
             if (cause instanceof ConstraintViolationException violation

@@ -19,6 +19,7 @@ import turnos.reservation.application.exception.ReservationProfessionalNotFoundE
 import turnos.reservation.application.exception.ReservationSlotInPastException;
 import turnos.reservation.application.exception.ReservationSlotNotAvailableException;
 import turnos.reservation.application.exception.ReservationUserNotFoundException;
+import turnos.reservation.application.support.UserOperationLock;
 import turnos.reservation.domain.model.ReservationHold;
 import turnos.reservation.domain.model.ReservationPolicy;
 import turnos.reservation.domain.model.ReservationProcess;
@@ -71,9 +72,11 @@ class CreateReservationProcessUseCaseImplTest {
     private final Set<Long> users = Collections.synchronizedSet(new java.util.HashSet<>(Set.of(USER, 7L)));
     private final ScriptedProfessionalProvider professionals = new ScriptedProfessionalProvider();
     private final ScriptedHoldProvider holds = new ScriptedHoldProvider();
+    private final UserOperationLock userOperationLock = new UserOperationLock();
     private final CreateReservationProcessUseCaseImpl useCase = new CreateReservationProcessUseCaseImpl(repository,
             users::contains, professionals, holds,
-            new ReservationPolicy(ZoneId.of("America/Argentina/Mendoza"), Duration.ofSeconds(30)), clock);
+            new ReservationPolicy(ZoneId.of("America/Argentina/Mendoza"), Duration.ofSeconds(30)), clock,
+            userOperationLock);
 
     @Test
     void aSlotOfAnEarlierDayIsRejectedWithoutCallingAnyone() {
@@ -260,7 +263,7 @@ class CreateReservationProcessUseCaseImplTest {
         create(MONDAY, TEN_THIRTY);
         assertThatThrownBy(() -> create(MONDAY, LocalTime.of(11, 0))).isInstanceOf(ReservationOpenProcessExistsException.class);
 
-        assertThat((Map<?, ?>) ReflectionTestUtils.getField(useCase, "userLocks")).isEmpty();
+        assertThat((Map<?, ?>) ReflectionTestUtils.getField(userOperationLock, "userLocks")).isEmpty();
     }
 
     private ReservationProcess create(LocalDate date, LocalTime startTime) {
@@ -343,6 +346,18 @@ class CreateReservationProcessUseCaseImplTest {
         @Override
         public List<ReservationProcess> findOpenByUserId(Long userId) {
             return new ArrayList<>(processes.stream().filter(p -> p.getUserId().equals(userId) && p.isOpen()).toList());
+        }
+
+        @Override
+        public Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId) {
+            return processes.stream().filter(p -> p.getReservationProcessId().equals(reservationProcessId)
+                    && p.getUserId().equals(userId)).findFirst();
+        }
+
+        @Override
+        public void markForReconciliation(String reservationProcessId) {
+            processes.stream().filter(p -> p.getReservationProcessId().equals(reservationProcessId))
+                    .forEach(ReservationProcess::markForReconciliation);
         }
     }
 

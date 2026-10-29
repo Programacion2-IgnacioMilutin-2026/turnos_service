@@ -28,6 +28,7 @@ class ReservationProcessMapperTest {
                 .startTime(LocalTime.of(12, 0))
                 .status(ReservationStatus.HELD)
                 .expiresAt(Instant.parse("2026-10-27T04:44:38Z"))
+                .needsReconciliation(true)
                 .build();
         assertThat(original).hasNoNullFieldsOrProperties();
 

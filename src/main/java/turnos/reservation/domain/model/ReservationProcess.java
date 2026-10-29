@@ -26,6 +26,8 @@ public class ReservationProcess {
     private LocalTime startTime;
     private ReservationStatus status;
     private Instant expiresAt;
+    // El estado local puede no coincidir con el de la cátedra; lo encienden las operaciones y lo limpia la reconciliación
+    private boolean needsReconciliation;
 
     public boolean isOpen() {
         return status != null && status.isOpen();
@@ -34,6 +36,19 @@ public class ReservationProcess {
     // Vencido cuando el instante supera el vencimiento de la cátedra más el margen de seguridad
     public boolean hasExpired(Instant now, Duration margin) {
         return expiresAt != null && now.isAfter(expiresAt.plus(margin));
+    }
+
+    // La cátedra aceptó la confirmación: solo un proceso con el turno bloqueado pasa a esperar el teléfono
+    public void confirm(Instant confirmedExpiresAt) {
+        if (status != ReservationStatus.HELD) {
+            throw new IllegalStateException("Only a held process can be confirmed, this one is " + status);
+        }
+        status = ReservationStatus.WAITING_FOR_PHONE;
+        expiresAt = confirmedExpiresAt;
+    }
+
+    public void markForReconciliation() {
+        needsReconciliation = true;
     }
 
     // Solo se cierran por reloj los que esperan una acción del usuario; uno con el teléfono enviado puede tener
