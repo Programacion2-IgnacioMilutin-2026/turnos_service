@@ -90,6 +90,10 @@ sequenceDiagram
     break Professional disabled
         Service-->>App: 409 (PROFESSIONAL_DISABLED, Central API not queried)
     end
+    Service->>Service: Take the enabled weekly schedules of the date's day of week
+    break No enabled schedule that day
+        Service-->>App: 200 (empty list, professional does not attend that day, Central API not queried)
+    end
 
     Service->>Central: Get occupancies (professionalId, from = to = date), technical JWT
     Central-->>Service: Occupancies, or error
@@ -116,10 +120,6 @@ sequenceDiagram
         Note over Service,Cache: Continues with the cached occupancies, response flagged as stale with their dataAsOf
     end
 
-    Service->>Service: Take the enabled weekly schedules of the date's day of week
-    break No enabled schedule that day
-        Service-->>App: 200 (empty list, professional does not attend that day)
-    end
     Service->>Service: Generate possible slots (slotDurationMinutes), discard started ones if date is today
     Service->>Service: Discard slots occupied as CONFIRMED or HELD
     break No free slot left
@@ -172,6 +172,9 @@ sequenceDiagram
     break Catalog unavailable after retries (timeout, 503, connection lost, growing wait, max attempts)
         Service-->>App: 503 (operation cannot start, Central API not called)
     end
+    break Professional disabled
+        Service-->>App: 409 (PROFESSIONAL_DISABLED, Central API not called)
+    end
     Service->>Service: Check the slot falls inside an enabled weekly schedule of that day
     break Slot outside the enabled schedules
         Service-->>App: 400 (own functional code, Central API not called)
@@ -201,7 +204,7 @@ sequenceDiagram
     break 409 SLOT_ALREADY_RESERVED or SLOT_ALREADY_HELD
         Service-->>App: 409 (same functional code for both, slot no longer available)
     end
-    break Central API unavailable after retries (timeout, connection lost, 503, 500, growing wait, max attempts)
+    break Central API unavailable after retries (connection refused, connect timeout, 503, growing wait, max attempts), or answer lost (read timeout, 500), not retried
         Service-->>App: 503 (hold could not be created, no local process)
     end
     Service->>DB: Create process HELD (user, holdId, reservationProcessId, slot, expiresAt, professional name and category)
@@ -230,7 +233,7 @@ sequenceDiagram
         Service-->>App: 409 (HOLD_EXPIRED, Central API not called)
     end
     Service->>Central: Confirm hold (externalPatientId, patientFirstName and patientLastName from the user profile), technical JWT
-    Central-->>Service: reservationProcessId, WAITING_FOR_PHONE and new expiresAt, or error
+    Central-->>Service: reservationProcessId, WAITING_FOR_PHONE and expiresAt (same as the hold), or error
     opt 401 (technical JWT expired or rejected)
         Service->>Service: Run X01 (authenticate again), once
         Service->>Central: Confirm hold again
@@ -240,11 +243,11 @@ sequenceDiagram
         Service->>Service: Log configuration error
         Service-->>App: 503 (no details)
     end
-    break 404 HOLD_NOT_FOUND
+    break 404 HOLD_NOT_FOUND before the local expiresAt
         Service->>Service: Log error
         Service-->>App: 404 (functional code)
     end
-    break 404 HOLD_EXPIRED
+    break 404 HOLD_EXPIRED, or 404 HOLD_NOT_FOUND once the local expiresAt has passed (expired holds answer so)
         Service->>DB: Mark process EXPIRED
         Service-->>App: 409 (HOLD_EXPIRED)
     end
@@ -268,7 +271,7 @@ sequenceDiagram
         Service->>DB: Mark process for reconciliation (T13), it stays HELD
         Service-->>App: 503
     end
-    Service->>DB: Update process to WAITING_FOR_PHONE with the new expiresAt
+    Service->>DB: Update process to WAITING_FOR_PHONE with the expiresAt from Central API
     break Local persistence fails (Central API already advanced the process)
         Service->>Service: Log critical error and mark for reconciliation (T13)
         Service-->>App: 500 (functional code)

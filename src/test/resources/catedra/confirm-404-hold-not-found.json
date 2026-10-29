@@ -1,0 +1,1 @@
+{"detail":"Hold not found","instance":"/api/appointment-holds/hold-00000000-0000-0000-0000-000000000000/confirm","status":404,"title":"Not Found","type":"https://www.jhipster.tech/problem/problem-with-message","message":"error.http.404","path":"/api/appointment-holds/hold-00000000-0000-0000-0000-000000000000/confirm","code":"HOLD_NOT_FOUND"}

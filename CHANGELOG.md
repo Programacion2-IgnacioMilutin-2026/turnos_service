@@ -47,4 +47,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentacion de decision tomada acerca de porque se desactiva el CSRF
 ### Changed
 - En UserController se cambio el orden de llamada a toDomain para que sonarqube no marque el error 'A NULL object should not be accessed'.
-- Expresion regular de UserRequest para pasar solucionar los issues de sonarqube. Se cambiaron las alternativas de esta y se soluciono para evitar StackOverflow en un input largo
+- Expresion regular de UserRequest para pasar solucionar los issues de sonarqube. Se cambiaron las alternativas de esta y se soluciono para evitar StackOverflow en un input largo.
+
+## 2026-10-24
+### Added
+- Documentacion de SDD para la validacion de jwt, utlizado pra proteger endpoints.
+- Archivos relacionados con la validacion del jwt.
+- Tests de la validacion del jwt.
+- Tests para el CORS.
+- Documentacion de decisiones sobre la validacion del jwt y configuracion de CORS.
+- Se maneja error 'no resource' para que no revelar informacion.
+### Changed
+- SecurityConfig ahora funciona con la cadena de seguridad, sumando el CORS.
+- La configuracion del CORS se suma al application.yaml. Le agrega los orgines permitidos.
+- Se modificaron los test de otras funciones pra que funcionen a corde a esta actualizacion.
+
+## 2026-10-26
+### Added
+- Servidor http para tests simulando el servicio de catedra y de catalogo.
+- Slice 'Catalog'. Maneja las comunicaciones con el servicio de catalogo. 
+- Archivos para la comunicacion con la catedra. Dentro de slice 'Catedra'.
+- Slice 'Availability'. Maneja los turnos libres.
+- Tests para lo añadido en 'Catalog', 'Catedra' y 'Availability'.
+- Cache de 'Availability'.
+- Endpoint para obtener 'free-slots'.
+- Test End to End que incluye solo la consulta de turnos libres (T03). Solo llamados con el servicio de catedra ya que en este momento el servicio de catalogo no existe. 
+- Documentacion para el SDD de T04-CrearHold y las decisiones tomadas.
+### Changed
+- Se cambio el nombre de el slice 'Integration' a 'Catedra', representando y manejando las comunicaciones con la catedra.
+- application.yaml actualizado con lo incluido en el slice 'Availability'.
+- Documentacion de contratos, casos de uso y secuencias debido a decisiones tomadas para aplicar T04-CrearHold.
+
+## 2026-10-27
+### Added
+- Mas atributos en slice 'Catalog'. Los que se agregan porque los utiliza el caso de uso T04-CrearHold.
+- Pieza comun a slice 'Catedra'.
+- Archivos para la creacion del hold en slice 'Catedra'. Es la comunicacion y pedrile al servicio de catedra.
+- En slice 'User', saber si existe un usuario, para utliarlo en el caso de uso T04-CrearHold.
+- Nuevo slice 'Reservation'. Todos sus archivos principales y los creados debido al caso de uso T04-CrearHold.
+- Tests para todo lo añadido en el dia de la fecha.
+- Se incluyela creacion del hold en el test E2E.
+### Changed
+- Application.yaml para que se adapte al caso de uso T04-CrearHold.
+
+## 2026-10-28
+### Added
+- Documentacion de SDD para el caso de uso T05-ConfirmarReserva
+### Changed
+- Documentacion actualizada debido a que se descubrio que una confrimacion no reincia el contador expiresAt de un proceso abierto.
+
+## 2026-10-29
+### Added
+- Archivos a slice 'User' para poder realizar la consulta por a traves de un UsaerName.
+- Archivos a slice 'Catedra' para manejar la confirmacion de un hold con el servicio de catedra.
+- En slice 'Reservation', se sumo el atributo needsReconciliation, por lo que se agrega a todos los archivos que nombren a los atributos. Ademas de funciones para cambiar el valor de este atributo.
+- Lock o candado general en slice 'Reservation', de esta forma el hold y luego de confirmar utlizan el mismo lock. 
+- Caso de uso de confirmacion de hold en slice 'Reservation', con su gateway para poder realizar estos hablar con el slice 'Catedra'.
+- Endpoint para confirmar el hold en slice 'Reservation' e integracion con la applicacion.
+- Tests para todos los archivos agregados en este dia. 
+- Se agregan las nuevas funcionalidades al test E2E.
+### Changed
+- Se descubrio que la catedra devuelve HOLD_NOT_FOUND cuiando este vence, por lo que se actualizo la documentacion para que sea consistente con la realidad.
+- Ahora el candado del hold del slice 'Reservation' es general, por lo que se lo quito y modifico del CreateReservationProcessUseCaseImpl.

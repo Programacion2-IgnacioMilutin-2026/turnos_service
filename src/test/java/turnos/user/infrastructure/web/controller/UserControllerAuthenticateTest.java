@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -14,11 +15,13 @@ import org.springframework.security.oauth2.jwt.JwtEncodingException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
-import turnos.config.SecurityConfig;
+import turnos.TestSecurityConfiguration;
+import turnos.TestTokens;
 import turnos.user.application.exception.UserInvalidCredentialsException;
 import turnos.user.application.service.UserService;
 import turnos.user.infrastructure.web.mapper.UserDtoMapper;
 
+import java.time.Instant;
 import java.util.stream.Stream;
 
 import static org.hamcrest.Matchers.containsString;
@@ -34,7 +37,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(UserController.class)
-@Import({SecurityConfig.class, UserDtoMapper.class})
+@Import({TestSecurityConfiguration.class, UserDtoMapper.class})
 class UserControllerAuthenticateTest {
 
     private static final String VALID_BODY = "{\"username\":\"maria.gomez\",\"password\":\"secreta123\"}";
@@ -109,6 +112,36 @@ class UserControllerAuthenticateTest {
                         .content(VALID_BODY))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.id_token").value("header.payload.signature"));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"valid", "expired"})
+    void aValidOrExpiredAuthorizationHeaderIsAlsoIgnored(String kind) throws Exception {
+        given(userService.authenticateUser("maria.gomez", "secreta123")).willReturn("header.payload.signature");
+        Instant now = Instant.now();
+        String token = "valid".equals(kind)
+                ? TestTokens.forUser("42", "ROLE_USER")
+                : TestTokens.signed(claims -> claims.subject("42").claim("auth", "ROLE_USER")
+                        .issuedAt(now.minusSeconds(3600)).expiresAt(now.minusSeconds(60)));
+
+        mockMvc.perform(post("/api/authenticate")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_BODY))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id_token").value("header.payload.signature"));
+    }
+
+    @Test
+    void anAuthorizationHeaderDoesNotChangeTheInvalidCredentialsAnswer() throws Exception {
+        given(userService.authenticateUser(anyString(), anyString())).willThrow(new UserInvalidCredentialsException());
+
+        ResultActions result = mockMvc.perform(post("/api/authenticate")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TestTokens.forUser("42", "ROLE_USER"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(VALID_BODY));
+
+        expectProblem(result, 401, "Unauthorized", "INVALID_CREDENTIALS");
     }
 
     @Test

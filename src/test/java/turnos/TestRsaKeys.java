@@ -27,6 +27,10 @@ public final class TestRsaKeys {
 		return (RSAPublicKey) KEY_PAIR.getPublic();
 	}
 
+	public static KeyPair keyPair() {
+		return KEY_PAIR;
+	}
+
 	public static KeyPair generate(int bits) {
 		try {
 			KeyPairGenerator generator = KeyPairGenerator.getInstance("RSA");

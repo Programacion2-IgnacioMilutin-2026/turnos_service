@@ -30,6 +30,10 @@
 		<java.version>25</java.version>
 		<sonar.organization>programacion2-ignaciomilutin-2026</sonar.organization>
 		<jacoco.version>0.8.15</jacoco.version>
+		<!-- Suite normal: sin los tests E2E y sin leer el .env local. El perfil e2e cambia los tres valores -->
+		<tests.env-file>${project.build.directory}/tests-do-not-read-the-local-env</tests.env-file>
+		<tests.groups></tests.groups>
+		<tests.excluded-groups>e2e</tests.excluded-groups>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -118,6 +122,17 @@
 		</dependency>
 	</dependencies>
 
+	<profiles>
+		<profile>
+			<!-- ./mvnw test -Pe2e: solo los tests E2E, contra la cátedra real con las credenciales del .env local -->
+			<id>e2e</id>
+			<properties>
+				<tests.env-file>${project.basedir}/.env</tests.env-file>
+				<tests.groups>e2e</tests.groups>
+				<tests.excluded-groups></tests.excluded-groups>
+			</properties>
+		</profile>
+	</profiles>
 	<build>
 		<plugins>
 			<plugin>
@@ -161,12 +176,14 @@
 				</executions>
 			</plugin>
 			<plugin>
-				<!-- Los tests no leen el .env local: apuntan su ruta a un archivo que no existe -->
+				<!-- Los tests no leen el .env local: apuntan su ruta a un archivo que no existe. Solo el perfil e2e lo lee -->
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
 				<configuration>
+					<groups>${tests.groups}</groups>
+					<excludedGroups>${tests.excluded-groups}</excludedGroups>
 					<systemPropertyVariables>
-						<turnos.env-file>${project.build.directory}/tests-do-not-read-the-local-env</turnos.env-file>
+						<turnos.env-file>${tests.env-file}</turnos.env-file>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>

@@ -1,0 +1,1 @@
+{"detail":"Hold not found","instance":"/api/appointment-holds/hold-d969ad8e-34cc-47da-9c02-993332f00af6/confirm","status":404,"title":"Not Found","type":"https://www.jhipster.tech/problem/problem-with-message","message":"error.http.404","path":"/api/appointment-holds/hold-d969ad8e-34cc-47da-9c02-993332f00af6/confirm","code":"HOLD_NOT_FOUND"}

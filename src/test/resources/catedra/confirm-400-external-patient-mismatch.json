@@ -1,0 +1,1 @@
+{"detail":"External patient id does not match hold","instance":"/api/appointment-holds/hold-d969ad8e-34cc-47da-9c02-993332f00af6/confirm","status":400,"title":"Bad Request","type":"https://www.jhipster.tech/problem/problem-with-message","message":"error.http.400","path":"/api/appointment-holds/hold-d969ad8e-34cc-47da-9c02-993332f00af6/confirm","code":"EXTERNAL_PATIENT_MISMATCH"}

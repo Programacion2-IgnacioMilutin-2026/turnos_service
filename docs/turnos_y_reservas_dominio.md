@@ -127,7 +127,7 @@ classDiagram
 | `ReservationProcess` | `date` | `LocalDate` | Fecha del turno |
 | `ReservationProcess` | `startTime` | `LocalTime` | Hora local de inicio del turno, sin zona horaria |
 | `ReservationProcess` | `status` | `ReservationStatus` | Estado actual del proceso |
-| `ReservationProcess` | `expiresAt` | `Instant` | Vencimiento del hold en la cátedra, en UTC; lo fija T04 y lo actualizan T05, T07 y el rechazo de teléfono de T08 |
+| `ReservationProcess` | `expiresAt` | `Instant` | Vencimiento del hold en la cátedra, en UTC; lo fija T04; T05 guarda el que informa la cátedra al confirmar (el mismo del hold), y lo actualizan T07 y el rechazo de teléfono de T08 |
 | `ReservationProcess` | `requestEventId` | `String` | Vacío hasta que T07 recibe el pedido de teléfono; es el `eventId` de ese pedido y se envía como `requestEventId` al informar el teléfono (T06) |
 | `ReservationProcess` | `phoneNumber` | `String` | Vacío hasta T06; es el último teléfono informado |
 | `ReservationProcess` | `rejectionReason` | `String` | Código con que la cátedra rechazó el teléfono (por ejemplo `INVALID_PHONE_NUMBER`); vacío si no hay rechazo vigente |

@@ -27,6 +27,11 @@ class InMemoryUserRepository implements UserRepository {
     }
 
     @Override
+    public Optional<User> findById(Long id) {
+        return users.stream().filter(user -> user.getId().equals(id)).findFirst();
+    }
+
+    @Override
     public boolean existsByLogin(String login) {
         return findByLogin(login).isPresent();
     }
@@ -34,5 +39,10 @@ class InMemoryUserRepository implements UserRepository {
     @Override
     public boolean existsByEmail(String email) {
         return users.stream().anyMatch(user -> user.getEmail().equals(email));
+    }
+
+    @Override
+    public boolean existsById(Long id) {
+        return users.stream().anyMatch(user -> user.getId().equals(id));
     }
 }

@@ -234,7 +234,7 @@ Respuesta `201`: proceso de reserva (sección 2) en estado `HELD`, con `expiresA
 | `400` | `INVALID_SLOT` | El turno no cae en un horario habilitado del profesional (T04 4.2 y 5.5). |
 | `404` | `PROFESSIONAL_NOT_FOUND` | El profesional no existe (T04 4.1 y 5.3). |
 | `409` | `OPEN_PROCESS_EXISTS` | El usuario ya tiene un proceso abierto (T04 3.2). |
-| `409` | `PROFESSIONAL_DISABLED` | El profesional ya no acepta turnos (T04 5.4). |
+| `409` | `PROFESSIONAL_DISABLED` | El profesional ya no acepta turnos (T04 4.5 y 5.4). |
 | `409` | `SLOT_NOT_AVAILABLE` | El turno ya está confirmado o bloqueado por otro (T04 5.6 y 5.7). |
 | `503` | `CATALOG_UNAVAILABLE` | Catálogo no responde tras los reintentos (T04 4.3). |
 | `503` | `SERVICE_DEGRADED` | Error de configuración con la cátedra (T04 5.2). |
@@ -279,16 +279,16 @@ Un `401` o `403` de catálogo al JWT reenviado responde `500` `INTERNAL_ERROR` (
 
 `POST /api/reservation-processes/{reservationProcessId}/confirm`, sin body. El nombre y apellido del paciente salen del perfil del usuario.
 
-Respuesta `200`: proceso de reserva (sección 2) en estado `WAITING_FOR_PHONE`, con el nuevo `expiresAt`. Si la cátedra ya lo había confirmado antes (reintento de la app), también responde `200` con el estado actual (T05 4.7).
+Respuesta `200`: proceso de reserva (sección 2) en estado `WAITING_FOR_PHONE`, con el `expiresAt` que informa la cátedra, que es el mismo del hold (confirmar no extiende el plazo). Si la cátedra ya lo había confirmado antes (reintento de la app), también responde `200` con el estado actual (T05 4.7).
 
 | Estado | `code` | Cuándo |
 | --- | --- | --- |
 | `400` | `INVALID_SLOT` | La cátedra rechaza el turno (T05 4.8). |
 | `404` | `RESERVATION_PROCESS_NOT_FOUND` | El proceso no existe o no es del usuario; no se distingue (T05 2.2). |
-| `404` | `HOLD_NOT_FOUND` | La cátedra no encuentra el hold (T05 4.3). |
+| `404` | `HOLD_NOT_FOUND` | La cátedra no encuentra el hold y su vencimiento todavía no pasó (T05 4.3). |
 | `404` | `PROFESSIONAL_NOT_FOUND` | La cátedra no encuentra el profesional (T05 4.8). |
 | `409` | `INVALID_PROCESS_STATE` | El proceso no está en `HELD` (T05 3.1). Agrega `currentStatus`. |
-| `409` | `HOLD_EXPIRED` | El bloqueo venció, localmente o según la cátedra; el proceso queda `EXPIRED` y hay que repetir T04 (T05 3.2 y 4.4). |
+| `409` | `HOLD_EXPIRED` | El bloqueo venció, localmente o según la cátedra, que puede responder `HOLD_EXPIRED` o `HOLD_NOT_FOUND`; el proceso queda `EXPIRED` y hay que repetir T04 (T05 3.2, 4.3 y 4.4). |
 | `409` | `PATIENT_MISMATCH` | El paciente no coincide con el del hold (T05 4.6). |
 | `409` | `SLOT_NOT_AVAILABLE` | El turno ya está reservado (T05 4.8). |
 | `503` | `SERVICE_DEGRADED` | Error de configuración con la cátedra (T05 4.2). |
@@ -409,7 +409,7 @@ Respuesta `200`: proceso de reserva (sección 2) en estado `CANCELLED`, con `can
 
 ### 4.1 Servicio de catálogo
 
-Turnos usa una sola ruta de catálogo, C06. Su contrato completo está en `contrato_catalogo.md`; aquí se indica cómo la usa turnos. Catálogo no guarda nada de turnos y turnos no guarda copia del catálogo: se consulta en cada operación (T03 y T04).
+Turnos usa una sola ruta de catálogo, C06. Su contrato completo está en `catalogo_y_sincronizacion_contrato.md`; aquí se indica cómo la usa turnos. Catálogo no guarda nada de turnos y turnos no guarda copia del catálogo: se consulta en cada operación (T03 y T04).
 
 `GET /api/professionals/{professionalId}`
 
@@ -445,7 +445,7 @@ Turnos acepta las horas en `HH:mm` y en `HH:mm:ss`. Un profesional sin horarios 
 
 | Respuesta de catálogo | Qué hace turnos |
 | --- | --- |
-| `200` | Usa los datos. En T03, si `enabled` es falso, responde `409` `PROFESSIONAL_DISABLED` (T03 4.4). |
+| `200` | Usa los datos. En T03 y T04, si `enabled` es falso, responde `409` `PROFESSIONAL_DISABLED` sin llamar a la cátedra (T03 4.4, T04 4.5). |
 | `401` o `403` | Error de integración interna: se registra y se responde `500` `INTERNAL_ERROR` (T03 4.1, T04 4.4). |
 | `404` `PROFESSIONAL_NOT_FOUND` | Responde `404` `PROFESSIONAL_NOT_FOUND` (T03 4.2, T04 4.1). |
 | `503` (incluye `CATALOG_NOT_INITIALIZED`), timeout o corte de conexión | Reintenta con espera creciente y un máximo de intentos. Agotados, responde `503` `CATALOG_UNAVAILABLE` sin llamar a la cátedra (T03 4.3, T04 4.3). |
@@ -459,10 +459,10 @@ Turnos acepta las horas en `HH:mm` y en `HH:mm:ss`. Un profesional sin horarios 
 - Salvo el login técnico, todas las rutas llevan `Authorization: Bearer <jwt-tecnico>` y exigen `ROLE_STUDENT_CLIENT`.
 - La integración se obtiene siempre del JWT; ninguna operación acepta `groupId`.
 - El JWT técnico se guarda solo en memoria. Nunca se envía a la app ni a catálogo.
-- Los errores usan `application/problem+json`. Se decide por `status` y `code`, nunca por el texto de `detail`. Los `503` y `500` no garantizan `code`.
+- Los errores usan `application/problem+json`. Se decide por `status` y `code`, nunca por el texto de `detail`. Los `503` y `500` no garantizan `code`. El `401` es la excepción: llega sin cuerpo y sin `Content-Type`, solo con `WWW-Authenticate: Bearer error="invalid_token"`, así que se decide únicamente por el estado.
 - Un `401` en cualquier ruta ejecuta el login técnico (4.2.2) y repite la operación una sola vez.
 - Un `403` `STUDENT_INTEGRATION_NOT_FOUND` es un error de configuración: se registra y se responde `503` `SERVICE_DEGRADED` sin exponer detalles.
-- Ante timeout, corte de conexión, `503` o `500`, se reintenta con espera creciente y un máximo de intentos.
+- Ante timeout, corte de conexión, `503` o `500`, se reintenta con espera creciente y un máximo de intentos. La creación de un hold es la excepción: ver 4.2.4.
 - `externalPatientId` es el `sub` del JWT del usuario, como texto.
 
 #### 4.2.2 Login técnico
@@ -612,7 +612,8 @@ El hold es temporal. La vigencia real se determina por `expiresAt`; una copia lo
 | `400` `PROFESSIONAL_DISABLED` | Responde `409` `PROFESSIONAL_DISABLED` (T04 5.4). |
 | `400` `INVALID_SLOT` | Responde `400` `INVALID_SLOT` (T04 5.5). |
 | `409` `SLOT_ALREADY_RESERVED` o `SLOT_ALREADY_HELD` | Responde `409` `SLOT_NOT_AVAILABLE` (T04 5.6 y 5.7). |
-| Timeout, corte, `503` o `500` | Reintenta. Agotados, responde `503` `CENTRAL_UNAVAILABLE` y no crea ningún proceso (T04 5.8). |
+| Conexión rechazada, timeout de conexión o `503` | Reintenta. Agotados, responde `503` `CENTRAL_UNAVAILABLE` y no crea ningún proceso (T04 5.8). |
+| Timeout de respuesta, corte durante la respuesta o `500` | No reintenta, porque el hold pudo crearse. Registra y responde `503` `CENTRAL_UNAVAILABLE`, sin crear ningún proceso (T04 5.8). |
 
 #### 4.2.5 Confirmar un hold
 
@@ -652,10 +653,10 @@ La cátedra crea una reserva `PHONE_PENDING` y publica `AdditionalInformationReq
 
 | Respuesta de la cátedra | Qué hace turnos |
 | --- | --- |
-| `202` | Pasa el proceso local a `WAITING_FOR_PHONE` con el nuevo `expiresAt` (T05 6). |
+| `202` | Pasa el proceso local a `WAITING_FOR_PHONE` con el `expiresAt` recibido, que es el mismo del hold (T05 6). |
 | `401` | Login técnico y una sola repetición (T05 4.1). |
 | `403` `STUDENT_INTEGRATION_NOT_FOUND` | Responde `503` `SERVICE_DEGRADED` (T05 4.2). |
-| `404` `HOLD_NOT_FOUND` | Responde `404` `HOLD_NOT_FOUND` (T05 4.3). |
+| `404` `HOLD_NOT_FOUND` | Si el `expiresAt` local ya pasó, el hold venció (un hold vencido responde así): marca el proceso `EXPIRED` y responde `409` `HOLD_EXPIRED`. Si no, responde `404` `HOLD_NOT_FOUND` (T05 4.3). |
 | `404` `HOLD_EXPIRED` | Marca el proceso `EXPIRED` y responde `409` `HOLD_EXPIRED` (T05 4.4). |
 | `403` `HOLD_OWNER_MISMATCH` | No debería ocurrir: se registra como error grave y se responde `500` `INTERNAL_ERROR` (T05 4.5). |
 | `400` `EXTERNAL_PATIENT_MISMATCH` | Responde `409` `PATIENT_MISMATCH` (T05 4.6). |
