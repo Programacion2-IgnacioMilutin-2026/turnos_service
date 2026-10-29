@@ -285,10 +285,10 @@ Respuesta `200`: proceso de reserva (sección 2) en estado `WAITING_FOR_PHONE`, 
 | --- | --- | --- |
 | `400` | `INVALID_SLOT` | La cátedra rechaza el turno (T05 4.8). |
 | `404` | `RESERVATION_PROCESS_NOT_FOUND` | El proceso no existe o no es del usuario; no se distingue (T05 2.2). |
-| `404` | `HOLD_NOT_FOUND` | La cátedra no encuentra el hold (T05 4.3). |
+| `404` | `HOLD_NOT_FOUND` | La cátedra no encuentra el hold y su vencimiento todavía no pasó (T05 4.3). |
 | `404` | `PROFESSIONAL_NOT_FOUND` | La cátedra no encuentra el profesional (T05 4.8). |
 | `409` | `INVALID_PROCESS_STATE` | El proceso no está en `HELD` (T05 3.1). Agrega `currentStatus`. |
-| `409` | `HOLD_EXPIRED` | El bloqueo venció, localmente o según la cátedra; el proceso queda `EXPIRED` y hay que repetir T04 (T05 3.2 y 4.4). |
+| `409` | `HOLD_EXPIRED` | El bloqueo venció, localmente o según la cátedra, que puede responder `HOLD_EXPIRED` o `HOLD_NOT_FOUND`; el proceso queda `EXPIRED` y hay que repetir T04 (T05 3.2, 4.3 y 4.4). |
 | `409` | `PATIENT_MISMATCH` | El paciente no coincide con el del hold (T05 4.6). |
 | `409` | `SLOT_NOT_AVAILABLE` | El turno ya está reservado (T05 4.8). |
 | `503` | `SERVICE_DEGRADED` | Error de configuración con la cátedra (T05 4.2). |
@@ -656,7 +656,7 @@ La cátedra crea una reserva `PHONE_PENDING` y publica `AdditionalInformationReq
 | `202` | Pasa el proceso local a `WAITING_FOR_PHONE` con el `expiresAt` recibido, que es el mismo del hold (T05 6). |
 | `401` | Login técnico y una sola repetición (T05 4.1). |
 | `403` `STUDENT_INTEGRATION_NOT_FOUND` | Responde `503` `SERVICE_DEGRADED` (T05 4.2). |
-| `404` `HOLD_NOT_FOUND` | Responde `404` `HOLD_NOT_FOUND` (T05 4.3). |
+| `404` `HOLD_NOT_FOUND` | Si el `expiresAt` local ya pasó, el hold venció (un hold vencido responde así): marca el proceso `EXPIRED` y responde `409` `HOLD_EXPIRED`. Si no, responde `404` `HOLD_NOT_FOUND` (T05 4.3). |
 | `404` `HOLD_EXPIRED` | Marca el proceso `EXPIRED` y responde `409` `HOLD_EXPIRED` (T05 4.4). |
 | `403` `HOLD_OWNER_MISMATCH` | No debería ocurrir: se registra como error grave y se responde `500` `INTERNAL_ERROR` (T05 4.5). |
 | `400` `EXTERNAL_PATIENT_MISMATCH` | Responde `409` `PATIENT_MISMATCH` (T05 4.6). |

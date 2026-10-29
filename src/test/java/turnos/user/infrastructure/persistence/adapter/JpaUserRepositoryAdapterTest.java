@@ -58,6 +58,28 @@ class JpaUserRepositoryAdapterTest {
     }
 
     @Test
+    void findByIdReadsBackEveryFieldFromTheDatabase() {
+        User original = newUser("maria.gomez", "maria.gomez@example.com");
+        User created = userRepository.create(original);
+        entityManager.flush();
+        entityManager.clear();
+
+        User found = userRepository.findById(created.getId()).orElseThrow();
+
+        assertThat(found.getId()).isEqualTo(created.getId());
+        assertThat(found).usingRecursiveComparison()
+                .ignoringFields("id", "createdDate", "lastModifiedDate")
+                .isEqualTo(original);
+    }
+
+    @Test
+    void findByIdIsEmptyWhenTheUserDoesNotExist() {
+        User created = userRepository.create(newUser("maria.gomez", "maria.gomez@example.com"));
+
+        assertThat(userRepository.findById(created.getId() + 1000)).isEmpty();
+    }
+
+    @Test
     void findByLoginIsEmptyWhenTheLoginDoesNotExist() {
         assertThat(userRepository.findByLogin("nobody")).isEmpty();
     }

@@ -95,3 +95,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentacion de SDD para el caso de uso T05-ConfirmarReserva
 ### Changed
 - Documentacion actualizada debido a que se descubrio que una confrimacion no reincia el contador expiresAt de un proceso abierto.
+
+## 2026-10-29
+### Added
+- Archivos a slice 'User' para poder realizar la consulta por a traves de un UsaerName.
+- Archivos a slice 'Catedra' para manejar la confirmacion de un hold con el servicio de catedra.
+### Changed
+- Se descubrio que la catedra devuelve HOLD_NOT_FOUND cuiando este vence, por lo que se actualizo la documentacion para que sea consistente con la realidad.

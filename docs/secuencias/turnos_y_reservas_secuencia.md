@@ -243,11 +243,11 @@ sequenceDiagram
         Service->>Service: Log configuration error
         Service-->>App: 503 (no details)
     end
-    break 404 HOLD_NOT_FOUND
+    break 404 HOLD_NOT_FOUND before the local expiresAt
         Service->>Service: Log error
         Service-->>App: 404 (functional code)
     end
-    break 404 HOLD_EXPIRED
+    break 404 HOLD_EXPIRED, or 404 HOLD_NOT_FOUND once the local expiresAt has passed (expired holds answer so)
         Service->>DB: Mark process EXPIRED
         Service-->>App: 409 (HOLD_EXPIRED)
     end
