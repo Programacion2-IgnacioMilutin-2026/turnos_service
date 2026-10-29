@@ -81,6 +81,25 @@ class ReservationProcessTest {
         assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE"})
+    void aProcessWaitingForTheUserExpiresWhenTheCatedraSaysSo(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        process.expire();
+
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.EXPIRED);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "EXPIRED"})
+    void aProcessThatIsNotWaitingForTheUserDoesNotExpire(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        assertThatThrownBy(process::expire).isInstanceOf(IllegalStateException.class);
+        assertThat(process.getStatus()).isEqualTo(status);
+    }
+
     @Test
     void aProcessIsNotMarkedForReconciliationUntilAskedTo() {
         ReservationProcess process = process(ReservationStatus.HELD);

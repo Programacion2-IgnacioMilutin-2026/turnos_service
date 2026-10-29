@@ -51,6 +51,14 @@ public class ReservationProcess {
         needsReconciliation = true;
     }
 
+    // La cátedra dijo que el hold venció: se cierra aunque el reloj local todavía no lo indique
+    public void expire() {
+        if (status != ReservationStatus.HELD && status != ReservationStatus.WAITING_FOR_PHONE) {
+            throw new IllegalStateException("Only a process waiting for the user can expire, this one is " + status);
+        }
+        status = ReservationStatus.EXPIRED;
+    }
+
     // Solo se cierran por reloj los que esperan una acción del usuario; uno con el teléfono enviado puede tener
     // su resultado en camino y no se cierra así. Devuelve si el proceso pasó a EXPIRED
     public boolean expireIfOverdue(Instant now, Duration margin) {

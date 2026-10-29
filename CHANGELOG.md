@@ -102,6 +102,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Archivos a slice 'Catedra' para manejar la confirmacion de un hold con el servicio de catedra.
 - En slice 'Reservation', se sumo el atributo needsReconciliation, por lo que se agrega a todos los archivos que nombren a los atributos. Ademas de funciones para cambiar el valor de este atributo.
 - Lock o candado general en slice 'Reservation', de esta forma el hold y luego de confirmar utlizan el mismo lock. 
+- Caso de uso de confirmacion de hold en slice 'Reservation', con su gateway para poder realizar estos hablar con el slice 'Catedra'.
 ### Changed
 - Se descubrio que la catedra devuelve HOLD_NOT_FOUND cuiando este vence, por lo que se actualizo la documentacion para que sea consistente con la realidad.
 - Ahora el candado del hold del slice 'Reservation' es general, por lo que se lo quito y modifico del CreateReservationProcessUseCaseImpl.

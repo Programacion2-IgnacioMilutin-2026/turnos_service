@@ -21,6 +21,8 @@ import turnos.reservation.application.exception.ReservationSlotNotAvailableExcep
 import turnos.reservation.application.exception.ReservationUserNotFoundException;
 import turnos.reservation.application.support.UserOperationLock;
 import turnos.reservation.domain.model.ReservationHold;
+import turnos.reservation.domain.model.ReservationHoldConfirmation;
+import turnos.reservation.domain.model.ReservationPatient;
 import turnos.reservation.domain.model.ReservationPolicy;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationProfessional;
@@ -29,6 +31,7 @@ import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.HoldProvider;
 import turnos.reservation.domain.ports.out.ProfessionalProvider;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
+import turnos.reservation.domain.ports.out.UserDirectory;
 
 import java.time.DayOfWeek;
 import java.time.Duration;
@@ -74,7 +77,7 @@ class CreateReservationProcessUseCaseImplTest {
     private final ScriptedHoldProvider holds = new ScriptedHoldProvider();
     private final UserOperationLock userOperationLock = new UserOperationLock();
     private final CreateReservationProcessUseCaseImpl useCase = new CreateReservationProcessUseCaseImpl(repository,
-            users::contains, professionals, holds,
+            new KnownUsers(users), professionals, holds,
             new ReservationPolicy(ZoneId.of("America/Argentina/Mendoza"), Duration.ofSeconds(30)), clock,
             userOperationLock);
 
@@ -411,6 +414,26 @@ class CreateReservationProcessUseCaseImplTest {
             return ReservationHold.builder().holdId(hold.getHoldId() + (externalPatientId.equals("42") ? "" : "-" + externalPatientId))
                     .reservationProcessId(hold.getReservationProcessId() + (externalPatientId.equals("42") ? "" : "-" + externalPatientId))
                     .expiresAt(hold.getExpiresAt()).build();
+        }
+
+        @Override
+        public ReservationHoldConfirmation confirmHold(String holdId, Long professionalId, String externalPatientId,
+                                                       ReservationPatient patient) {
+            throw new UnsupportedOperationException("Blocking a slot never confirms it");
+        }
+    }
+
+    // Bloquear solo pregunta si el usuario existe
+    private record KnownUsers(Set<Long> ids) implements UserDirectory {
+
+        @Override
+        public boolean exists(Long userId) {
+            return ids.contains(userId);
+        }
+
+        @Override
+        public Optional<ReservationPatient> findPatient(Long userId) {
+            throw new UnsupportedOperationException("Blocking a slot never asks for the patient");
         }
     }
 }
