@@ -109,3 +109,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Se descubrio que la catedra devuelve HOLD_NOT_FOUND cuiando este vence, por lo que se actualizo la documentacion para que sea consistente con la realidad.
 - Ahora el candado del hold del slice 'Reservation' es general, por lo que se lo quito y modifico del CreateReservationProcessUseCaseImpl.
+
+## 2026-10-30
+### Added
+- archivo de SDD para el caso de uso T07-ProcesarSolicitudInformaciónAdicional
+- El login tecnico avisa a kafka que esta listo para consumir
+- En slice 'Reservation', se añade la entidad evento, con sus archivos para la persistencia incluidos.
+### Changed
+- Ahora la escritura en el repositorio de ReservationProcess, junto con la del evento, lo hace TransactionRunner para que sean consitente entre ellas.

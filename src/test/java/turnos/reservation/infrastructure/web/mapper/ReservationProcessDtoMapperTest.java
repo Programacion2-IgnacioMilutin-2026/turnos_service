@@ -6,10 +6,12 @@ import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessResponse;
 
+import java.lang.reflect.Field;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,7 +24,8 @@ class ReservationProcessDtoMapperTest {
         ReservationProcess process = ReservationProcess.builder().reservationProcessId("process-1").holdId("hold-1")
                 .userId(42L).professionalId(201L).professionalFirstName("Ana").professionalLastName("Gomez")
                 .professionalCategoryName("Clinica medica").date(LocalDate.of(2026, 11, 2)).startTime(LocalTime.of(10, 30))
-                .status(ReservationStatus.HELD).expiresAt(Instant.parse("2026-10-27T04:44:38.627744064Z")).build();
+                .status(ReservationStatus.HELD).expiresAt(Instant.parse("2026-10-27T04:44:38.627744064Z"))
+                .requestEventId("request-event-1").build();
         assertThat(process).hasNoNullFieldsOrProperties();
 
         ReservationProcessResponse response = mapper.toResponse(process);
@@ -36,6 +39,12 @@ class ReservationProcessDtoMapperTest {
         assertThat(response.getExpiresAt()).isEqualTo(Instant.parse("2026-10-27T04:44:38Z"));
         assertThat(response).hasAllNullFieldsOrPropertiesExcept("reservationProcessId", "status", "professionalId",
                 "professionalFirstName", "professionalLastName", "professionalCategoryName", "date", "startTime", "expiresAt");
+    }
+
+    @Test
+    void theResponseNeverHasTheHoldTheReconciliationMarkOrThePhoneRequest() {
+        assertThat(Arrays.stream(ReservationProcessResponse.class.getDeclaredFields()).map(Field::getName))
+                .doesNotContain("holdId", "needsReconciliation", "requestEventId");
     }
 
     @Test

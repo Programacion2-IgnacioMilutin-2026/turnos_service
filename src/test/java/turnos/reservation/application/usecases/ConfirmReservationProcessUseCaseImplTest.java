@@ -432,6 +432,11 @@ class ConfirmReservationProcessUseCaseImplTest {
         }
 
         @Override
+        public synchronized Optional<ReservationProcess> findById(String reservationProcessId) {
+            return Optional.ofNullable(processes.get(reservationProcessId)).map(CopyingRepository::copy);
+        }
+
+        @Override
         public synchronized Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId) {
             return Optional.ofNullable(processes.get(reservationProcessId))
                     .filter(p -> p.getUserId().equals(userId)).map(CopyingRepository::copy);
@@ -451,7 +456,7 @@ class ConfirmReservationProcessUseCaseImplTest {
                     .professionalFirstName(p.getProfessionalFirstName()).professionalLastName(p.getProfessionalLastName())
                     .professionalCategoryName(p.getProfessionalCategoryName()).date(p.getDate())
                     .startTime(p.getStartTime()).status(p.getStatus()).expiresAt(p.getExpiresAt())
-                    .needsReconciliation(p.isNeedsReconciliation()).build();
+                    .needsReconciliation(p.isNeedsReconciliation()).requestEventId(p.getRequestEventId()).build();
         }
     }
 
