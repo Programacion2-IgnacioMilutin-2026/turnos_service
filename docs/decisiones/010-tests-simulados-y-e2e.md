@@ -51,3 +51,11 @@ Alternativas descartadas:
 La suite normal sigue sin leer el `.env` ni usar credenciales reales, y el test que lo comprueba sigue valiendo. La prueba manual con la aplicación levantada sigue siendo útil para ver el servicio completo, pero ya no es la única evidencia contra la cátedra real.
 
 Excepción (2026-10-27, T04): la cátedra no permite cancelar un hold, así que el E2E de T04 intenta deshacerlo y, si no puede, lo informa y deja que venza solo (D9 de la SPEC de T04).
+
+Actualización (2026-10-29, T07, D8 de su SPEC): **la suite E2E verifica turnos usando los servicios reales; no verifica el comportamiento de esos servicios** (ni de la cátedra ni de catálogo). Ninguna prueba contra sistemas reales puede afectar lo de otros alumnos ni romper el servicio de turnos real ni la cátedra; puede dejar algo escrito en lo propio si no tiene efecto. Cómo se aplica a Kafka (consumer group propio de tests, lectura sin consumer group): decisión 014.
+
+Actualización (2026-10-30, PLAN de T07, P8): **Kafka en las dos suites.**
+
+- **Suite normal:** Kafka real en Testcontainers, como Postgres, con un solo contenedor compartido. La cátedra simulada devuelve en el login los servidores del contenedor y se publican los mensajes reales grabados. Los tests que no son de Kafka apagan el consumo con `turnos.catedra.kafka.enabled` (variable `TURNOS_CATEDRA_KAFKA_ENABLED`, verdadera por defecto en la aplicación): si no, intentarían conectarse a los servidores inventados que devuelve la cátedra simulada.
+- **Suite E2E:** después de T07, todo E2E hace el login técnico real y el consumo arrancaría con el consumer group del servicio. Por eso la configuración común de la suite E2E obliga a una de dos cosas: usar el consumer group de tests que el usuario define en su `.env` con **`TURNOS_E2E_KAFKA_CONSUMER_GROUP`** (el nombre dice que es del E2E; la aplicación no lee esa variable), o, si está vacía, apagar el consumo y leer los mensajes reales sin consumer group.
+- **Grabaciones de Kafka:** se leen sin consumer group, con un programa de un solo archivo en el scratchpad que corre el usuario, y se limpian como las de REST antes de versionarlas.
