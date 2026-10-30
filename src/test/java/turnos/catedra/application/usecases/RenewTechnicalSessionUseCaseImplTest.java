@@ -32,8 +32,55 @@ class RenewTechnicalSessionUseCaseImplTest {
     private final ScriptedLoginClient client = new ScriptedLoginClient();
     private final TechnicalLoginPolicy policy = new TechnicalLoginPolicy(
             5, Duration.ofMillis(1), 2, Duration.ofMillis(10), INTERVAL);
+    private final RecordingIntegrationListener listener = new RecordingIntegrationListener();
     private final RenewTechnicalSessionUseCaseImpl useCase =
-            new RenewTechnicalSessionUseCaseImpl(client, repository, policy, clock);
+            new RenewTechnicalSessionUseCaseImpl(client, repository, policy, clock, listener);
+
+    @Test
+    void aRenewedSessionNotifiesItsIntegration() {
+        repository.save(enabled("jwt-a", START));
+        client.then(ScriptedLoginClient.success("jwt-b", ProvisioningStatus.PROVISIONED));
+        clock.advance(Duration.ofDays(30));
+
+        useCase.renewTechnicalSession("jwt-a");
+
+        assertThat(listener.notified()).containsExactly(ScriptedLoginClient.integration(ProvisioningStatus.PROVISIONED));
+    }
+
+    @Test
+    void noNewLoginOrALoginThatDoesNotEnableTheIntegrationNotifiesNothing() {
+        // Ya renovada por otro pedido: devuelve la sesión vigente sin un login nuevo
+        repository.save(enabled("jwt-b", START));
+        useCase.renewTechnicalSession("jwt-a");
+        // Antes del intervalo mínimo: no hay login
+        useCase.renewTechnicalSession("jwt-b");
+        // Logins que no habilitan la integración
+        for (TechnicalLoginResult result : List.of(new TechnicalLoginResult.Unavailable("HTTP 503"),
+                ScriptedLoginClient.success("jwt-c", ProvisioningStatus.REVOKED),
+                new TechnicalLoginResult.ConfigurationError("HTTP 401"))) {
+            client.then(result);
+            clock.advance(Duration.ofDays(1));
+            useCase.renewTechnicalSession(repository.get().token());
+        }
+
+        assertThat(client.calls()).isEqualTo(3);
+        assertThat(listener.notified()).isEmpty();
+    }
+
+    @Test
+    void aFailingNotificationDoesNotUndoTheRenewal() {
+        RecordingIntegrationListener failing = new RecordingIntegrationListener().failing();
+        RenewTechnicalSessionUseCaseImpl renewing = new RenewTechnicalSessionUseCaseImpl(client, repository, policy, clock, failing);
+        repository.save(enabled("jwt-a", START));
+        client.then(ScriptedLoginClient.success("jwt-b", ProvisioningStatus.PROVISIONED));
+        clock.advance(Duration.ofDays(30));
+
+        Optional<TechnicalSession> renewed = renewing.renewTechnicalSession("jwt-a");
+
+        assertThat(failing.notified()).hasSize(1);
+        assertThat(renewed).map(TechnicalSession::token).contains("jwt-b");
+        assertThat(repository.get().state()).isEqualTo(IntegrationState.ENABLED);
+    }
 
     @Test
     void aDegradedSessionTriesAgainOnlyAfterTheInterval() {

@@ -53,7 +53,7 @@ La clave de los mensajes de turnos es el `reservationProcessId`: los eventos de 
 
 ### 3.1 Autenticación (T07, D1)
 
-Si el servidor exige credenciales, son las de la cuenta técnica, las mismas de la configuración externa de X01; si no las exige, alcanza con `integration`. El protocolo y el mecanismo son configurables por configuración externa, para no fijar una suposición en el código. **Por verificar:** se consulta al profesor y se comprueba con una prueba de conexión de solo lectura (ver 3.6).
+Si el servidor exige credenciales, son las de la cuenta técnica, las mismas de la configuración externa de X01; si no las exige, alcanza con `integration`. El protocolo y el mecanismo son configurables por configuración externa, para no fijar una suposición en el código. **Verificado (2026-10-30, TASK-02 de T07):** la prueba de conexión de solo lectura conectó con `PLAINTEXT`, sin credenciales, al primer intento. El Kafka de la cátedra no exige autenticación ni tiene control de acceso: la lista de topics muestra los de todas las integraciones. El valor por defecto (`PLAINTEXT`) es el correcto, y en la práctica no puede ocurrir un rechazo de credenciales al publicar (T06 5.2). El servicio usa solo los nombres de su `integration`, así que nunca toca topics ajenos.
 
 ### 3.2 Eventos de resultado antes de que exista T08 (T07, D3)
 
@@ -141,12 +141,20 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - Un pedido que llega mientras opera el usuario se procesa con el mismo candado por usuario que bloquear y confirmar (T07 D2, decisión 013).
 - La idempotencia se guarda en `reservation`: tabla `processed_events` propia, escrita en la misma transacción que el cambio del proceso con un puerto técnico de transacción (PLAN de T07, P4). Sin control de versión además del candado (P5).
 
-## 4. Por verificar contra el Kafka real
+## 4. Verificado y por verificar contra el Kafka real
 
-- Protocolo, mecanismo y credenciales (3.1).
-- Si se permite un consumer group con otro nombre (3.6).
-- Cuántas particiones tiene el topic de acciones, cuánto tiempo conserva los mensajes y cuánto las posiciones de un consumer group inactivo.
-- El formato real de los mensajes frente al anexo §15.
+**Verificado (2026-10-30, TASK-02 de T07, lecturas sin consumer group corridas por el usuario):**
+
+- Conexión `PLAINTEXT` sin credenciales; sin control de acceso (3.1).
+- Se puede usar un consumer group con otro nombre: el sugerido y uno con `-e2e` al final no existían, y la consulta respondió "no existe", no un error de permisos. El E2E usa la opción (a) de 3.6.
+- El topic de acciones tiene **1 partición** y conserva los mensajes **7 días** (`retention.ms=604800000`, `cleanup.policy=delete`).
+- El consumer group del servicio no tiene posiciones guardadas: nunca se consumió con él.
+- **La cátedra no publica en el topic de acciones:** estaba vacío desde siempre (posiciones 0 → 0), aunque se confirmaron holds el 2026-10-28, el 2026-10-29 y el 2026-10-30 (después de la confirmación de las 02:00 y después de su vencimiento de las 02:10, siguió vacío). Contradice el anexo §10 y §15.4. Le pasa también a otros alumnos: un compañero ya se lo consultó al profesor. Hipótesis sin comprobar: hay un topic `kafkaProducer-out-0`, que es el nombre por defecto de una salida de Spring Cloud Stream sin destino configurado.
+
+**Por verificar:**
+
+- Cuánto conserva Kafka las posiciones de un consumer group inactivo.
+- El formato real de los mensajes frente al anexo §15, cuando la cátedra publique. Mientras tanto, los tests usan mensajes armados desde el contrato y el anexo.
 - Si `catalog_service` usará el mismo consumer group sugerido sobre su topic: dos servicios en un mismo grupo provocan reacomodos entre ellos aunque cada uno lea su topic. Se revisa al hacer catálogo.
 
 ## 5. Por definir en los PLAN
@@ -158,3 +166,4 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 
 - 2026-10-29: creado con las decisiones de la SPEC de T07.
 - 2026-10-30: decisiones del PLAN de T07 (3.7 a 3.12), aprobado por el usuario.
+- 2026-10-30: resultados de la prueba de conexión (3.1 y sección 4): `PLAINTEXT` sin credenciales, consumer group libre, 1 partición, 7 días de retención; la cátedra no publica en el topic de acciones (consultado al profesor).

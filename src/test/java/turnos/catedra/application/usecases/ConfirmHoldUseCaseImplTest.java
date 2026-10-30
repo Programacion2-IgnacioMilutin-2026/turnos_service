@@ -40,7 +40,7 @@ class ConfirmHoldUseCaseImplTest {
             repository,
             new RenewTechnicalSessionUseCaseImpl(loginClient, repository,
                     new TechnicalLoginPolicy(1, Duration.ofMillis(1), 2, Duration.ofMillis(1), Duration.ofSeconds(60)),
-                    new MutableClock(START)),
+                    new MutableClock(START), integration -> {}),
             new CatedraOperationPolicy(3, Duration.ofMillis(1), 2)));
 
     @Test
