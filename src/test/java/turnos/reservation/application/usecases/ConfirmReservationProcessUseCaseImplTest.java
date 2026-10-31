@@ -20,16 +20,17 @@ import turnos.reservation.application.exception.ReservationProfessionalNotFoundE
 import turnos.reservation.application.exception.ReservationServiceDegradedException;
 import turnos.reservation.application.exception.ReservationSlotNotAvailableException;
 import turnos.reservation.application.support.UserOperationLock;
+import turnos.reservation.domain.model.PhoneRequestOutcome;
 import turnos.reservation.domain.model.ReservationHold;
 import turnos.reservation.domain.model.ReservationHoldConfirmation;
 import turnos.reservation.domain.model.ReservationPatient;
+import turnos.reservation.domain.model.ReservationPhoneRequest;
 import turnos.reservation.domain.model.ReservationPolicy;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationProfessional;
 import turnos.reservation.domain.model.ReservationSchedule;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.HoldProvider;
-import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 import turnos.reservation.domain.ports.out.UserDirectory;
 
 import java.time.DayOfWeek;
@@ -38,15 +39,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -63,7 +61,7 @@ class ConfirmReservationProcessUseCaseImplTest {
     private static final ZoneId ZONE = ZoneId.of("America/Argentina/Mendoza");
 
     private final MutableClock clock = new MutableClock(NOW);
-    private final CopyingRepository repository = new CopyingRepository();
+    private final CopyingReservationProcessRepository repository = new CopyingReservationProcessRepository();
     private final Directory users = new Directory(Map.of(USER, PATIENT, 7L, new ReservationPatient("Juan", "Pérez")));
     private final ScriptedHoldProvider holds = new ScriptedHoldProvider();
     private final UserOperationLock userOperationLock = new UserOperationLock();
@@ -327,6 +325,36 @@ class ConfirmReservationProcessUseCaseImplTest {
         }
     }
 
+    // La cátedra publica el pedido de teléfono antes de responder la confirmación: el pedido espera a que la
+    // confirmación guarde, y el proceso termina con los datos de las dos
+    @Test
+    void aPhoneRequestThatArrivesWhileConfirmingIsAppliedAfterTheConfirmationIsSaved() throws InterruptedException {
+        repository.add(held(PROCESS, USER));
+        CountDownLatch confirmationRequested = new CountDownLatch(1);
+        holds.beforeAnswering(() -> {
+            confirmationRequested.countDown();
+            sleep(300);
+        });
+        ProcessPhoneRequestUseCaseImpl phoneRequests = new ProcessPhoneRequestUseCaseImpl(repository,
+                new InMemoryProcessedEventRepository(), Runnable::run, userOperationLock, clock);
+        ReservationPhoneRequest request = ReservationPhoneRequest.builder().eventId("request-event-1")
+                .reservationProcessId(PROCESS).holdId("hold-1").expiresAt(EXPIRES_AT).build();
+
+        Thread confirmation = Thread.ofVirtual().start(() -> confirm(USER, PROCESS));
+        assertThat(confirmationRequested.await(5, TimeUnit.SECONDS)).isTrue();
+        List<PhoneRequestOutcome> outcome = new CopyOnWriteArrayList<>();
+        Thread phoneRequest = Thread.ofVirtual().start(() -> outcome.add(phoneRequests.processPhoneRequest(request)));
+        confirmation.join(10000);
+        phoneRequest.join(10000);
+
+        assertThat(outcome).containsExactly(PhoneRequestOutcome.APPLIED);
+        ReservationProcess stored = repository.stored(PROCESS);
+        assertThat(stored.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
+        assertThat(stored.getRequestEventId()).isEqualTo("request-event-1");
+        assertThat(repository.history(PROCESS))
+                .containsExactly(ReservationStatus.WAITING_FOR_PHONE, ReservationStatus.WAITING_FOR_PHONE);
+    }
+
     private ReservationProcess confirm(Long userId, String reservationProcessId) {
         return useCase.confirmReservationProcess(userId, reservationProcessId);
     }
@@ -373,90 +401,6 @@ class ConfirmReservationProcessUseCaseImplTest {
             Thread.sleep(millis);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        }
-    }
-
-    // Como la base: guarda y devuelve copias, así cada operación trabaja sobre su propia lectura. Registra cada estado
-    // escrito por proceso, y puede fallar al actualizar o al marcar
-    private static final class CopyingRepository implements ReservationProcessRepository {
-
-        private final Map<String, ReservationProcess> processes = new LinkedHashMap<>();
-        private final Map<String, List<ReservationStatus>> histories = new LinkedHashMap<>();
-        private volatile Predicate<ReservationProcess> failUpdate = process -> false;
-        private volatile boolean failMarks;
-
-        synchronized void add(ReservationProcess process) {
-            processes.put(process.getReservationProcessId(), copy(process));
-        }
-
-        synchronized ReservationProcess stored(String reservationProcessId) {
-            return copy(processes.get(reservationProcessId));
-        }
-
-        synchronized List<ReservationStatus> history(String reservationProcessId) {
-            return new ArrayList<>(histories.getOrDefault(reservationProcessId, List.of()));
-        }
-
-        void failUpdatesWhen(Predicate<ReservationProcess> condition) {
-            failUpdate = condition;
-        }
-
-        void failMarks() {
-            failMarks = true;
-        }
-
-        @Override
-        public synchronized ReservationProcess create(ReservationProcess process) {
-            add(process);
-            histories.computeIfAbsent(process.getReservationProcessId(), id -> new ArrayList<>()).add(process.getStatus());
-            return copy(process);
-        }
-
-        @Override
-        public synchronized Optional<ReservationProcess> update(String reservationProcessId, ReservationProcess process) {
-            if (!processes.containsKey(reservationProcessId)) {
-                return Optional.empty();
-            }
-            if (failUpdate.test(process)) {
-                throw new IllegalStateException("database down");
-            }
-            processes.put(reservationProcessId, copy(process));
-            histories.computeIfAbsent(reservationProcessId, id -> new ArrayList<>()).add(process.getStatus());
-            return Optional.of(copy(process));
-        }
-
-        @Override
-        public synchronized List<ReservationProcess> findOpenByUserId(Long userId) {
-            return processes.values().stream().filter(p -> p.getUserId().equals(userId) && p.isOpen())
-                    .map(CopyingRepository::copy).toList();
-        }
-
-        @Override
-        public synchronized Optional<ReservationProcess> findById(String reservationProcessId) {
-            return Optional.ofNullable(processes.get(reservationProcessId)).map(CopyingRepository::copy);
-        }
-
-        @Override
-        public synchronized Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId) {
-            return Optional.ofNullable(processes.get(reservationProcessId))
-                    .filter(p -> p.getUserId().equals(userId)).map(CopyingRepository::copy);
-        }
-
-        @Override
-        public synchronized void markForReconciliation(String reservationProcessId) {
-            if (failMarks) {
-                throw new IllegalStateException("database down");
-            }
-            processes.get(reservationProcessId).markForReconciliation();
-        }
-
-        private static ReservationProcess copy(ReservationProcess p) {
-            return ReservationProcess.builder().reservationProcessId(p.getReservationProcessId()).holdId(p.getHoldId())
-                    .userId(p.getUserId()).professionalId(p.getProfessionalId())
-                    .professionalFirstName(p.getProfessionalFirstName()).professionalLastName(p.getProfessionalLastName())
-                    .professionalCategoryName(p.getProfessionalCategoryName()).date(p.getDate())
-                    .startTime(p.getStartTime()).status(p.getStatus()).expiresAt(p.getExpiresAt())
-                    .needsReconciliation(p.isNeedsReconciliation()).requestEventId(p.getRequestEventId()).build();
         }
     }
 
