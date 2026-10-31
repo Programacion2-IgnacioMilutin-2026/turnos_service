@@ -33,8 +33,47 @@ class StartTechnicalSessionUseCaseImplTest {
     // Mismas reglas que la configuración real, con esperas de milisegundos para que el test sea rápido
     private final TechnicalLoginPolicy policy = new TechnicalLoginPolicy(
             5, Duration.ofMillis(1), 2, Duration.ofMillis(10), Duration.ofSeconds(60));
+    private final RecordingIntegrationListener listener = new RecordingIntegrationListener();
     private final StartTechnicalSessionUseCaseImpl useCase =
-            new StartTechnicalSessionUseCaseImpl(client, repository, policy, Clock.fixed(NOW, ZoneOffset.UTC));
+            new StartTechnicalSessionUseCaseImpl(client, repository, policy, Clock.fixed(NOW, ZoneOffset.UTC), listener);
+
+    @Test
+    void anEnabledIntegrationIsNotifiedOnceWithItsData() {
+        client.then(new TechnicalLoginResult.Unavailable("HTTP 503"))
+                .then(ScriptedLoginClient.success(TOKEN, ProvisioningStatus.PROVISIONED));
+
+        useCase.startTechnicalSession();
+
+        assertThat(listener.notified()).containsExactly(ScriptedLoginClient.integration(ProvisioningStatus.PROVISIONED));
+    }
+
+    @Test
+    void aLoginThatDoesNotEnableTheIntegrationNotifiesNothing() {
+        for (TechnicalLoginResult result : List.of(new TechnicalLoginResult.ConfigurationError("HTTP 401"),
+                new TechnicalLoginResult.Unavailable("HTTP 503"),
+                ScriptedLoginClient.success(TOKEN, ProvisioningStatus.PENDING))) {
+            ScriptedLoginClient scripted = new ScriptedLoginClient().then(result);
+            new StartTechnicalSessionUseCaseImpl(scripted, repository, policy, Clock.fixed(NOW, ZoneOffset.UTC), listener)
+                    .startTechnicalSession();
+        }
+
+        assertThat(listener.notified()).isEmpty();
+    }
+
+    @Test
+    void aFailingNotificationDoesNotUndoTheLogin(CapturedOutput output) {
+        RecordingIntegrationListener failing = new RecordingIntegrationListener().failing();
+        client.then(ScriptedLoginClient.success(TOKEN, ProvisioningStatus.PROVISIONED));
+
+        TechnicalSession session = new StartTechnicalSessionUseCaseImpl(client, repository, policy,
+                Clock.fixed(NOW, ZoneOffset.UTC), failing).startTechnicalSession();
+
+        assertThat(failing.notified()).hasSize(1);
+        assertThat(session.state()).isEqualTo(IntegrationState.ENABLED);
+        assertThat(repository.get()).isEqualTo(session);
+        assertThat(output.getAll()).contains("ERROR").contains("The enabled integration could not be notified")
+                .doesNotContain(TOKEN);
+    }
 
     @Test
     void aProvisionedLoginEnablesTheSessionOnTheFirstAttempt() {
