@@ -33,6 +33,19 @@ turnos:
       max-attempts: ${TURNOS_CATEDRA_OPERATIONS_MAX_ATTEMPTS:3}
       initial-delay: ${TURNOS_CATEDRA_OPERATIONS_INITIAL_DELAY:500ms}
       multiplier: ${TURNOS_CATEDRA_OPERATIONS_DELAY_MULTIPLIER:2}
+    kafka:
+      # Los servidores, los topics y el consumer group los informa el login técnico; el servicio empieza a consumir
+      # cuando la integración queda habilitada. Desactivado, no consume (lo usan los tests que no son de Kafka)
+      enabled: ${TURNOS_CATEDRA_KAFKA_ENABLED:true}
+      # El Kafka de la cátedra no pide credenciales; si las pidiera, se usan las de la cuenta técnica
+      security-protocol: ${TURNOS_CATEDRA_KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+      sasl-mechanism: ${TURNOS_CATEDRA_KAFKA_SASL_MECHANISM:PLAIN}
+      retry:
+        initial-delay: ${TURNOS_CATEDRA_KAFKA_RETRY_INITIAL_DELAY:500ms}
+        multiplier: ${TURNOS_CATEDRA_KAFKA_RETRY_MULTIPLIER:2}
+        max-attempts: ${TURNOS_CATEDRA_KAFKA_RETRY_MAX_ATTEMPTS:3}
+        # Si la base sigue fallando, cuánto se espera antes de volver a intentar el mismo mensaje
+        pause: ${TURNOS_CATEDRA_KAFKA_RETRY_PAUSE:30s}
   catalog:
     # Vacía por defecto: la aplicación arranca, avisa con un warning y la consulta de turnos responde 503
     base-url: ${TURNOS_CATALOG_BASE_URL:}

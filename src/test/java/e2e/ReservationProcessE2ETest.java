@@ -17,6 +17,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.client.RestTestClient;
@@ -38,7 +39,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 // Contra la cátedra real, con la cuenta técnica del .env local: solo con ./mvnw test -Pe2e. Sin credenciales se saltea.
-// Crea un hold real en un turno libre, lo confirma y al terminar intenta cancelarlo directamente en la cátedra, para no
+// Crea un hold real en un turno libre, lo confirma y, si el .env define el consumer group de los E2E, espera el pedido
+// de teléfono que la cátedra publica por Kafka. Al terminar intenta cancelarlo directamente en la cátedra, para no
 // dejarlo tomado.
 // Si la cátedra no lo permite, lo avisa sin fallar: lo que se prueba es la creación del hold, y el hold vence solo
 @Tag("e2e")
@@ -65,6 +67,7 @@ class ReservationProcessE2ETest {
     static void simulatedCatalog(DynamicPropertyRegistry registry) {
         CATALOG.respondToAnyPath(FakeHttpServer.Response.of(200, PROFESSIONAL));
         registry.add("TURNOS_CATALOG_BASE_URL", CATALOG::baseUrl);
+        E2EKafka.configure(registry);
     }
 
     @AfterAll
@@ -78,6 +81,8 @@ class ReservationProcessE2ETest {
     private TechnicalSessionRepository technicalSessionRepository;
     @Autowired
     private Environment environment;
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     private String reservationProcessId;
     private Instant expiresAt;
@@ -124,7 +129,22 @@ class ReservationProcessE2ETest {
         assertThat(JsonPath.<String>read(confirmed, "$.status")).isEqualTo("WAITING_FOR_PHONE");
         assertThat(JsonPath.<String>read(confirmed, "$.expiresAt")).isEqualTo(JsonPath.<String>read(body, "$.expiresAt"));
         System.out.println("E2E confirmation of " + reservationProcessId + ": WAITING_FOR_PHONE until " + expiresAt);
+
+        // El pedido de teléfono llega por Kafka y queda guardado en el proceso, en la base de este test
+        if (E2EKafka.consumerGroup().isEmpty()) {
+            System.out.println("E2E: TURNOS_E2E_KAFKA_CONSUMER_GROUP is not set in the .env, the phone request is not checked");
+        } else {
+            await().alias("the Catedra publishes the phone request of " + reservationProcessId + " and it is saved")
+                    .atMost(Duration.ofSeconds(30)).until(() -> requestEventId() != null);
+            System.out.println("E2E phone request " + requestEventId() + " saved for " + reservationProcessId);
+        }
         assertThat(output.getAll()).doesNotContain(userToken).doesNotContain(technicalSessionRepository.get().token());
+    }
+
+    private String requestEventId() {
+        return jdbcTemplate.queryForObject(
+                "SELECT request_event_id FROM reservation_processes WHERE reservation_process_id = ?", String.class,
+                reservationProcessId);
     }
 
     // Deshace en la cátedra real lo que creó el test. Nunca muestra la URL ni el token técnico

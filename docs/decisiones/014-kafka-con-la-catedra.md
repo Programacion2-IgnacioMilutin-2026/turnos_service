@@ -106,6 +106,12 @@ Kafka ─► catedra/infrastructure/kafka (consumidor: lee el JSON, valida el fo
 
 spring-kafka, con `spring-boot-starter-kafka` (BOM de Boot 4.1.1: spring-kafka 4.1.1, kafka-clients 4.2.1). Como los datos de conexión llegan con el login y no al arrancar, el contenedor de consumo se arma **por programa**; no se usa `@KafkaListener` ni `spring.kafka.bootstrap-servers`. La librería ya resuelve confirmar el offset de cada mensaje después de procesarlo, volver a leer el mismo mensaje con espera creciente y detener o arrancar el consumo. Descartado: kafka-clients puro, que obligaba a escribir y probar a mano lo más delicado.
 
+Detalles de la implementación (TASK-10 de T07):
+
+- Un solo consumidor (`KafkaMessageListenerContainer`) con `AckMode.RECORD` y sin confirmación automática: cada mensaje se confirma recién cuando terminó de procesarse sin error.
+- La espera entre entregas es propia (`MessageRetryBackOff`), para que los intentos cuenten entregas totales, igual que los de las operaciones con la cátedra, y para tener las dos variantes de 3.3 y 3.10.
+- El manager pide el oyente a Spring recién al armar el consumo (`ObjectProvider`), no al crearse. Si lo recibiera al crearse, Spring no podría armar el servicio: el login avisa al manager, el oyente llega hasta `reservation`, y `reservation` (al bloquear un turno) termina usando el login. Es una dependencia circular entre objetos al arrancar, no entre capas ni slices.
+
 ### 3.9 Cómo arranca el consumo (PLAN de T07, P3)
 
 Los casos de uso de login de `catedra` (arranque y renovación), después de guardar una sesión habilitada, avisan a un puerto de salida que la integración se habilitó. Lo implementa la infraestructura de Kafka: arranca el consumo aparte del hilo del login, o, si ya corría y los datos cambiaron, registra el warning de 3.5. Descartados: que el repositorio de la sesión avise al guardar (efecto escondido) y un chequeo periódico (demora y una tarea más).
@@ -167,3 +173,4 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - 2026-10-29: creado con las decisiones de la SPEC de T07.
 - 2026-10-30: decisiones del PLAN de T07 (3.7 a 3.12), aprobado por el usuario.
 - 2026-10-30: resultados de la prueba de conexión (3.1 y sección 4): `PLAINTEXT` sin credenciales, consumer group libre, 1 partición, 7 días de retención; la cátedra no publica en el topic de acciones (consultado al profesor).
+- 2026-10-31: detalles de la implementación del consumo (3.8); la cátedra sigue sin publicar, los tests usan mensajes armados desde el anexo.
