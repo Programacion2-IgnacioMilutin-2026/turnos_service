@@ -80,7 +80,7 @@ Criterio del usuario: **ninguna prueba afecta lo de otros alumnos ni rompe el se
 | Conexión | Pide la lista de topics sin credenciales y con las de la cuenta técnica; consulta, sin leer mensajes, si la cátedra permite un consumer group con otro nombre | Nada |
 | Grabaciones | Lee el topic de acciones **sin consumer group** y sin confirmar nada; si no hay pedidos, se crea uno con un bloqueo y una confirmación (ocupa un turno 10 minutos) | Nada en Kafka. Los mensajes se limpian antes de versionarlos |
 | E2E (a) | Si la cátedra lo permite, el servicio consume con un **consumer group propio de tests**, configurado solo para el E2E; prueba el camino completo (autenticación, consumo, posición) | Un segundo consumer group propio, sin efecto sobre el del servicio |
-| E2E plan B (a') | Si no lo permite, el test lee el pedido real **sin consumer group** y se lo entrega al procesamiento de turnos | Nada. El consumo real del servicio se prueba en el E2E de T06 |
+| E2E plan B (a') | Si no lo permite, el test lee el pedido real **sin consumer group** y se lo entrega al procesamiento de turnos | Nada. El consumo real del servicio se prueba en el E2E de T06. **No hizo falta**: la cátedra permite cualquier nombre (sección 4), así que no se implementó |
 
 Por eso el consumer group se puede reemplazar por configuración externa; sin ella, se usa el de `integration`. Descartado: correr el E2E con el consumer group del servicio, porque podía leer el pedido de un proceso real abierto en la app local y descartarlo como huérfano, y ese proceso nunca lo recibiría.
 
@@ -155,6 +155,7 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - Se puede usar un consumer group con otro nombre: el sugerido y uno con `-e2e` al final no existían, y la consulta respondió "no existe", no un error de permisos. El E2E usa la opción (a) de 3.6.
 - El topic de acciones tiene **1 partición** y conserva los mensajes **7 días** (`retention.ms=604800000`, `cleanup.policy=delete`).
 - El consumer group del servicio no tiene posiciones guardadas: nunca se consumió con él.
+- **El servicio consume del Kafka real** (E2E de T07, 2026-10-31): con el consumer group de tests, se conectó, recibió la asignación del topic de acciones y se posicionó desde el principio. El consumer group del servicio siguió sin posiciones después de la corrida. El pedido de teléfono no llegó porque la cátedra no publica, así que el E2E falla en ese paso (CA-14 de T07, bloqueado).
 - **La cátedra no publica en el topic de acciones:** estaba vacío desde siempre (posiciones 0 → 0), aunque se confirmaron holds el 2026-10-28, el 2026-10-29 y el 2026-10-30 (después de la confirmación de las 02:00 y después de su vencimiento de las 02:10, siguió vacío). Contradice el anexo §10 y §15.4. Le pasa también a otros alumnos: un compañero ya se lo consultó al profesor. Hipótesis sin comprobar: hay un topic `kafkaProducer-out-0`, que es el nombre por defecto de una salida de Spring Cloud Stream sin destino configurado.
 
 **Por verificar:**
@@ -174,3 +175,4 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - 2026-10-30: decisiones del PLAN de T07 (3.7 a 3.12), aprobado por el usuario.
 - 2026-10-30: resultados de la prueba de conexión (3.1 y sección 4): `PLAINTEXT` sin credenciales, consumer group libre, 1 partición, 7 días de retención; la cátedra no publica en el topic de acciones (consultado al profesor).
 - 2026-10-31: detalles de la implementación del consumo (3.8); la cátedra sigue sin publicar, los tests usan mensajes armados desde el anexo.
+- 2026-10-31: E2E con el consumer group de tests: el consumo real funciona; el plan B de 3.6 no se implementó. Cierre de T07 con CA-14 y las grabaciones reales pendientes.

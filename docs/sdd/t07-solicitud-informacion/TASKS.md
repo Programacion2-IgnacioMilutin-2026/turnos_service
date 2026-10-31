@@ -91,9 +91,33 @@ Tandas propuestas, para que la suite quede en verde al cerrar cada una: TASK-01;
   - Validación: `./mvnw test -Pe2e` corrido por el usuario: el proceso confirmado queda con el `requestEventId` real; la posición del consumer group del servicio es la misma que antes (consulta de solo lectura, como en TASK-02); sin credenciales, los tests se saltean. Reportes de Surefire leídos sin mostrar credenciales
   - Resultado: en curso (2026-10-31). TASK-02 mostró que el Kafka de la cátedra permite otro consumer group, así que va la opción (a) y **el plan B no se implementa**. Código: `e2e/E2EEnvFile` (lectura del `.env`, ahora compartida; `E2ECredentials` la usa en lugar de leer el archivo por su cuenta), `e2e/E2EKafka` (con `TURNOS_E2E_KAFKA_CONSUMER_GROUP` en el `.env`, consumo encendido con ese consumer group; sin ella, apagado; exige que termine en `-e2e`, para que un error de tipeo no apunte al del servicio) y `ReservationProcessE2ETest` ampliado (llama a `E2EKafka.configure`; después de confirmar, si la variable está, espera hasta 30 s el `requestEventId` del proceso en la base del test; si no, lo avisa). Solo ese E2E enciende el consumo: Spring mantiene vivas las aplicaciones de cada test, y dos con el mismo consumer group se repartirían el pedido. Los demás E2E siguen sin consumir (la propiedad de Surefire vale también en `-Pe2e`). `.env.example` documenta la variable. `./mvnw clean test`: 681 tests, 0 fallas (los E2E no corren). **Falta la validación**, que corre el usuario: con la cátedra todavía sin publicar, se espera que el paso de Kafka falle con el mensaje del alias. **Corrida del usuario (2026-10-31, 02:13 y 02:14)**, con `TURNOS_E2E_KAFKA_CONSUMER_GROUP` en su `.env` (quedó con el prefijo `alumnos-` repetido por una instrucción ambigua; termina en `-e2e` y no es el del servicio, así que no afecta): `./mvnw test -Pe2e -Dtest=ReservationProcessE2ETest` → hold real `process-18b76565-…` confirmado `WAITING_FOR_PHONE`, cancelación `409`, y **error en el paso de Kafka**, el esperado: "the Catedra publishes the phone request of process-18b76565-… and it is saved didn't complete within 30 seconds". El log muestra que el servicio se conectó al Kafka real, entró al consumer group de tests, recibió la asignación del topic de acciones y se posicionó desde el principio: el consumo real funciona. El programa de TASK-02, enseguida: topic de acciones 0 → 0 (la cátedra no publicó) y el consumer group del servicio sin posiciones (intacto). Salidas revisadas sin credenciales, URL, hosts ni IP, y borradas. **CA-14 no verificado: bloqueado por la cátedra.** Se marca cuando la cátedra publique y el E2E pase
 
-- [ ] **TASK-13 · Cierre**
+- [x] **TASK-13 · Cierre**
   - Alcance: `CLAUDE.md` (slice `catedra` con Kafka, excepciones nuevas a la skill, cómo usar Kafka y los tests, decisiones hasta la 014); decisión 014 (lo verificado en TASK-02 y TASK-12, "Por verificar", historial) y 010; `.env.example` completo; revisión de la cobertura de los CA.
   - Depende de: TASK-01 a TASK-12
   - Resuelve: todos los CA (revisión)
   - Validación: `./mvnw clean verify` en verde con el conteo de los reportes XML; los cinco chequeos de la skill sin coincidencias fuera de las excepciones autorizadas y comentadas; `grep` de imports de Kafka solo en `catedra/infrastructure/kafka` (y tests); cada CA con su evidencia registrada en este archivo
-  - Resultado: pendiente
+  - Resultado: 2026-10-31. `CLAUDE.md`: requisitos (variables de Kafka y la del E2E), slices `catedra` y `reservation` con T07, criterios (candado también para lo que llega por Kafka, sin control de versión; todo lo que entra a un slice entra por su service), excepciones nuevas a la skill (paquete `infrastructure/kafka`, el gateway que implementa un puerto de otro slice, `processed_events` con el `eventId` como clave y `Persistable`, puertos técnicos `TechnicalIntegrationListener` y `TransactionRunner`, resultados sellados `AdditionalInformationRequestResult` y `AppointmentAction`), sección nueva "Cómo usar Kafka de la cátedra", tests (Kafka apagado por Surefire, `KafkaTestContainer`, `KafkaTestTopic`, los repositorios de apoyo extraídos, transacciones reales con `@DataJpaTest`, `E2EKafka`) y documentación (SDD de T07, decisiones hasta la 014). Decisión 014: lo verificado por el E2E y el plan B no implementado; 010: cómo quedó la suite E2E con Kafka. `.env.example` ya estaba completo (TASK-09 y TASK-12). `./mvnw clean verify`: BUILD SUCCESS, 681 tests según Maven (679 en los XML), 0 fallas, 1 min 33 s; JaCoCo 97,7 % de líneas (1666/1706) y 91,6 % de ramas (545/595); el paquete `kafka`, 96,7 % y 89,6 % (5 líneas de `KafkaConsumerManager` sin cubrir, en caminos de error al arrancar el consumo). Los cinco chequeos de la skill sin coincidencias, salvo los seis adaptadores `gateway` del chequeo 5, todos con su comentario de excepción; ningún import de Kafka fuera de `catedra/infrastructure/kafka`; ninguna cita a documentos en el código ni en los tests.
+
+    **Revisión de los criterios de aceptación:**
+
+    | CA | Evidencia | Estado |
+    | --- | --- | --- |
+    | CA-01 | TASK-07 (caso de uso) y TASK-11 (aplicación completa con Kafka) | Verificado |
+    | CA-02 | TASK-05, TASK-07 y TASK-11 | Verificado |
+    | CA-03 | TASK-09 (lector) y TASK-11 | Verificado, con mensajes armados desde el anexo |
+    | CA-04 | TASK-09 y TASK-11 | Verificado, con mensajes armados |
+    | CA-05 | TASK-07 y TASK-11 | Verificado |
+    | CA-06 | TASK-07 y TASK-11 | Verificado |
+    | CA-07 | TASK-10 (Kafka real de Testcontainers) y TASK-11 (falla de la base; guardado sin confirmar) | Verificado |
+    | CA-08 | TASK-06 (transacción real contra Postgres) | Verificado |
+    | CA-09 | TASK-07 (hilos reales con T05) | Verificado |
+    | CA-10 | TASK-06 y TASK-11 | Verificado |
+    | CA-11 | TASK-07, TASK-10 (contraseña con SASL) y TASK-11 (tokens) | Verificado |
+    | CA-12 | TASK-11 (Kafka pausado durante la ejecución) | Verificado; la variante "Kafka caído al arrancar" no tiene un test propio |
+    | CA-13 | TASK-11 | Verificado |
+    | CA-14 | TASK-12 | **No verificado: bloqueado por la cátedra**, que no publica el pedido de teléfono. El consumo real con el consumer group de tests sí está verificado |
+    | CA-15 | TASK-10 y TASK-11 | Verificado |
+    | CA-16 | TASK-11 (arranque degradado) y TASK-04 (un error de configuración no avisa) | Verificado |
+    | CA-17 | TASK-10 | Verificado |
+
+    **Queda pendiente, bloqueado por la cátedra:** TASK-02 (grabar mensajes reales y reemplazar los armados) y TASK-12 (CA-14). Cuando la cátedra publique: el programa de TASK-02, el E2E, y de nuevo el programa para comprobar el consumer group del servicio
