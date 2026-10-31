@@ -115,5 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - archivo de SDD para el caso de uso T07-ProcesarSolicitudInformaciónAdicional
 - El login tecnico avisa a kafka que esta listo para consumir
 - En slice 'Reservation', se añade la entidad evento, con sus archivos para la persistencia incluidos.
+- Caso de uso en slice 'Reservation', su implementacion y tests para procesar un pedido de telefono de un proceso de reserva.
+- Caso de uso y archivos en slice 'Catedra' para que pueda recibir peticion de telefono y reenviarlo al slice 'Resrvation'.
 ### Changed
 - Ahora la escritura en el repositorio de ReservationProcess, junto con la del evento, lo hace TransactionRunner para que sean consitente entre ellas.
