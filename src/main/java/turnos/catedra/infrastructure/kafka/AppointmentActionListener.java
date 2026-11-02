@@ -20,6 +20,7 @@ public class AppointmentActionListener {
         switch (appointmentActionReader.read(message.value())) {
             case AppointmentAction.PhoneRequest phoneRequest ->
                     catedraEventService.receiveAdditionalInformationRequest(phoneRequest.request());
+            case AppointmentAction.Result result -> catedraEventService.receiveAppointmentResult(result.result());
             case AppointmentAction.Discarded discarded -> log.warn(
                     "Catedra message at offset {} discarded (eventId={}, reservationProcessId={}): {}",
                     message.offset(), discarded.eventId(), discarded.reservationProcessId(), discarded.reason());

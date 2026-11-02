@@ -126,6 +126,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Nuevos estados a 'Reservation' y los metodos que cambian estados, implementados con la alogica de cuando se deberian cambiar.
 - Caso de uso de slice 'Reservation' para manejar el resultado de una reserva y sus distintos estados.}
 - En slice 'Catedra', arhcivos para manejar los resultados de una reserva.
+- Listener de kafka en slice 'Catedra' para obtener los resultados.
 - Tests para los archivos agregados. 
 ### Changed
 - Actualizado el nombre de algunas clases para que estan mas acorde a lo que hacen, ya que se les añaden funcionalidades en T08.
