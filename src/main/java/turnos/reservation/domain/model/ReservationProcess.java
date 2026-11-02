@@ -131,7 +131,7 @@ public class ReservationProcess {
         }
         status = ReservationStatus.WAITING_FOR_PHONE;
         expiresAt = rejectionExpiresAt;
-        rejectionReason = limited(reason);
+        rejectionReason = storable(reason);
     }
 
     // Un evento de la cátedra informa el vencimiento: a diferencia de expire, también cierra un proceso con el teléfono
@@ -159,7 +159,7 @@ public class ReservationProcess {
         }
         close(ReservationStatus.CANCELLED);
         cancelledAt = occurredAt;
-        cancellationReason = limited(reason);
+        cancellationReason = storable(reason);
     }
 
     private void requireOpen(String action) {
@@ -175,12 +175,16 @@ public class ReservationProcess {
         needsReconciliation = false;
     }
 
-    // Recorta sin partir un carácter de dos unidades, que la base rechazaría
-    private static String limited(String reason) {
-        if (reason == null || reason.length() <= MAX_REASON_LENGTH) {
-            return reason;
+    // Deja un motivo como la base lo acepta: sin el carácter nulo, y recortado sin partir un carácter de dos unidades
+    private static String storable(String reason) {
+        if (reason == null) {
+            return null;
         }
-        int end = Character.isHighSurrogate(reason.charAt(MAX_REASON_LENGTH - 1)) ? MAX_REASON_LENGTH - 1 : MAX_REASON_LENGTH;
-        return reason.substring(0, end);
+        String withoutNull = reason.replace("\0", "");
+        if (withoutNull.length() <= MAX_REASON_LENGTH) {
+            return withoutNull;
+        }
+        int end = Character.isHighSurrogate(withoutNull.charAt(MAX_REASON_LENGTH - 1)) ? MAX_REASON_LENGTH - 1 : MAX_REASON_LENGTH;
+        return withoutNull.substring(0, end);
     }
 }

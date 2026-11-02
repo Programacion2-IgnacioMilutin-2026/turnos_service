@@ -401,6 +401,18 @@ class ReservationProcessTest {
         assertThat(process.getCancellationReason()).isEqualTo("a".repeat(ReservationProcess.MAX_REASON_LENGTH - 1));
     }
 
+    @Test
+    void theNullCharacterIsRemovedFromAReason() {
+        ReservationProcess rejected = process(ReservationStatus.PHONE_SUBMITTED);
+        ReservationProcess cancelled = process(ReservationStatus.HELD);
+
+        rejected.rejectPhone("INVALID\0_PHONE", EXPIRES_AT);
+        cancelled.cancel(OCCURRED_AT, "Cambio\0 de turno");
+
+        assertThat(rejected.getRejectionReason()).isEqualTo("INVALID_PHONE");
+        assertThat(cancelled.getCancellationReason()).isEqualTo("Cambio de turno");
+    }
+
     private static Stream<Consumer<ReservationProcess>> exitsFromWaitingForThePhone() {
         return Stream.concat(exitsToConfirmedCancelledOrExpired(), Stream.of(ReservationProcess::invalidate));
     }

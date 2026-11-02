@@ -71,6 +71,6 @@ class CatedraEventAdapterTest {
             received.add(request);
             return useCase.processPhoneRequest(request);
         };
-        return new CatedraEventAdapter(new ReservationService(null, null, recording));
+        return new CatedraEventAdapter(new ReservationService(null, null, recording, null));
     }
 }

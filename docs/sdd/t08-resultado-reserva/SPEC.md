@@ -104,7 +104,7 @@ referencia no tengan sin consultarlo. -->
 - **RF-12** · T08 alternativo 5.2, contrato §4.3.1, anexo §18.4: si falla la persistencia, se reintenta con espera creciente y un máximo de intentos; agotados, se registra el error y no se confirma el offset. El comportamiento ante la falla de la base es el de T07 (D5 de T07, decisión 014 §3.3).
 - **RF-13** · Guía de backend (concurrencia), decisión 013: el procesamiento toma el candado del dueño del proceso, como T07, para no pisar una operación del mismo usuario.
 - **RF-14** · Guía de backend (observabilidad y privacidad): cada descarte, huérfano, inconsistencia y estado final ignorado queda en el log con `eventId`, `reservationProcessId` (si lo trae) y motivo; sin JWT técnico ni credenciales.
-- **RF-17** · Guía de backend (consistencia y dependencias), D4, indicado por el usuario: un valor demasiado largo no puede frenar el consumo. Un `eventId`, `reservationProcessId` o `holdId` de más de 255 caracteres hace inválido el mensaje (se trata como RF-02), en los cinco eventos y también en el pedido de teléfono de T07. Un `reason` largo se recorta (D4) y deja un warning.
+- **RF-17** · Guía de backend (consistencia y dependencias), D4, indicado por el usuario: un valor demasiado largo no puede frenar el consumo. Un `eventId`, `reservationProcessId` o `holdId` de más de 255 caracteres hace inválido el mensaje (se trata como RF-02), en los cinco eventos y también en el pedido de teléfono de T07. Un `reason` largo se recorta (D4) y deja un warning. Lo mismo vale para el carácter nulo (`\u0000`), que la base no acepta en un texto (agregado el 2026-11-02, aprobado por el usuario): un identificador que lo contiene hace inválido el mensaje, y a un `reason` se le quita, con un warning.
 
 ## Fuera de alcance
 
@@ -208,7 +208,7 @@ Repite el formato según sea necesario. -->
 - **CA-17 · RF-15, D7:** Dado un proceso en `WAITING_FOR_PHONE` con motivo de rechazo, cuando sale de ese estado por un evento o por vencimiento (`expire` y `expireIfOverdue`), entonces el motivo queda vacío.
 - **CA-18 · RF-16, D5:** Dado un proceso marcado, cuando pasa a `CONFIRMED`, `CANCELLED` o `EXPIRED`, por un evento o por vencimiento, entonces la marca se apaga. Con un rechazo aplicado, la marca no cambia. Un proceso marcado que T05 o T07 pasan a `WAITING_FOR_PHONE` sigue marcado.
 - **CA-19 · RF-07, RF-10, RF-17, D4:** Cuando llega un evento con un `reason` de más de 500 caracteres, entonces el efecto se aplica con los primeros 500, el log tiene un warning, el offset se confirma y el evento siguiente se procesa.
-- **CA-20 · RF-17:** Cuando llega un evento o un pedido de teléfono con un `eventId`, `reservationProcessId` o `holdId` de más de 255 caracteres, entonces se descarta como CA-08 y el mensaje siguiente se procesa. Con exactamente 255, se procesa.
+- **CA-20 · RF-17:** Cuando llega un evento o un pedido de teléfono con un `eventId`, `reservationProcessId` o `holdId` de más de 255 caracteres, entonces se descarta como CA-08 y el mensaje siguiente se procesa. Con exactamente 255, se procesa. Un identificador con el carácter nulo se descarta igual, y un `reason` con ese carácter se guarda sin él, con un warning, y el mensaje siguiente se procesa.
 - **CA-21 · RF-01 a RF-11:** Con la aplicación completa, base real, Kafka en contenedor y la cátedra REST simulada, un usuario bloquea y confirma un turno, llega el pedido de teléfono, el proceso se deja en `PHONE_SUBMITTED` directamente en la base (T06 no existe) y llega un `AppointmentConfirmed`; entonces la base tiene el proceso `CONFIRMED` con su `reservationId`, y el usuario puede bloquear otro turno.
 - **CA-22 · Restricciones:** Las respuestas de T04 y T05 no cambian. Confirmar un proceso en `CONFIRMED`, `CANCELLED` o `INVALID` responde el `409` que T05 ya da para un proceso que no está en `HELD`, y un pedido de teléfono sobre esos estados se trata como estado ya avanzado (T07 5.1).
 
@@ -239,7 +239,7 @@ No marques los criterios como superados durante la especificación. -->
 | CA-17 | Motivo vigente y cada salida de `WAITING_FOR_PHONE` | Motivo vacío |
 | CA-18 | Proceso marcado y cada transición | Apagada en los cierres; igual en rechazo y en `WAITING_FOR_PHONE` |
 | CA-19 | `reason` de 501 caracteres en rechazo y cancelación, con otro evento detrás | Efecto con 500; warning; el siguiente se procesa |
-| CA-20 | Identificadores de 256 y de 255 caracteres, con otro mensaje detrás | Descartado y procesado, respectivamente; sin frenar el consumo |
+| CA-20 | Identificadores de 256 y de 255 caracteres, y con el carácter nulo; `reason` con el carácter nulo; con otro mensaje detrás | Descartado, procesado, descartado y guardado sin el carácter, respectivamente; sin frenar el consumo |
 | CA-21 | Recorrido completo con la aplicación levantada | Proceso `CONFIRMED` en la base; nuevo bloqueo posible |
 | CA-22 | Suite existente; T05 y pedido de teléfono sobre los estados nuevos | Sin cambios en las respuestas; `409`; estado ya avanzado |
 
