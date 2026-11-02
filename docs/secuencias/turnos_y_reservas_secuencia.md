@@ -331,6 +331,11 @@ sequenceDiagram
     break JWT missing, invalid, expired or without permissions
         Service-->>App: 401 or 403
     end
+    Service->>Service: Validate phone format (optional leading +, 7 to 15 digits, after removing spaces, hyphens, parentheses and dots), then normalize
+    break Invalid phone format
+        Service-->>App: 400 (functional code, no database access, nothing published)
+    end
+    Note over Service,DB: From here until the response, the operation holds the user lock (a T08 result of this user waits)
     Service->>DB: Find process by reservationProcessId and user
     DB-->>Service: Process or none
     break Process does not exist or belongs to another user
@@ -346,32 +351,33 @@ sequenceDiagram
     break requestEventId not stored yet (T07 has not processed the request)
         Service-->>App: 409 (PHONE_REQUEST_NOT_READY, retry in a few seconds, nothing published)
     end
-    Service->>Service: Validate phone format (optional leading +, 7 to 15 digits, after removing spaces, hyphens, parentheses and dots), then normalize
-    break Invalid phone format
-        Service-->>App: 400 (functional code, nothing published)
-    end
 
-    Service->>Kafka: Publish AdditionalInformationSubmitted (reservationProcessId, holdId, requestEventId, phoneNumber, own eventId)
-    Kafka-->>Service: Acknowledgment, or error
-    opt Kafka rejects the credentials (authentication failure)
-        Service->>Service: Run X01 (get current configuration), once
-        Service->>Kafka: Publish again (same eventId and content)
-        Kafka-->>Service: Acknowledgment, or error
-    end
-    break Kafka unavailable after retries, or credentials still rejected (growing wait, max attempts, same eventId and content)
-        Service->>Service: Log error
-        Service->>DB: Mark process for reconciliation (T13)
+    break No technical session and none can be obtained, or configuration error (nothing saved, published or marked)
+        Service->>Service: Log the reason
         Service-->>App: 503 (the user can retry T06 while expiresAt has not passed)
     end
-    Service->>DB: Only if the process is still WAITING_FOR_PHONE: save phone, clear previous rejection reason, set PHONE_SUBMITTED (if T08 already advanced it, nothing changes)
-    break Local persistence fails (event already sent to Central API)
-        Service->>Service: Log critical error and mark for reconciliation (T13)
-        Service-->>App: 500 (functional code)
+    Service->>DB: Save phone, clear previous rejection reason, set PHONE_SUBMITTED
+    break Local persistence fails (nothing published, the process stays as it was)
+        Service->>Service: Log error
+        Service-->>App: 500 (INTERNAL_ERROR, the user can retry)
+    end
+    Note over Service,Kafka: If the service crashes here, the process stays PHONE_SUBMITTED and nothing was published (T13 solves it at startup)
+    Service->>Kafka: Publish AdditionalInformationSubmitted (reservationProcessId, holdId, requestEventId, phoneNumber, own eventId)
+    Kafka-->>Service: Acknowledgment, or error
+    break Kafka unavailable after retries (growing wait, max attempts, time limit, same eventId and content), or credentials rejected (no retries)
+        Service->>Service: Log error
+        Service->>DB: Back to WAITING_FOR_PHONE and mark for reconciliation (T13), previous rejection reason and phone not restored
+        alt Saved
+            Service-->>App: 503 (the user can retry T06 while expiresAt has not passed)
+        else Local persistence fails (the process stays PHONE_SUBMITTED, the phone did not leave)
+            Service->>Service: Log critical error
+            Service-->>App: 500 (LOCAL_STATE_OUT_OF_SYNC, T13 solves it)
+        end
     end
     Service-->>App: Phone submitted (the result is available through T09)
     Note over Kafka,Central: Central API consumes the message and later publishes the result (T08)
 
-    Note over App,Central: T08 — Process reservation result (asynchronous, can arrive before the save in T06)
+    Note over App,Central: T08 — Process reservation result (asynchronous, never ahead of the save in T06)
     Central->>Kafka: Publish result event (Confirmed, Rejected, Expired, Invalid or Cancelled)
     Kafka->>Service: Result event (eventId, eventType, reservationProcessId, holdId, ...)
     Service->>Service: Validate message (required fields by event type, schemaVersion = 1, known eventType)

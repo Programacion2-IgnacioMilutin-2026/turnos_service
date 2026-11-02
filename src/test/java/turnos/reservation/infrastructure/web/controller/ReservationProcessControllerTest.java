@@ -2,10 +2,14 @@ package turnos.reservation.infrastructure.web.controller;
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
@@ -22,12 +26,14 @@ import turnos.reservation.application.exception.ReservationHoldExpiredException;
 import turnos.reservation.application.exception.ReservationHoldNotFoundException;
 import turnos.reservation.application.exception.ReservationHoldNotSavedException;
 import turnos.reservation.application.exception.ReservationIntegrationException;
+import turnos.reservation.application.exception.ReservationInvalidPhoneNumberException;
 import turnos.reservation.application.exception.ReservationInvalidProcessStateException;
 import turnos.reservation.application.exception.ReservationInvalidSlotException;
 import turnos.reservation.application.exception.ReservationLocalStateOutOfSyncException;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.application.exception.ReservationOpenProcessExistsException;
 import turnos.reservation.application.exception.ReservationPatientMismatchException;
+import turnos.reservation.application.exception.ReservationPhoneRequestNotReadyException;
 import turnos.reservation.application.exception.ReservationProcessNotFoundException;
 import turnos.reservation.application.exception.ReservationProfessionalDisabledException;
 import turnos.reservation.application.exception.ReservationProfessionalNotFoundException;
@@ -62,6 +68,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@ExtendWith(OutputCaptureExtension.class)
 @WebMvcTest(ReservationProcessController.class)
 @Import({TestSecurityConfiguration.class, ReservationProcessDtoMapper.class})
 class ReservationProcessControllerTest {
@@ -297,13 +304,14 @@ class ReservationProcessControllerTest {
         }
     }
 
-    @Test
-    void aProcessInAnotherStateAnswersConflictWithItsCurrentStatus() throws Exception {
-        doThrow(new ReservationInvalidProcessStateException("process-1", ReservationStatus.PHONE_SUBMITTED))
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "CONFIRMED", "CANCELLED", "INVALID"})
+    void aProcessInAnotherStateAnswersConflictWithItsCurrentStatus(ReservationStatus status) throws Exception {
+        doThrow(new ReservationInvalidProcessStateException("process-1", status))
                 .when(reservationService).confirmReservationProcess(anyLong(), anyString());
 
         expectProblem(confirm("process-1"), 409, "INVALID_PROCESS_STATE")
-                .andExpect(jsonPath("$.currentStatus").value("PHONE_SUBMITTED"));
+                .andExpect(jsonPath("$.currentStatus").value(status.name()));
     }
 
     @Test
@@ -320,6 +328,154 @@ class ReservationProcessControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"userId\":99,\"reservationProcessId\":\"process-9\"}"))
                 .andExpect(status().isOk());
         verify(reservationService).confirmReservationProcess(42L, "process-1");
+    }
+
+    @Test
+    void aSubmittedPhoneAnswersTheProcessWithoutThePhoneTheHoldOrTheMark() throws Exception {
+        ReservationProcess submitted = submittedProcess();
+        when(reservationService.submitPhone(42L, "process-1", "+54 9 261 555-1234")).thenReturn(submitted);
+
+        MockHttpServletResponse response = submitPhone("process-1", "{\"phoneNumber\":\"+54 9 261 555-1234\"}")
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andReturn().getResponse();
+
+        Map<String, Object> body = JsonPath.read(response.getContentAsString(), "$");
+        assertThat(body).containsOnlyKeys("reservationProcessId", "status", "professionalId", "professionalFirstName",
+                "professionalLastName", "professionalCategoryName", "date", "startTime", "expiresAt", "rejectionReason",
+                "reservationId", "confirmedAt", "cancelledAt", "cancellationReason");
+        assertThat(body).containsEntry("reservationProcessId", "process-1").containsEntry("status", "PHONE_SUBMITTED")
+                .containsEntry("startTime", "10:30").containsEntry("expiresAt", "2026-10-27T04:44:38Z")
+                .containsEntry("rejectionReason", null).containsEntry("reservationId", null);
+        assertThat(response.getContentAsString()).doesNotContain("5492615551234").doesNotContain("hold-1")
+                .doesNotContain("request-event-1").doesNotContain("econciliation");
+    }
+
+    @Test
+    void eachPhoneErrorAnswersItsStatusAndCodeWithoutTheInternalReason() throws Exception {
+        Map<RuntimeException, List<Object>> expected = Map.of(
+                new ReservationInvalidPhoneNumberException(), List.of(400, "INVALID_PHONE_NUMBER"),
+                new ReservationProcessNotFoundException("process-1"), List.of(404, "RESERVATION_PROCESS_NOT_FOUND"),
+                new ReservationHoldExpiredException("hold-1"), List.of(409, "HOLD_EXPIRED"),
+                new ReservationPhoneRequestNotReadyException("process-1"), List.of(409, "PHONE_REQUEST_NOT_READY"),
+                new ReservationCentralUnavailableException("kafka-internal-reason"), List.of(503, "CENTRAL_UNAVAILABLE"),
+                new ReservationLocalStateOutOfSyncException("process-1", new IllegalStateException("db-internal-reason")),
+                List.of(500, "LOCAL_STATE_OUT_OF_SYNC"),
+                new ReservationNotSavedException("process-1", new IllegalStateException("db-internal-reason")),
+                List.of(500, "INTERNAL_ERROR"));
+
+        for (Map.Entry<RuntimeException, List<Object>> entry : expected.entrySet()) {
+            doThrow(entry.getKey()).when(reservationService).submitPhone(anyLong(), anyString(), anyString());
+            String body = expectProblem(submitPhone("process-1", "{\"phoneNumber\":\"+5492615551234\"}"),
+                    (Integer) entry.getValue().get(0), (String) entry.getValue().get(1))
+                    .andReturn().getResponse().getContentAsString();
+            assertThat(body).doesNotContain("internal-reason").doesNotContain("hold-1").doesNotContain("5492615551234");
+        }
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, mode = EnumSource.Mode.EXCLUDE, names = "WAITING_FOR_PHONE")
+    void aPhoneForAProcessInAnotherStateAnswersConflictWithItsCurrentStatus(ReservationStatus status) throws Exception {
+        doThrow(new ReservationInvalidProcessStateException("process-1", status))
+                .when(reservationService).submitPhone(anyLong(), anyString(), anyString());
+
+        expectProblem(submitPhone("process-1", "{\"phoneNumber\":\"+5492615551234\"}"), 409, "INVALID_PROCESS_STATE")
+                .andExpect(jsonPath("$.currentStatus").value(status.name()));
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"phoneNumber\":null}"})
+    void aMissingPhoneIsAValidationErrorThatNamesTheFieldWithoutAskingForTheProcess(String body) throws Exception {
+        expectProblem(submitPhone("process-1", body), 400, "VALIDATION_ERROR")
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("phoneNumber"))
+                .andExpect(jsonPath("$.fieldErrors[0].message").value("Phone number is mandatory"));
+        verifyNoInteractions(reservationService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{\"phoneNumber\":[\"+5492615551234\"]}", "{\"phoneNumber\":{\"value\":\"+5492615551234\"}}"})
+    void aPhoneThatIsNotAScalarIsAValidationErrorThatDoesNotEchoIt(String body, CapturedOutput output) throws Exception {
+        String answer = expectProblem(submitPhone("process-1", body), 400, "VALIDATION_ERROR")
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(answer).doesNotContain("5492615551234");
+        assertThat(output.getAll()).doesNotContain("5492615551234");
+        verifyNoInteractions(reservationService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "not json", "{\"phoneNumber\":\"+5492615551234\"", "\"+5492615551234\""})
+    void aBodyThatIsNotTheExpectedObjectIsAValidationErrorThatDoesNotEchoThePhone(String body, CapturedOutput output) throws Exception {
+        String answer = expectProblem(submitPhone("process-1", body), 400, "VALIDATION_ERROR")
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(answer).doesNotContain("5492615551234");
+        assertThat(output.getAll()).doesNotContain("5492615551234");
+        verifyNoInteractions(reservationService);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "   ", "abc"})
+    void anEmptyOrMalformedPhoneReachesTheUseCaseThatDecidesItsFormat(String phone) throws Exception {
+        doThrow(new ReservationInvalidPhoneNumberException()).when(reservationService).submitPhone(42L, "process-1", phone);
+
+        expectProblem(submitPhone("process-1", "{\"phoneNumber\":\"" + phone + "\"}"), 400, "INVALID_PHONE_NUMBER");
+
+        verify(reservationService).submitPhone(42L, "process-1", phone);
+    }
+
+    @Test
+    void aNumberInsteadOfTextIsTreatedAsThePhoneItWrites() throws Exception {
+        when(reservationService.submitPhone(42L, "process-1", "5492615551234")).thenReturn(submittedProcess());
+
+        submitPhone("process-1", "{\"phoneNumber\":5492615551234}").andExpect(status().isOk());
+
+        verify(reservationService).submitPhone(42L, "process-1", "5492615551234");
+    }
+
+    @Test
+    void withoutTokenThePhoneIsNeverSubmitted() throws Exception {
+        mockMvc.perform(post(PATH + "/process-1/phone").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"phoneNumber\":\"+5492615551234\"}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void anExpiredTokenNeverSubmitsThePhone() throws Exception {
+        Instant now = Instant.now();
+        String expired = TestTokens.signed(claims -> claims.subject("42").claim("auth", "ROLE_USER")
+                .issuedAt(now.minusSeconds(3600)).expiresAt(now.minusSeconds(1)));
+
+        mockMvc.perform(post(PATH + "/process-1/phone").header(HttpHeaders.AUTHORIZATION, "Bearer " + expired)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"phoneNumber\":\"+5492615551234\"}"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void theOwnerOfThePhoneComesFromTheTokenAndTheProcessFromThePathIgnoringTheRestOfTheBody() throws Exception {
+        when(reservationService.submitPhone(anyLong(), anyString(), anyString())).thenReturn(submittedProcess());
+
+        submitPhone("process-1", "{\"phoneNumber\":\"2615551234\",\"userId\":99,\"reservationProcessId\":\"process-9\"}")
+                .andExpect(status().isOk());
+
+        verify(reservationService).submitPhone(42L, "process-1", "2615551234");
+    }
+
+    private static ReservationProcess submittedProcess() {
+        return ReservationProcess.builder()
+                .reservationProcessId("process-1").holdId("hold-1").userId(42L).professionalId(201L)
+                .professionalFirstName("Ana").professionalLastName("Gomez").professionalCategoryName("Clinica medica")
+                .date(DATE).startTime(TEN_THIRTY).status(ReservationStatus.PHONE_SUBMITTED)
+                .expiresAt(Instant.parse("2026-10-27T04:44:38.627744064Z")).requestEventId("request-event-1")
+                .phoneNumber("+5492615551234").needsReconciliation(true).build();
+    }
+
+    private ResultActions submitPhone(String reservationProcessId, String body) throws Exception {
+        return mockMvc.perform(post(PATH + "/" + reservationProcessId + "/phone")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
+                .contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
     private ResultActions confirm(String reservationProcessId) throws Exception {

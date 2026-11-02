@@ -7,6 +7,7 @@ import turnos.catedra.domain.model.TechnicalLoginPolicy;
 import turnos.catedra.domain.model.TechnicalLoginResult;
 import turnos.catedra.domain.model.TechnicalSession;
 import turnos.catedra.domain.ports.in.RenewTechnicalSessionUseCase;
+import turnos.catedra.domain.ports.out.TechnicalIntegrationListener;
 import turnos.catedra.domain.ports.out.TechnicalLoginClient;
 import turnos.catedra.domain.ports.out.TechnicalSessionRepository;
 
@@ -25,6 +26,7 @@ public class RenewTechnicalSessionUseCaseImpl implements RenewTechnicalSessionUs
     private final TechnicalSessionRepository technicalSessionRepository;
     private final TechnicalLoginPolicy technicalLoginPolicy;
     private final Clock clock;
+    private final TechnicalIntegrationListener technicalIntegrationListener;
     // Un solo login a la vez: quien llega mientras hay uno en curso espera y después usa su resultado
     private final ReentrantLock loginLock = new ReentrantLock();
 
@@ -42,9 +44,22 @@ public class RenewTechnicalSessionUseCaseImpl implements RenewTechnicalSessionUs
             }
             TechnicalSession renewed = attemptLogin();
             technicalSessionRepository.save(renewed);
-            return renewed.isEnabled() ? Optional.of(renewed) : Optional.empty();
+            if (!renewed.isEnabled()) {
+                return Optional.empty();
+            }
+            notifyEnabled(renewed);
+            return Optional.of(renewed);
         } finally {
             loginLock.unlock();
+        }
+    }
+
+    // La sesión ya quedó guardada: si quien recibe el aviso falla, la renovación no se deshace
+    private void notifyEnabled(TechnicalSession session) {
+        try {
+            technicalIntegrationListener.integrationEnabled(session.integration());
+        } catch (RuntimeException e) {
+            log.error("The enabled integration could not be notified: {}", e.getClass().getSimpleName());
         }
     }
 

@@ -109,3 +109,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Se descubrio que la catedra devuelve HOLD_NOT_FOUND cuiando este vence, por lo que se actualizo la documentacion para que sea consistente con la realidad.
 - Ahora el candado del hold del slice 'Reservation' es general, por lo que se lo quito y modifico del CreateReservationProcessUseCaseImpl.
+
+## 2026-10-31
+### Added
+- archivo de SDD para el caso de uso T07-ProcesarSolicitudInformaciónAdicional
+- El login tecnico avisa a kafka que esta listo para consumir
+- En slice 'Reservation', se añade la entidad evento, con sus archivos para la persistencia incluidos.
+- Caso de uso en slice 'Reservation', su implementacion y tests para procesar un pedido de telefono de un proceso de reserva.
+- Caso de uso y archivos en slice 'Catedra' para que pueda recibir peticion de telefono y reenviarlo al slice 'Reservation'.
+### Changed
+- Ahora la escritura en el repositorio de ReservationProcess, junto con la del evento, lo hace TransactionRunner para que sean consitente entre ellas.
+
+## 2026-11-02
+### Added
+- Documentacion de SDD para el caso de uso T08-ResultadoReserva.
+- Nuevos estados a 'Reservation' y los metodos que cambian estados, implementados con la alogica de cuando se deberian cambiar.
+- Caso de uso de slice 'Reservation' para manejar el resultado de una reserva y sus distintos estados.}
+- En slice 'Catedra', arhcivos para manejar los resultados de una reserva.
+- Listener de kafka en slice 'Catedra' para obtener los resultados.
+- Tests para los archivos agregados en el caso de uso T08.
+- Documentacion de SDD para el caso de uso T06-InformarTelefono.
+- En slice 'Reservation', validacion del numero de telefono y transiciones en la subida de este.
+- Publisher de kafka para sunir el numerro de telefono.
+- Caso de uso para publicar el numero de telefono y su gateway para comunicarse con catedra. Dentro de slice 'Reservation'.
+- Endpoint en slice 'Reservation' para la publicacion del numero de telefono.
+- Tests para los archivos agregados en el caso de uso T06. El test E2E al momento no funciona correctamente hasta que el servicio de catedra este arreglado
+### Changed
+- Actualizado el nombre de algunas clases para que estan mas acorde a lo que hacen, ya que se les añaden funcionalidades en T08.
+- Ahora tambien vuelve a intentar cuando falla al leer la base, antes solo cuando escribia.
+- Documentacion actualizada debido a decisiones tomadas.

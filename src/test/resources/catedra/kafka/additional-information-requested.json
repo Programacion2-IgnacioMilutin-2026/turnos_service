@@ -1,0 +1,11 @@
+{
+  "eventId": "request-event-8a31",
+  "eventType": "AdditionalInformationRequested",
+  "reservationProcessId": "process-a92b47d0",
+  "holdId": "hold-6c0c2f41",
+  "requiredField": "PHONE_NUMBER",
+  "message": "Ingrese un numero de telefono para continuar.",
+  "expiresAt": "2026-10-12T14:44:50Z",
+  "occurredAt": "2026-10-12T14:35:10Z",
+  "schemaVersion": 1
+}
