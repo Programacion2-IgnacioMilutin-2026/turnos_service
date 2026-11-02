@@ -1,0 +1,13 @@
+{
+  "eventId": "rejection-event-7d11",
+  "eventType": "AdditionalInformationRejected",
+  "groupId": "proyecto-de-prueba",
+  "reservationProcessId": "process-a92b47d0",
+  "holdId": "hold-6c0c2f41",
+  "requestEventId": "request-event-8a31",
+  "reason": "INVALID_PHONE_NUMBER",
+  "message": "El telefono ingresado no es valido.",
+  "expiresAt": "2026-10-12T14:44:50Z",
+  "occurredAt": "2026-10-12T14:36:01Z",
+  "schemaVersion": 1
+}

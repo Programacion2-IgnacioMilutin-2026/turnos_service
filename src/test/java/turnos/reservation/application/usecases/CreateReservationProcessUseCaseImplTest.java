@@ -352,6 +352,11 @@ class CreateReservationProcessUseCaseImplTest {
         }
 
         @Override
+        public Optional<ReservationProcess> findById(String reservationProcessId) {
+            return processes.stream().filter(p -> p.getReservationProcessId().equals(reservationProcessId)).findFirst();
+        }
+
+        @Override
         public Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId) {
             return processes.stream().filter(p -> p.getReservationProcessId().equals(reservationProcessId)
                     && p.getUserId().equals(userId)).findFirst();

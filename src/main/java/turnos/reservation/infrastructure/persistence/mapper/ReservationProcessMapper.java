@@ -24,6 +24,7 @@ public class ReservationProcessMapper {
                 .status(reservationProcess.getStatus())
                 .expiresAt(reservationProcess.getExpiresAt())
                 .needsReconciliation(reservationProcess.isNeedsReconciliation())
+                .requestEventId(reservationProcess.getRequestEventId())
                 .build();
     }
 
@@ -44,6 +45,7 @@ public class ReservationProcessMapper {
                 .status(entity.getStatus())
                 .expiresAt(entity.getExpiresAt())
                 .needsReconciliation(entity.isNeedsReconciliation())
+                .requestEventId(entity.getRequestEventId())
                 .build();
     }
 }

@@ -1,0 +1,16 @@
+{
+  "eventId": "cancellation-event-7d14",
+  "eventType": "AppointmentCancelled",
+  "groupId": "proyecto-de-prueba",
+  "reservationProcessId": "process-a92b47d0",
+  "holdId": "hold-6c0c2f41",
+  "requestEventId": "request-event-8a31",
+  "reservationId": 8251,
+  "professionalId": 15,
+  "date": "2026-10-20",
+  "startTime": "09:30",
+  "status": "CANCELLED",
+  "reason": "Cambio solicitado por el usuario",
+  "occurredAt": "2026-10-13T15:10:00Z",
+  "schemaVersion": 1
+}

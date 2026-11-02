@@ -1,0 +1,11 @@
+{
+  "eventId": "process-event-7d12",
+  "eventType": "AppointmentProcessExpired",
+  "groupId": "proyecto-de-prueba",
+  "reservationProcessId": "process-a92b47d0",
+  "holdId": "hold-6c0c2f41",
+  "requestEventId": "request-event-8a31",
+  "reason": "HOLD_EXPIRED",
+  "occurredAt": "2026-10-12T14:44:52Z",
+  "schemaVersion": 1
+}

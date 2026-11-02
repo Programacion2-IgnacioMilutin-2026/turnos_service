@@ -49,16 +49,23 @@ public final class FakeCatedraServer implements AutoCloseable {
 
     // La respuesta del login técnico, incluidos los campos de Redis que turnos debe descartar
     public static String provisionedLoginResponse(String provisioningStatus) {
+        return provisionedLoginResponse(provisioningStatus, "kafka.catedra.internal:9092",
+                "alumnos.turnos.acciones.proyecto-juan-perez", "alumnos-proyecto-juan-perez");
+    }
+
+    // La misma respuesta, con el Kafka que use el test (por ejemplo, el de Testcontainers)
+    public static String provisionedLoginResponse(String provisioningStatus, String kafkaBootstrapServers,
+                                                  String actionsTopic, String consumerGroup) {
         return """
                 {"id_token":"%s","integration":{"groupId":"proyecto-juan-perez","redisHost":"redis.catedra.internal",
                  "redisPort":6379,"redisUsername":"grp_proyecto-juan-perez","redisPassword":"secreto-redis",
                  "redisReadNamespace":"catedra:sync:*","redisWriteNamespace":"alumnos:proyecto-juan-perez:*",
-                 "kafkaBootstrapServers":"kafka.catedra.internal:9092","kafkaConsumerGroupId":"alumnos-proyecto-juan-perez",
+                 "kafkaBootstrapServers":"%s","kafkaConsumerGroupId":"%s",
                  "kafkaCatalogTopic":"catedra.catalog.proyecto-juan-perez",
-                 "kafkaAppointmentActionsTopic":"alumnos.turnos.acciones.proyecto-juan-perez",
+                 "kafkaAppointmentActionsTopic":"%s",
                  "kafkaAppointmentPhoneTopic":"catedra.turnos.telefono.proyecto-juan-perez",
                  "provisioningStatus":"%s"}}
-                """.formatted(TOKEN, provisioningStatus);
+                """.formatted(TOKEN, kafkaBootstrapServers, consumerGroup, actionsTopic, provisioningStatus);
     }
 
     public static String problem(int status, String code) {

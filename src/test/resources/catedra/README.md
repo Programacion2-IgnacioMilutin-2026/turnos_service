@@ -33,6 +33,19 @@ Tiempo de respuesta observado: unos 0,5 s por consulta.
 
 No se pudo grabar: un `403` `STUDENT_INTEGRATION_NOT_FOUND`, un `503`, un `500` ni un timeout (no se pueden provocar), ni un `409` `SLOT_ALREADY_RESERVED` (necesita una reserva confirmada, T05 y Kafka). Al confirmar tampoco: `403` `HOLD_OWNER_MISMATCH` (los dos backends comparten la cuenta técnica) ni `404` `HOLD_EXPIRED` (un hold vencido respondió `HOLD_NOT_FOUND`). Esos casos se arman a mano en los tests.
 
+## Mensajes de Kafka (`kafka/`): armados, no grabados
+
+**Estos archivos no son respuestas reales.** Hasta el 2026-10-31 la cátedra no publicó ningún mensaje en el topic de acciones de la integración: estaba vacío después de confirmar holds y después de su vencimiento (ver TASK-02 de `docs/sdd/t07-solicitud-informacion/TASKS.md` y la decisión 014). Por eso se armaron copiando los ejemplos del anexo de la cátedra (§15.4 y §15.6 a §15.10, los mismos del contrato de turnos §4.3.2 y §4.3.4), con el `groupId` reemplazado por el valor de prueba de `login-200.json`. Cuando la cátedra publique, se reemplazan por los grabados, limpios como el resto.
+
+| Archivo | Evento | Lo usa |
+| --- | --- | --- |
+| `kafka/additional-information-requested.json` | `AdditionalInformationRequested` (no trae `groupId`, como en el anexo) | T07 |
+| `kafka/appointment-confirmed.json` | `AppointmentConfirmed` | Hasta T08, como evento que se descarta |
+| `kafka/additional-information-rejected.json` | `AdditionalInformationRejected` | Ídem |
+| `kafka/appointment-process-expired.json` | `AppointmentProcessExpired` | Ídem |
+| `kafka/appointment-process-invalid.json` | `AppointmentProcessInvalid` | Ídem |
+| `kafka/appointment-cancelled.json` | `AppointmentCancelled` | Ídem |
+
 **Cancelar un hold no funciona (2026-10-27):** `POST /api/appointments/{reservationProcessId}/cancel` con el `reservationProcessId` de `hold-201-created.json`, todavía en `HELD`, respondió `404` `RESERVATION_NOT_FOUND`. No se versiona, porque no lo usa ningún test. El hold no se pudo deshacer y venció solo a los 10 minutos. Los profesionales deshabilitados en la cátedra el 2026-10-27 eran el 206, el 214 y el 222 (snapshot versión 1, no versionado).
 
 **Cancelar un proceso en `WAITING_FOR_PHONE` tampoco funciona (2026-10-28):** `POST /api/appointments/{reservationProcessId}/cancel` con el proceso de `confirm-202-accepted.json`, ya confirmado, respondió `409` `RESERVATION_NOT_CANCELLABLE` (`detail` "Reservation is not confirmed"). No se versiona, porque no lo usa ningún test. La reserva `PHONE_PENDING` venció sola a los 10 minutos.

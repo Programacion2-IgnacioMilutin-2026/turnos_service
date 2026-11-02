@@ -29,6 +29,7 @@ class ReservationProcessMapperTest {
                 .status(ReservationStatus.HELD)
                 .expiresAt(Instant.parse("2026-10-27T04:44:38Z"))
                 .needsReconciliation(true)
+                .requestEventId("request-event-1")
                 .build();
         assertThat(original).hasNoNullFieldsOrProperties();
 

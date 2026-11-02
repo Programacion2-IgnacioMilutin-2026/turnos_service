@@ -111,6 +111,53 @@ class ReservationProcessTest {
         assertThat(process.getStatus()).isEqualTo(ReservationStatus.HELD);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE"})
+    void aPhoneRequestLeavesTheProcessWaitingForThePhoneWithTheRequestAndItsExpiration(ReservationStatus status) {
+        ReservationProcess process = process(status);
+        Instant requestExpiresAt = EXPIRES_AT.plusSeconds(1);
+
+        assertThat(process.canAcceptPhoneRequest()).isTrue();
+        process.acceptPhoneRequest("request-event-1", requestExpiresAt);
+
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
+        assertThat(process.getRequestEventId()).isEqualTo("request-event-1");
+        assertThat(process.getExpiresAt()).isEqualTo(requestExpiresAt);
+    }
+
+    @Test
+    void aNewPhoneRequestReplacesThePreviousOne() {
+        ReservationProcess process = process(ReservationStatus.WAITING_FOR_PHONE);
+        process.acceptPhoneRequest("request-event-1", EXPIRES_AT);
+
+        process.acceptPhoneRequest("request-event-2", EXPIRES_AT);
+
+        assertThat(process.getRequestEventId()).isEqualTo("request-event-2");
+    }
+
+    @Test
+    void aPhoneRequestDoesNotChangeTheReconciliationMark() {
+        ReservationProcess process = process(ReservationStatus.HELD);
+        process.markForReconciliation();
+
+        process.acceptPhoneRequest("request-event-1", EXPIRES_AT);
+
+        assertThat(process.isNeedsReconciliation()).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "EXPIRED"})
+    void aProcessThatAlreadyAdvancedDoesNotAcceptAPhoneRequest(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        assertThat(process.canAcceptPhoneRequest()).isFalse();
+        assertThatThrownBy(() -> process.acceptPhoneRequest("request-event-1", EXPIRES_AT.plusSeconds(1)))
+                .isInstanceOf(IllegalStateException.class);
+        assertThat(process.getStatus()).isEqualTo(status);
+        assertThat(process.getRequestEventId()).isNull();
+        assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT);
+    }
+
     private static ReservationProcess process(ReservationStatus status) {
         return ReservationProcess.builder().reservationProcessId("process-1").status(status).expiresAt(EXPIRES_AT).build();
     }

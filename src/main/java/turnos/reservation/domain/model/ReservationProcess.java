@@ -28,6 +28,8 @@ public class ReservationProcess {
     private Instant expiresAt;
     // El estado local puede no coincidir con el de la cátedra; lo encienden las operaciones y lo limpia la reconciliación
     private boolean needsReconciliation;
+    // Identifica el pedido de teléfono de la cátedra: hace falta para responderlo
+    private String requestEventId;
 
     public boolean isOpen() {
         return status != null && status.isOpen();
@@ -45,6 +47,23 @@ public class ReservationProcess {
         }
         status = ReservationStatus.WAITING_FOR_PHONE;
         expiresAt = confirmedExpiresAt;
+    }
+
+    // Solo un proceso que todavía espera algo de la cátedra o del usuario recibe el pedido de teléfono; uno que ya
+    // avanzó o terminó no vuelve atrás
+    public boolean canAcceptPhoneRequest() {
+        return status == ReservationStatus.HELD || status == ReservationStatus.WAITING_FOR_PHONE;
+    }
+
+    // El pedido de teléfono prueba que la cátedra confirmó el hold, aunque el proceso todavía figure con el turno
+    // bloqueado. Se guarda para poder responderlo, con el vencimiento que informa la cátedra
+    public void acceptPhoneRequest(String phoneRequestEventId, Instant requestExpiresAt) {
+        if (!canAcceptPhoneRequest()) {
+            throw new IllegalStateException("Only a held process or one waiting for the phone accepts a phone request, this one is " + status);
+        }
+        status = ReservationStatus.WAITING_FOR_PHONE;
+        requestEventId = phoneRequestEventId;
+        expiresAt = requestExpiresAt;
     }
 
     public void markForReconciliation() {

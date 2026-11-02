@@ -7,6 +7,7 @@ import turnos.catedra.domain.model.TechnicalLoginPolicy;
 import turnos.catedra.domain.model.TechnicalLoginResult;
 import turnos.catedra.domain.model.TechnicalSession;
 import turnos.catedra.domain.ports.in.StartTechnicalSessionUseCase;
+import turnos.catedra.domain.ports.out.TechnicalIntegrationListener;
 import turnos.catedra.domain.ports.out.TechnicalLoginClient;
 import turnos.catedra.domain.ports.out.TechnicalSessionRepository;
 
@@ -22,6 +23,7 @@ public class StartTechnicalSessionUseCaseImpl implements StartTechnicalSessionUs
     private final TechnicalSessionRepository technicalSessionRepository;
     private final TechnicalLoginPolicy technicalLoginPolicy;
     private final Clock clock;
+    private final TechnicalIntegrationListener technicalIntegrationListener;
 
     // Mientras dure, la sesión está en CONNECTING y los logins a pedido se rechazan: nunca coincide con una renovación
     @Override
@@ -37,7 +39,9 @@ public class StartTechnicalSessionUseCaseImpl implements StartTechnicalSessionUs
                 case TechnicalLoginResult.Success success when success.integration().isProvisioned() -> {
                     log.info("Technical login succeeded: groupId={}, provisioningStatus={}",
                             success.integration().groupId(), success.integration().provisioningStatus());
-                    return save(TechnicalSession.enabled(success.token(), success.integration(), clock.instant()));
+                    TechnicalSession enabled = save(TechnicalSession.enabled(success.token(), success.integration(), clock.instant()));
+                    notifyEnabled(enabled);
+                    return enabled;
                 }
                 case TechnicalLoginResult.Success success -> log.warn(
                         "Technical login attempt {}/{}: integration not enabled, provisioningStatus={}",
@@ -65,6 +69,15 @@ public class StartTechnicalSessionUseCaseImpl implements StartTechnicalSessionUs
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return false;
+        }
+    }
+
+    // La sesión ya quedó guardada: si quien recibe el aviso falla, el login no se deshace
+    private void notifyEnabled(TechnicalSession session) {
+        try {
+            technicalIntegrationListener.integrationEnabled(session.integration());
+        } catch (RuntimeException e) {
+            log.error("The enabled integration could not be notified: {}", e.getClass().getSimpleName());
         }
     }
 

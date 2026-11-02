@@ -1,0 +1,11 @@
+{
+  "eventId": "process-event-7d13",
+  "eventType": "AppointmentProcessInvalid",
+  "groupId": "proyecto-de-prueba",
+  "reservationProcessId": "process-a92b47d0",
+  "holdId": "hold-6c0c2f41",
+  "requestEventId": "request-event-8a31",
+  "reason": "REQUEST_EVENT_MISMATCH",
+  "occurredAt": "2026-10-12T14:36:01Z",
+  "schemaVersion": 1
+}

@@ -122,6 +122,31 @@ class JpaReservationProcessRepositoryAdapterTest {
     }
 
     @Test
+    void aProcessIsFoundByItsIdWithoutCheckingTheOwner() {
+        Long maria = newUser("maria.gomez");
+        ReservationProcess original = repository.create(held("process-1", maria));
+        entityManager.clear();
+
+        assertThat(repository.findById("process-1")).get().usingRecursiveComparison().isEqualTo(original);
+        assertThat(repository.findById("process-missing")).isEmpty();
+    }
+
+    @Test
+    void thePhoneRequestIsSavedAndReadBack() {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess process = repository.create(held("process-1", userId));
+        process.acceptPhoneRequest("request-event-1", Instant.parse("2026-10-27T04:45:00Z"));
+
+        repository.update("process-1", process);
+        entityManager.clear();
+
+        ReservationProcess read = repository.findById("process-1").orElseThrow();
+        assertThat(read.getRequestEventId()).isEqualTo("request-event-1");
+        assertThat(read.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
+        assertThat(read.getExpiresAt()).isEqualTo(Instant.parse("2026-10-27T04:45:00Z"));
+    }
+
+    @Test
     void markingForReconciliationChangesOnlyTheMark() {
         Long userId = newUser("maria.gomez");
         ReservationProcess original = repository.create(held("process-1", userId));
@@ -157,7 +182,7 @@ class JpaReservationProcessRepositoryAdapterTest {
         assertThat(read.getStatus()).isEqualTo(ReservationStatus.HELD);
     }
 
-    // Así quedan los procesos que ya estaban en la base cuando se agregó la marca
+    // Así quedan los procesos que ya estaban en la base cuando se agregaron la marca y el pedido de teléfono
     @Test
     void aProcessSavedWithoutTheMarkIsNotMarked() {
         Long userId = newUser("maria.gomez");
@@ -168,7 +193,9 @@ class JpaReservationProcessRepositoryAdapterTest {
                         """)
                 .setParameter("userId", userId).executeUpdate();
 
-        assertThat(repository.findByIdAndUserId("process-old", userId).orElseThrow().isNeedsReconciliation()).isFalse();
+        ReservationProcess old = repository.findByIdAndUserId("process-old", userId).orElseThrow();
+        assertThat(old.isNeedsReconciliation()).isFalse();
+        assertThat(old.getRequestEventId()).isNull();
     }
 
     @Test
