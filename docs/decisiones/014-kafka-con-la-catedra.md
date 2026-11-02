@@ -61,7 +61,7 @@ Mientras T08 no existe, los cinco eventos de resultado se descartan con un regis
 
 ### 3.3 Falla de la base al procesar un mensaje (T07, D5)
 
-Se reintenta con espera creciente y un máximo de intentos; agotados, se registra el error, se hace una pausa configurable y se vuelve a intentar **el mismo** mensaje, sin confirmar su offset. Los que vienen detrás en su partición esperan en Kafka, sin perderse. Motivo: como confirmar un offset marca como leído todo lo anterior, no se puede dejar uno pendiente y seguir con los siguientes; esperar conserva el orden y no pierde nada, y con la base caída tampoco se podría procesar otro. Solo se reintenta así una falla de la base: qué se hace con un error inesperado se define en el PLAN de T07, para que no detenga la partición para siempre. Descartadas: apartar el mensaje en un topic de reintentos o una tabla (complejo, rompe el orden y probablemente no se puedan crear topics) y descartarlo (contradice T07 6.1).
+Se reintenta con espera creciente y un máximo de intentos; agotados, se registra el error, se hace una pausa configurable y se vuelve a intentar **el mismo** mensaje, sin confirmar su offset. Los que vienen detrás en su partición esperan en Kafka, sin perderse. Motivo: como confirmar un offset marca como leído todo lo anterior, no se puede dejar uno pendiente y seguir con los siguientes; esperar conserva el orden y no pierde nada, y con la base caída tampoco se podría procesar otro. Solo se reintenta así una falla de la base: qué se hace con un error inesperado se define en el PLAN de T07, para que no detenga la partición para siempre. **Una falla de la base también puede ser al leer**, y es lo primero que pasa con la base caída: al principio solo se traducía la falla al guardar, y con Postgres caído el mensaje se descartaba (defecto de T07, corregido en TASK-12 de T08; lo prueba `DatabaseDownKafkaIntegrationTest`, con Postgres pausado de verdad). Descartadas: apartar el mensaje en un topic de reintentos o una tabla (complejo, rompe el orden y probablemente no se puedan crear topics) y descartarlo (contradice T07 6.1).
 
 ### 3.4 Posición inicial (T07, D6)
 
@@ -185,3 +185,4 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - 2026-10-31: detalles de la implementación del consumo (3.8); la cátedra sigue sin publicar, los tests usan mensajes armados desde el anexo.
 - 2026-10-31: E2E con el consumer group de tests: el consumo real funciona; el plan B de 3.6 no se implementó. Cierre de T07 con CA-14 y las grabaciones reales pendientes.
 - 2026-11-02: decisiones de la SPEC y del PLAN de T08 (3.14).
+- 2026-11-02: corregido que una falla de la base al leer descartara el mensaje (3.3).

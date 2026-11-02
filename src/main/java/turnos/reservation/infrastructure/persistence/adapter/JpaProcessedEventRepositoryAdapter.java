@@ -3,6 +3,7 @@ package turnos.reservation.infrastructure.persistence.adapter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.TransactionException;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.domain.model.ProcessedEvent;
 import turnos.reservation.domain.ports.out.ProcessedEventRepository;
@@ -28,8 +29,13 @@ public class JpaProcessedEventRepositoryAdapter implements ProcessedEventReposit
         }
     }
 
+    // Una base caída se informa igual que al guardar: un evento de la cátedra que no se pudo leer se reintenta, no se descarta
     @Override
     public boolean existsById(String eventId) {
-        return jpaProcessedEventRepository.existsById(eventId);
+        try {
+            return jpaProcessedEventRepository.existsById(eventId);
+        } catch (DataAccessException | TransactionException e) {
+            throw new ReservationNotSavedException(e);
+        }
     }
 }
