@@ -84,9 +84,28 @@ Tandas propuestas, para que la suite quede en verde al cerrar cada una: TASK-01;
   - Validación: confirmar un proceso en esos estados responde `409` `INVALID_PROCESS_STATE` con su `currentStatus`; un pedido de teléfono sobre esos estados queda como estado ya avanzado; `ReservationProcessDtoMapperTest`: `expiresAt` en `null` y los campos que T08 guarda siguen sin exponerse; respuestas de T04 y T05 sin cambios.
   - Resultado: 2026-11-02. Con `CONFIRMED`, `CANCELLED` e `INVALID`: T05 responde `409` `INVALID_PROCESS_STATE` con su `currentStatus` (caso de uso, controller y, en TASK-09, de punta a punta); T07 los trata como estado ya avanzado; `expire` y `acceptPhoneRequest` los rechazan; el vencimiento por reloj no los cierra; la respuesta web los muestra con `expiresAt` en `null` y sin exponer lo que T08 guarda (TASK-02). T04: un usuario con esos estados puede bloquear otro turno (TASK-02 contra Postgres y TASK-09 de punta a punta). Negativos, cada uno hizo fallar su test y se restauró con hash igual: T07 acepta el pedido en `CONFIRMED`; T05 confirma un `CANCELLED`. Solo cambiaron tests; no apareció ningún defecto. `./mvnw clean test`: 939 tests, 0 fallos, 0 errores, 0 salteados. Sin commitear.
 
-- [ ] **TASK-11 · Cierre**
+- [x] **TASK-11 · Cierre**
   - Alcance: `CLAUDE.md` (slices, transiciones, nombres nuevos, Kafka y tests); decisión 014 (3.2 reemplazada, 3.14, sección 5 e historial); `README` de `src/test/resources/catedra/` si cambia lo que dice de los mensajes. No toca T06 ni T13: sus condiciones quedan en D2 y D5 de la SPEC.
   - Depende de: TASK-09, TASK-10
   - Resuelve: cierre de todos los CA
   - Validación: `./mvnw clean verify` con el conteo y la cobertura de JaCoCo reales; chequeos de la skill (§12), con las excepciones comentadas; repaso de CA-01 a CA-22 contra lo registrado en estas tareas; `git status` sin archivos con credenciales.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. `CLAUDE.md` (slices, transiciones, nombres nuevos, Kafka, tests, condiciones para T06 y T13), decisión 014 (3.2, sección 5 e historial) y `README` de `src/test/resources/catedra/` actualizados. `./mvnw clean verify`: `BUILD SUCCESS`, 940 tests, 0 fallos, 0 errores, 0 salteados; JaCoCo 97,9 % líneas (1898/1939), 92,3 % ramas (631/684). Chequeos de la skill (§12): 1 a 4 sin resultados; 5, sin imports entre slices fuera de `infrastructure/gateway`. Sin citas a documentos en el código de T08. Las copias del dominio y de `contratos_comunes.md` son idénticas a las de `documentacion`. Sin credenciales en estos documentos. Se sumó un test (`aRepeatedResultOfAProcessThatNoLongerExistsIsAlreadyProcessed`) por un camino sin cubrir. Sin commitear.
+
+    Repaso de los criterios:
+
+    | Criterio | Dónde se comprobó | Verificado |
+    | --- | --- | --- |
+    | CA-01 a CA-07 | TASK-03 y TASK-04 (por estado de origen), TASK-09 (Kafka y Postgres) | Sí, con mensajes armados desde el anexo |
+    | CA-08 | TASK-08 y TASK-09 | Sí, con mensajes armados |
+    | CA-09, CA-10 | TASK-04 y TASK-09 | Sí |
+    | CA-11, CA-12 | TASK-04 y TASK-09 | Sí |
+    | CA-13 | TASK-05, contra Postgres | Sí |
+    | CA-14 | TASK-09 y TASK-12: falla simulada y Postgres pausado; el reinicio, simulado como guardado sin confirmar el offset | Sí; sin reiniciar el servicio de verdad |
+    | CA-15 | TASK-04, hilos reales con un repositorio que devuelve copias | Sí |
+    | CA-16 | TASK-04 y TASK-09, salida capturada | Sí |
+    | CA-17, CA-18 | TASK-03 | Sí |
+    | CA-19, CA-20 | TASK-03, TASK-04, TASK-08 y TASK-09, con las columnas reales | Sí |
+    | CA-21 | TASK-09 | Sí, con `PHONE_SUBMITTED` escrito en la base, porque T06 no existe |
+    | CA-22 | TASK-02, TASK-09 y TASK-10 | Sí |
+
+    **Sin verificar:** el formato real de los eventos y el recorrido contra la cátedra real, porque no publica y T06 no existe (SPEC, "Sin prueba contra la cátedra real"). Se revisa al hacer T06 o cuando la cátedra publique.

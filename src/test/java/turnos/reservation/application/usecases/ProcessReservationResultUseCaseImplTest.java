@@ -11,6 +11,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import turnos.MutableClock;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.application.support.UserOperationLock;
+import turnos.reservation.domain.model.ProcessedEvent;
 import turnos.reservation.domain.model.ReservationEventOutcome;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationResult;
@@ -268,6 +269,13 @@ class ProcessReservationResultUseCaseImplTest {
 
         assertThat(events.registered()).isEmpty();
         assertThat(output.getAll()).contains("Reservation result event-1 refers to reservation process process-1, which does not exist");
+    }
+
+    @Test
+    void aRepeatedResultOfAProcessThatNoLongerExistsIsAlreadyProcessed() {
+        events.create(new ProcessedEvent(EVENT, NOW));
+
+        assertThat(useCase.processReservationResult(confirmed())).isEqualTo(ReservationEventOutcome.ALREADY_PROCESSED);
     }
 
     @Test

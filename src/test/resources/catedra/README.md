@@ -40,11 +40,11 @@ No se pudo grabar: un `403` `STUDENT_INTEGRATION_NOT_FOUND`, un `503`, un `500` 
 | Archivo | Evento | Lo usa |
 | --- | --- | --- |
 | `kafka/additional-information-requested.json` | `AdditionalInformationRequested` (no trae `groupId`, como en el anexo) | T07 |
-| `kafka/appointment-confirmed.json` | `AppointmentConfirmed` | Hasta T08, como evento que se descarta |
-| `kafka/additional-information-rejected.json` | `AdditionalInformationRejected` | Ídem |
-| `kafka/appointment-process-expired.json` | `AppointmentProcessExpired` | Ídem |
-| `kafka/appointment-process-invalid.json` | `AppointmentProcessInvalid` | Ídem |
-| `kafka/appointment-cancelled.json` | `AppointmentCancelled` | Ídem |
+| `kafka/appointment-confirmed.json` | `AppointmentConfirmed` | T08 |
+| `kafka/additional-information-rejected.json` | `AdditionalInformationRejected` | T08 |
+| `kafka/appointment-process-expired.json` | `AppointmentProcessExpired` | T08 |
+| `kafka/appointment-process-invalid.json` | `AppointmentProcessInvalid` | T08 |
+| `kafka/appointment-cancelled.json` | `AppointmentCancelled` | T08 |
 
 **Cancelar un hold no funciona (2026-10-27):** `POST /api/appointments/{reservationProcessId}/cancel` con el `reservationProcessId` de `hold-201-created.json`, todavía en `HELD`, respondió `404` `RESERVATION_NOT_FOUND`. No se versiona, porque no lo usa ningún test. El hold no se pudo deshacer y venció solo a los 10 minutos. Los profesionales deshabilitados en la cátedra el 2026-10-27 eran el 206, el 214 y el 222 (snapshot versión 1, no versionado).
 

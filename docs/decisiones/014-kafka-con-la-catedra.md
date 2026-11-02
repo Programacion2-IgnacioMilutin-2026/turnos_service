@@ -57,7 +57,7 @@ Si el servidor exige credenciales, son las de la cuenta técnica, las mismas de 
 
 ### 3.2 Eventos de resultado antes de que exista T08 (T07, D3)
 
-Mientras T08 no existe, los cinco eventos de resultado se descartan con un registro en el log y se confirma el offset, sin registrarlos como procesados. No confirmarlos detendría la partición: Kafka entrega en orden y un mensaje sin confirmar frena a los que vienen detrás. Lo que se descarte en ese lapso solo puede venir de procesos de prueba. Se revisa al implementar T08. **Reemplazada por T08 al implementarse (ver 3.14).**
+Mientras T08 no existe, los cinco eventos de resultado se descartan con un registro en el log y se confirma el offset, sin registrarlos como procesados. No confirmarlos detendría la partición: Kafka entrega en orden y un mensaje sin confirmar frena a los que vienen detrás. Lo que se descarte en ese lapso solo puede venir de procesos de prueba. Se revisa al implementar T08. **Reemplazada por T08 (ver 3.14): los cinco eventos ya se procesan.**
 
 ### 3.3 Falla de la base al procesar un mensaje (T07, D5)
 
@@ -174,7 +174,6 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 
 ## 5. Por definir en los PLAN
 
-- T08: cómo se implementan los efectos de los cinco eventos de resultado (hoy se descartan, 3.2; lo decidido en la SPEC, en 3.14).
 - T06: configuración del productor (confirmación de escritura, reintentos y tiempos) y el caso de credenciales rechazadas al publicar. Además, T06 guarda `PHONE_SUBMITTED` antes de publicar (D5 de T08): falta definir qué pasa si el servicio se cae entre guardar y publicar.
 
 ## Historial
@@ -186,3 +185,4 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - 2026-10-31: E2E con el consumer group de tests: el consumo real funciona; el plan B de 3.6 no se implementó. Cierre de T07 con CA-14 y las grabaciones reales pendientes.
 - 2026-11-02: decisiones de la SPEC y del PLAN de T08 (3.14).
 - 2026-11-02: corregido que una falla de la base al leer descartara el mensaje (3.3).
+- 2026-11-02: T08 implementada (3.14). Comprobado contra Postgres: sin las protecciones de 3.14, un valor largo o con el carácter nulo frena el consumo. La cátedra sigue sin publicar, así que el formato real de los eventos sigue sin verificar.
