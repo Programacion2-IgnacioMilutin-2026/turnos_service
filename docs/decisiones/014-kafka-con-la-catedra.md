@@ -203,6 +203,8 @@ Mientras la cátedra no publique el pedido, T06 no tiene `requestEventId` y no l
 - **El servicio consume del Kafka real** (E2E de T07, 2026-10-31): con el consumer group de tests, se conectó, recibió la asignación del topic de acciones y se posicionó desde el principio. El consumer group del servicio siguió sin posiciones después de la corrida. El pedido de teléfono no llegó porque la cátedra no publica, así que el E2E falla en ese paso (CA-14 de T07, bloqueado).
 - **La cátedra no publica en el topic de acciones:** estaba vacío desde siempre (posiciones 0 → 0), aunque se confirmaron holds el 2026-10-28, el 2026-10-29 y el 2026-10-30 (después de la confirmación de las 02:00 y después de su vencimiento de las 02:10, siguió vacío). Contradice el anexo §10 y §15.4. Le pasa también a otros alumnos: un compañero ya se lo consultó al profesor. Hipótesis sin comprobar: hay un topic `kafkaProducer-out-0`, que es el nombre por defecto de una salida de Spring Cloud Stream sin destino configurado.
 
+**Verificado solo con Kafka en contenedor (2026-11-02, T06):** con el contenedor congelado, los tres intentos y el `503` entran en el tope de 10 s; un intento vencido puede llegar cuando Kafka vuelve, así que el caso de 3.15 ocurre de verdad. No se probó contra el Kafka de la cátedra (3.17).
+
 **Por verificar:**
 
 - Cuánto conserva Kafka las posiciones de un consumer group inactivo.
@@ -226,3 +228,4 @@ Nada pendiente: lo de T06 quedó en 3.15 a 3.18.
 - 2026-11-02: T08 implementada (3.14). Comprobado contra Postgres: sin las protecciones de 3.14, un valor largo o con el carácter nulo frena el consumo. La cátedra sigue sin publicar, así que el formato real de los eventos sigue sin verificar.
 - 2026-11-02: SPEC de T06: qué pasa cuando una publicación no termina (3.15), publicación dentro del candado (3.13), sin sesión y credenciales rechazadas (3.16), sin prueba real del productor (3.17).
 - 2026-11-02: PLAN de T06: cómo se publica (3.18).
+- 2026-11-02: T06 implementada: comprobado con Kafka en contenedor (sección 4). El E2E sumó el paso de publicar, pero no se corrió: la cátedra sigue sin publicar el pedido.

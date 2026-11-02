@@ -35,9 +35,11 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 @ExtendWith(OutputCaptureExtension.class)
 class KafkaAdditionalInformationPublisherTest {
@@ -195,6 +197,28 @@ class KafkaAdditionalInformationPublisherTest {
     }
 
     @Test
+    void anInterruptionDuringTheWaitBetweenAttemptsStopsThem() throws InterruptedException {
+        publisher = scripted(new CatedraKafkaProperties.Publish(Duration.ofMinutes(5), Duration.ofSeconds(1), 3, Duration.ofMinutes(1), 2));
+        producer.outcomes.add(CompletableFuture.failedFuture(new NetworkException("connection lost")));
+        List<AdditionalInformationSubmissionResult> results = new CopyOnWriteArrayList<>();
+        List<Boolean> interrupted = new CopyOnWriteArrayList<>();
+        Thread publishing = Thread.ofVirtual().start(() -> {
+            results.add(publisher.publish(SUBMISSION, INTEGRATION));
+            interrupted.add(Thread.currentThread().isInterrupted());
+        });
+        await().atMost(Duration.ofSeconds(5)).until(() -> producer.sentAtNanos.size() == 1);
+        // Da tiempo a que empiece la espera: si llegara antes, igual corta sin un segundo intento
+        Thread.sleep(100);
+
+        publishing.interrupt();
+        publishing.join(5000);
+
+        assertThat(results).containsExactly(new AdditionalInformationSubmissionResult.NotPublished("Interrupted"));
+        assertThat(interrupted).containsExactly(true);
+        assertThat(producer.sentAtNanos).hasSize(1);
+    }
+
+    @Test
     void thePhoneNeverReachesTheLog(CapturedOutput output) {
         publisher = scripted(publish(Duration.ofSeconds(5), Duration.ofSeconds(1), 3));
         producer.outcomes.add(CompletableFuture.failedFuture(new NetworkException("connection lost")));
@@ -309,8 +333,8 @@ class KafkaAdditionalInformationPublisherTest {
     // Responde a cada envío con el resultado que le indique el test; sin ninguno, confirma
     private static final class ScriptedProducer extends MockProducer<String, String> {
         private final Deque<CompletableFuture<RecordMetadata>> outcomes = new ArrayDeque<>();
-        private final List<ProducerRecord<String, String>> sent = new ArrayList<>();
-        private final List<Long> sentAtNanos = new ArrayList<>();
+        private final List<ProducerRecord<String, String>> sent = new CopyOnWriteArrayList<>();
+        private final List<Long> sentAtNanos = new CopyOnWriteArrayList<>();
         private RuntimeException failure;
 
         private ScriptedProducer() {

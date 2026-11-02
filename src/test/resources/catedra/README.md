@@ -40,6 +40,7 @@ No se pudo grabar: un `403` `STUDENT_INTEGRATION_NOT_FOUND`, un `503`, un `500` 
 | Archivo | Evento | Lo usa |
 | --- | --- | --- |
 | `kafka/additional-information-requested.json` | `AdditionalInformationRequested` (no trae `groupId`, como en el anexo) | T07 |
+| `kafka/additional-information-submitted.json` | `AdditionalInformationSubmitted`: el único que publica turnos; los tests comparan lo publicado con este ejemplo | T06 |
 | `kafka/appointment-confirmed.json` | `AppointmentConfirmed` | T08 |
 | `kafka/additional-information-rejected.json` | `AdditionalInformationRejected` | T08 |
 | `kafka/appointment-process-expired.json` | `AppointmentProcessExpired` | T08 |

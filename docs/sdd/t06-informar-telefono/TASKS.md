@@ -80,11 +80,38 @@ Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04; 05+06+07; 08; 
   - Depende de: TASK-09
   - Resuelve: CA-20
   - Validación: `./mvnw test-compile`, y `./mvnw test -Dtest=ReservationProcessE2ETest` sin el perfil no lo ejecuta. **Bloqueada para la prueba real:** la cátedra no publica el pedido (decisión 014 §4), así que el recorrido no llega a publicar. Queda sin marcar hasta que se pueda correr, o como no verificada.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. **Código hecho, prueba real no verificada.** `ReservationProcessE2ETest` suma informar un teléfono de mentira después del pedido, sin esperar el resultado. `./mvnw test-compile`: exit 0. `./mvnw test -Dtest=ReservationProcessE2ETest -Dsurefire.failIfNoSpecifiedTests=false`, sin el perfil: exit 0 sin ejecutarlo (ningún reporte de la clase ni arranque de la aplicación). **No se corrió contra la cátedra real:** está bloqueado porque la cátedra no publica el pedido (decisión 014 §4, última comprobación del 2026-10-31), así que el E2E falla antes de llegar a publicar. Queda sin marcar. Cuando publique, lo corre el usuario con `./mvnw test -Pe2e`, confirmando antes la lista de requests.
 
-- [ ] **TASK-12 · Cierre**
+- [x] **TASK-12 · Cierre**
   - Alcance: `CLAUDE.md` (slice `reservation` y `catedra`, transiciones, "Cómo usar Kafka", tests, condiciones ya cumplidas de T06), decisión 014 (lo que se compruebe), `src/test/resources/catedra/README.md` y tabla de cobertura en este archivo. Verificación final de la skill §12.
   - Depende de: TASK-01 a TASK-10
   - Resuelve: CA-19; cobertura de RF y CA
   - Validación: `./mvnw clean verify`, contando `<testcase>` en los XML, con JaCoCo; comandos de la skill §12, revisando cada coincidencia frente a las excepciones autorizadas; `documentacion` y sus copias en `turnos_service` idénticas.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. `CLAUDE.md`, decisión 014 y `README` de `src/test/resources/catedra/` actualizados. `./mvnw clean verify`: exit 0, 1079 tests contando `<testcase>` (ninguno de la suite E2E), 0 fallos, 0 errores, 0 salteados; JaCoCo 98,1 % líneas / 93,0 % ramas; las seis clases nuevas con lógica (`ReservationPhoneNumber`, `SubmitPhoneUseCaseImpl`, `CatedraPhoneAdapter`, `CheckTechnicalIntegrationUseCaseImpl`, `SubmitAdditionalInformationUseCaseImpl` y `KafkaAdditionalInformationPublisher`), 100 %. La salida de la corrida no tiene el teléfono de prueba. Skill §12: los comandos 1 a 4 no imprimen nada; el 5 solo muestra importaciones en `infrastructure/gateway`, una excepción autorizada. El código nuevo no cita documentos. `documentacion` y sus copias en `turnos_service`, idénticas; `contratos_comunes.md` y X01, idénticos también en `catalog_service`.
+
+    **Cobertura de los criterios:**
+
+    | Criterio | Tarea | ¿Comprobado? |
+    | --- | --- | --- |
+    | CA-01 | TASK-04, TASK-09 | Sí, con Kafka en contenedor |
+    | CA-02 | TASK-08, TASK-09 | Sí |
+    | CA-03 | TASK-06, TASK-08 | Sí, con dobles y MockMvc |
+    | CA-04 | TASK-06, TASK-09 | Sí |
+    | CA-05 | TASK-06, TASK-09 | Sí |
+    | CA-06 | TASK-01, TASK-06, TASK-08, TASK-09 | Sí |
+    | CA-07 | TASK-05, TASK-06, TASK-08 | Sí, con dobles y MockMvc |
+    | CA-08 | TASK-10 | Sí, con Kafka congelado |
+    | CA-09 | TASK-04 | Sí, con `MockProducer` |
+    | CA-10 | TASK-04 | **Con un doble:** el Kafka de tests no pide autenticación (D6) |
+    | CA-11 | TASK-06, TASK-10 | Sí, con un repositorio que falla sobre la base real |
+    | CA-12 | TASK-06, TASK-10 | Sí, igual, con Kafka congelado |
+    | CA-13 | TASK-09 | **Parcial:** parte del estado que dejaría una caída, sin provocarla |
+    | CA-14 | TASK-07, TASK-09 | Sí |
+    | CA-15 | TASK-07 | **Con dobles**, como preveía el PLAN |
+    | CA-16 | TASK-04, TASK-10 | Sí, con Kafka congelado y los tiempos reales |
+    | CA-17 | TASK-04, TASK-06, TASK-08, TASK-10 | Sí, sobre la salida capturada |
+    | CA-18 | TASK-09 | Sí, con la aplicación completa y la cátedra simulada |
+    | CA-19 | TASK-12 | Sí |
+    | CA-20 | TASK-11 | **No verificado: bloqueado por la cátedra** |
+
+    **Sin verificar:** publicar en el Kafka real, que el topic de teléfono exista, que la cátedra lo consuma y el formato real de sus eventos (D8). Tampoco una caída real ni un rechazo real de credenciales.
