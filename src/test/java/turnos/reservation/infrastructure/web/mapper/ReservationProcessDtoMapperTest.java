@@ -27,7 +27,7 @@ class ReservationProcessDtoMapperTest {
                 .userId(42L).professionalId(201L).professionalFirstName("Ana").professionalLastName("Gomez")
                 .professionalCategoryName("Clinica medica").date(LocalDate.of(2026, 11, 2)).startTime(LocalTime.of(10, 30))
                 .status(ReservationStatus.HELD).expiresAt(Instant.parse("2026-10-27T04:44:38.627744064Z"))
-                .requestEventId("request-event-1").reservationId(8251L).confirmedAt(Instant.parse("2026-10-27T04:36:01Z"))
+                .requestEventId("request-event-1").phoneNumber("+5492615551234").reservationId(8251L).confirmedAt(Instant.parse("2026-10-27T04:36:01Z"))
                 .cancelledAt(Instant.parse("2026-10-28T15:10:00Z")).cancellationReason("Cambio solicitado por el usuario")
                 .rejectionReason("INVALID_PHONE_NUMBER").build();
         assertThat(process).hasNoNullFieldsOrProperties();
@@ -46,9 +46,9 @@ class ReservationProcessDtoMapperTest {
     }
 
     @Test
-    void theResponseNeverHasTheHoldTheReconciliationMarkOrThePhoneRequest() {
+    void theResponseNeverHasTheHoldTheReconciliationMarkThePhoneRequestOrThePhone() {
         assertThat(Arrays.stream(ReservationProcessResponse.class.getDeclaredFields()).map(Field::getName))
-                .doesNotContain("holdId", "needsReconciliation", "requestEventId");
+                .doesNotContain("holdId", "needsReconciliation", "requestEventId", "phoneNumber");
     }
 
     @ParameterizedTest

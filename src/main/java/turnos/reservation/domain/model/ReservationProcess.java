@@ -33,6 +33,8 @@ public class ReservationProcess {
     private boolean needsReconciliation;
     // Identifica el pedido de teléfono de la cátedra: hace falta para responderlo
     private String requestEventId;
+    // El último que el usuario intentó informar, normalizado; puede no haber llegado a salir
+    private String phoneNumber;
     // Lo asigna la cátedra al confirmar la reserva
     private Long reservationId;
     private Instant confirmedAt;
@@ -116,6 +118,30 @@ public class ReservationProcess {
         if (confirmedStartTime != null) {
             startTime = confirmedStartTime;
         }
+    }
+
+    public boolean canSubmitPhone() {
+        return status == ReservationStatus.WAITING_FOR_PHONE;
+    }
+
+    // Se guarda antes de publicar: así un resultado de la cátedra nunca se adelanta a este estado
+    public void submitPhone(ReservationPhoneNumber phone) {
+        if (!canSubmitPhone()) {
+            throw new IllegalStateException("Only a process waiting for the phone can receive it, this one is " + status);
+        }
+        status = ReservationStatus.PHONE_SUBMITTED;
+        phoneNumber = phone.value();
+        rejectionReason = null;
+    }
+
+    // El teléfono no se pudo publicar: el usuario puede volver a enviarlo. Queda marcado, porque un intento vencido pudo
+    // haber llegado igual. No se restaura lo anterior: ni el motivo de un rechazo previo ni el teléfono que había
+    public void revertPhoneSubmission() {
+        if (status != ReservationStatus.PHONE_SUBMITTED) {
+            throw new IllegalStateException("Only a process with the phone submitted can go back to waiting for it, this one is " + status);
+        }
+        status = ReservationStatus.WAITING_FOR_PHONE;
+        needsReconciliation = true;
     }
 
     // Un rechazo solo tiene sentido si el teléfono ya se envió
