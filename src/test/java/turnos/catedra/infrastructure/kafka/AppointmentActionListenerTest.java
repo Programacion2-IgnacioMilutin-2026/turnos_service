@@ -7,8 +7,9 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import tools.jackson.databind.json.JsonMapper;
 import turnos.catedra.application.exception.CatedraEventNotSavedException;
-import turnos.catedra.application.service.AdditionalInformationRequestService;
+import turnos.catedra.application.service.CatedraEventService;
 import turnos.catedra.domain.model.AdditionalInformationRequest;
+import turnos.catedra.domain.model.AppointmentResult;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,6 +26,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AppointmentActionListenerTest {
 
     private final List<AdditionalInformationRequest> received = new CopyOnWriteArrayList<>();
+    private final List<AppointmentResult> receivedResults = new CopyOnWriteArrayList<>();
 
     @Test
     void aPhoneRequestReachesTheApplicationOfCatedra() {
@@ -34,12 +36,23 @@ class AppointmentActionListenerTest {
     }
 
     @Test
-    void aDiscardedMessageIsLoggedWithWhatItHadAndReachesNobody(CapturedOutput output) {
+    void aResultReachesTheApplicationOfCatedra() {
         listener(request -> received.add(request)).onMessage(message(read("appointment-confirmed.json")));
 
         assertThat(received).isEmpty();
+        assertThat(receivedResults).singleElement().extracting(AppointmentResult::eventId).isEqualTo("confirmation-event-7d10");
+    }
+
+    @Test
+    void aDiscardedMessageIsLoggedWithWhatItHadAndReachesNobody(CapturedOutput output) {
+        String unknown = read("appointment-confirmed.json").replace("AppointmentConfirmed", "SomethingNew");
+
+        listener(request -> received.add(request)).onMessage(message(unknown));
+
+        assertThat(received).isEmpty();
+        assertThat(receivedResults).isEmpty();
         assertThat(output.getAll()).contains("WARN").contains("Catedra message at offset 7 discarded "
-                + "(eventId=confirmation-event-7d10, reservationProcessId=process-a92b47d0): AppointmentConfirmed is not processed yet");
+                + "(eventId=confirmation-event-7d10, reservationProcessId=process-a92b47d0): unknown eventType SomethingNew");
     }
 
     @Test
@@ -51,9 +64,9 @@ class AppointmentActionListenerTest {
         }).onMessage(message(read("additional-information-requested.json")))).isSameAs(failure);
     }
 
-    private static AppointmentActionListener listener(Consumer<AdditionalInformationRequest> application) {
+    private AppointmentActionListener listener(Consumer<AdditionalInformationRequest> application) {
         return new AppointmentActionListener(new AppointmentActionReader(JsonMapper.builder().build()),
-                new AdditionalInformationRequestService(application::accept));
+                new CatedraEventService(application::accept, receivedResults::add));
     }
 
     private static ConsumerRecord<String, String> message(String value) {

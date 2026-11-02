@@ -220,7 +220,7 @@ class PhoneRequestKafkaIntegrationTest {
         assertThat(processedEvents()).containsExactly(eventId);
         assertThat(output.getAll()).contains("missing holdId").contains("unsupported schemaVersion 2")
                 .contains("unreadable message").contains("unknown eventType SomethingNew")
-                .contains("AppointmentConfirmed is not processed yet");
+                .contains("Reservation result confirmation-event-7d10 refers to reservation process process-a92b47d0, which does not exist");
     }
 
     @Test

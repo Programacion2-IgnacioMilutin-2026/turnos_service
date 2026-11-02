@@ -3,10 +3,9 @@ package turnos.catedra.infrastructure.kafka.dto;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.*;
 
-import java.time.Instant;
-
-// Un mensaje del topic de acciones de la cátedra: los campos del pedido de información adicional, que es el único
-// tipo que se procesa por ahora. De los demás tipos solo importa eventType, para reconocerlos
+// Un mensaje del topic de acciones de la cátedra: los campos de todos sus tipos. Los instantes, fechas, horas y números
+// llegan como texto y los convierte quien lee el mensaje, solo si ese tipo los usa: si Jackson los convirtiera acá, un
+// valor mal escrito en un campo que no se usa descartaría el mensaje entero, sin saber cuál era
 @Getter
 @Setter
 @Builder
@@ -19,6 +18,12 @@ public class AppointmentActionMessage {
     private String reservationProcessId;
     private String holdId;
     private String requiredField;
-    private Instant expiresAt;
+    private String reason;
+    private String reservationId;
+    private String professionalId;
+    private String date;
+    private String startTime;
+    private String expiresAt;
+    private String occurredAt;
     private Integer schemaVersion;
 }

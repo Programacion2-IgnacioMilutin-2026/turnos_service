@@ -1,6 +1,8 @@
 package turnos.reservation.infrastructure.web.mapper;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessRequest;
@@ -25,7 +27,9 @@ class ReservationProcessDtoMapperTest {
                 .userId(42L).professionalId(201L).professionalFirstName("Ana").professionalLastName("Gomez")
                 .professionalCategoryName("Clinica medica").date(LocalDate.of(2026, 11, 2)).startTime(LocalTime.of(10, 30))
                 .status(ReservationStatus.HELD).expiresAt(Instant.parse("2026-10-27T04:44:38.627744064Z"))
-                .requestEventId("request-event-1").build();
+                .requestEventId("request-event-1").reservationId(8251L).confirmedAt(Instant.parse("2026-10-27T04:36:01Z"))
+                .cancelledAt(Instant.parse("2026-10-28T15:10:00Z")).cancellationReason("Cambio solicitado por el usuario")
+                .rejectionReason("INVALID_PHONE_NUMBER").build();
         assertThat(process).hasNoNullFieldsOrProperties();
 
         ReservationProcessResponse response = mapper.toResponse(process);
@@ -47,13 +51,17 @@ class ReservationProcessDtoMapperTest {
                 .doesNotContain("holdId", "needsReconciliation", "requestEventId");
     }
 
-    @Test
-    void aClosedProcessHasNoExpiration() {
-        ReservationProcess expired = ReservationProcess.builder().reservationProcessId("process-1").professionalId(201L)
-                .date(LocalDate.of(2026, 11, 2)).startTime(LocalTime.of(10, 30)).status(ReservationStatus.EXPIRED)
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"CONFIRMED", "CANCELLED", "EXPIRED", "INVALID"})
+    void aClosedProcessHasNoExpirationAndShowsItsStatus(ReservationStatus status) {
+        ReservationProcess closed = ReservationProcess.builder().reservationProcessId("process-1").professionalId(201L)
+                .date(LocalDate.of(2026, 11, 2)).startTime(LocalTime.of(10, 30)).status(status)
                 .expiresAt(Instant.parse("2026-10-27T04:44:38Z")).build();
 
-        assertThat(mapper.toResponse(expired).getExpiresAt()).isNull();
+        ReservationProcessResponse response = mapper.toResponse(closed);
+
+        assertThat(response.getExpiresAt()).isNull();
+        assertThat(response.getStatus()).isEqualTo(status.name());
     }
 
     @Test

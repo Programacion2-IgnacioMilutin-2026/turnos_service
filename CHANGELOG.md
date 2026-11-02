@@ -119,3 +119,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Caso de uso y archivos en slice 'Catedra' para que pueda recibir peticion de telefono y reenviarlo al slice 'Reservation'.
 ### Changed
 - Ahora la escritura en el repositorio de ReservationProcess, junto con la del evento, lo hace TransactionRunner para que sean consitente entre ellas.
+
+## 2026-11-02
+### Added
+- Documentacion de SDD para el caso de uso T08-ResultadoReserva.
+- Nuevos estados a 'Reservation' y los metodos que cambian estados, implementados con la alogica de cuando se deberian cambiar.
+- Caso de uso de slice 'Reservation' para manejar el resultado de una reserva y sus distintos estados.}
+- En slice 'Catedra', arhcivos para manejar los resultados de una reserva.
+- Listener de kafka en slice 'Catedra' para obtener los resultados.
+- Tests para los archivos agregados. 
+### Changed
+- Actualizado el nombre de algunas clases para que estan mas acorde a lo que hacen, ya que se les añaden funcionalidades en T08.
+- Ahora tambien vuelve a intentar cuando falla al leer la base, antes solo cuando escribia.

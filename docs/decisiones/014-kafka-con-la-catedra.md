@@ -57,11 +57,11 @@ Si el servidor exige credenciales, son las de la cuenta técnica, las mismas de 
 
 ### 3.2 Eventos de resultado antes de que exista T08 (T07, D3)
 
-Mientras T08 no existe, los cinco eventos de resultado se descartan con un registro en el log y se confirma el offset, sin registrarlos como procesados. No confirmarlos detendría la partición: Kafka entrega en orden y un mensaje sin confirmar frena a los que vienen detrás. Lo que se descarte en ese lapso solo puede venir de procesos de prueba. Se revisa al implementar T08.
+Mientras T08 no existe, los cinco eventos de resultado se descartan con un registro en el log y se confirma el offset, sin registrarlos como procesados. No confirmarlos detendría la partición: Kafka entrega en orden y un mensaje sin confirmar frena a los que vienen detrás. Lo que se descarte en ese lapso solo puede venir de procesos de prueba. Se revisa al implementar T08. **Reemplazada por T08 (ver 3.14): los cinco eventos ya se procesan.**
 
 ### 3.3 Falla de la base al procesar un mensaje (T07, D5)
 
-Se reintenta con espera creciente y un máximo de intentos; agotados, se registra el error, se hace una pausa configurable y se vuelve a intentar **el mismo** mensaje, sin confirmar su offset. Los que vienen detrás en su partición esperan en Kafka, sin perderse. Motivo: como confirmar un offset marca como leído todo lo anterior, no se puede dejar uno pendiente y seguir con los siguientes; esperar conserva el orden y no pierde nada, y con la base caída tampoco se podría procesar otro. Solo se reintenta así una falla de la base: qué se hace con un error inesperado se define en el PLAN de T07, para que no detenga la partición para siempre. Descartadas: apartar el mensaje en un topic de reintentos o una tabla (complejo, rompe el orden y probablemente no se puedan crear topics) y descartarlo (contradice T07 6.1).
+Se reintenta con espera creciente y un máximo de intentos; agotados, se registra el error, se hace una pausa configurable y se vuelve a intentar **el mismo** mensaje, sin confirmar su offset. Los que vienen detrás en su partición esperan en Kafka, sin perderse. Motivo: como confirmar un offset marca como leído todo lo anterior, no se puede dejar uno pendiente y seguir con los siguientes; esperar conserva el orden y no pierde nada, y con la base caída tampoco se podría procesar otro. Solo se reintenta así una falla de la base: qué se hace con un error inesperado se define en el PLAN de T07, para que no detenga la partición para siempre. **Una falla de la base también puede ser al leer**, y es lo primero que pasa con la base caída: al principio solo se traducía la falla al guardar, y con Postgres caído el mensaje se descartaba (defecto de T07, corregido en TASK-12 de T08; lo prueba `DatabaseDownKafkaIntegrationTest`, con Postgres pausado de verdad). Descartadas: apartar el mensaje en un topic de reintentos o una tabla (complejo, rompe el orden y probablemente no se puedan crear topics) y descartarlo (contradice T07 6.1).
 
 ### 3.4 Posición inicial (T07, D6)
 
@@ -147,6 +147,14 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - Un pedido que llega mientras opera el usuario se procesa con el mismo candado por usuario que bloquear y confirmar (T07 D2, decisión 013).
 - La idempotencia se guarda en `reservation`: tabla `processed_events` propia, escrita en la misma transacción que el cambio del proceso con un puerto técnico de transacción (PLAN de T07, P4). Sin control de versión además del candado (P5).
 
+### 3.14 Eventos de resultado (SPEC de T08)
+
+- **Un solo camino (D1):** los cinco eventos entran por un solo caso de uso en cada slice, porque validar, correlacionar, registrar el evento y tomar el candado es igual para los cinco.
+- **Campos obligatorios (D8):** solo los que el efecto necesita, con el mismo criterio que el pedido de teléfono: un descarte no tiene vuelta atrás, y nunca se vio un mensaje real.
+- **Un mensaje no puede frenar el consumo por su tamaño (D4, RF-17):** un valor más largo que su columna haría fallar el guardado, y eso se trata como una caída de la base: se reintentaría sin fin y frenaría a todos (3.3). Por eso `reason` se recorta a 500 caracteres con un warning, y un `eventId`, `reservationProcessId` o `holdId` de más de 255 caracteres hace inválido el mensaje, también en el pedido de teléfono. Lo mismo con el carácter nulo, que Postgres no acepta en un texto: invalida un identificador y se quita de `reason`, con un warning.
+- **Cómo se lee un mensaje (PLAN de T08, P3):** un solo DTO con las fechas, instantes y números como texto, y el lector convierte solo los campos que usa ese tipo de evento. Un formato distinto en un campo que no se usa no descarta el mensaje, y si hay que descartarlo, el log conserva el `eventId`. Descartadas: tipos en el DTO, que pierde el mensaje entero, y un DTO por evento.
+- **Sin prueba contra el Kafka real (SPEC de T08):** la cátedra no publica en el topic de acciones y T06 todavía no existe. Se revisa al hacer T06.
+
 ## 4. Verificado y por verificar contra el Kafka real
 
 **Verificado (2026-10-30, TASK-02 de T07, lecturas sin consumer group corridas por el usuario):**
@@ -166,8 +174,7 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 
 ## 5. Por definir en los PLAN
 
-- T08: los efectos de los cinco eventos de resultado (hoy se descartan, 3.2).
-- T06: configuración del productor (confirmación de escritura, reintentos y tiempos) y el caso de credenciales rechazadas al publicar.
+- T06: configuración del productor (confirmación de escritura, reintentos y tiempos) y el caso de credenciales rechazadas al publicar. Además, T06 guarda `PHONE_SUBMITTED` antes de publicar (D5 de T08): falta definir qué pasa si el servicio se cae entre guardar y publicar.
 
 ## Historial
 
@@ -176,3 +183,6 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - 2026-10-30: resultados de la prueba de conexión (3.1 y sección 4): `PLAINTEXT` sin credenciales, consumer group libre, 1 partición, 7 días de retención; la cátedra no publica en el topic de acciones (consultado al profesor).
 - 2026-10-31: detalles de la implementación del consumo (3.8); la cátedra sigue sin publicar, los tests usan mensajes armados desde el anexo.
 - 2026-10-31: E2E con el consumer group de tests: el consumo real funciona; el plan B de 3.6 no se implementó. Cierre de T07 con CA-14 y las grabaciones reales pendientes.
+- 2026-11-02: decisiones de la SPEC y del PLAN de T08 (3.14).
+- 2026-11-02: corregido que una falla de la base al leer descartara el mensaje (3.3).
+- 2026-11-02: T08 implementada (3.14). Comprobado contra Postgres: sin las protecciones de 3.14, un valor largo o con el carácter nulo frena el consumo. La cátedra sigue sin publicar, así que el formato real de los eventos sigue sin verificar.

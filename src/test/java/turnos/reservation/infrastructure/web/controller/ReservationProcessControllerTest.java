@@ -3,6 +3,7 @@ package turnos.reservation.infrastructure.web.controller;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -297,13 +298,14 @@ class ReservationProcessControllerTest {
         }
     }
 
-    @Test
-    void aProcessInAnotherStateAnswersConflictWithItsCurrentStatus() throws Exception {
-        doThrow(new ReservationInvalidProcessStateException("process-1", ReservationStatus.PHONE_SUBMITTED))
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "CONFIRMED", "CANCELLED", "INVALID"})
+    void aProcessInAnotherStateAnswersConflictWithItsCurrentStatus(ReservationStatus status) throws Exception {
+        doThrow(new ReservationInvalidProcessStateException("process-1", status))
                 .when(reservationService).confirmReservationProcess(anyLong(), anyString());
 
         expectProblem(confirm("process-1"), 409, "INVALID_PROCESS_STATE")
-                .andExpect(jsonPath("$.currentStatus").value("PHONE_SUBMITTED"));
+                .andExpect(jsonPath("$.currentStatus").value(status.name()));
     }
 
     @Test

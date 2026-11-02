@@ -170,7 +170,7 @@ classDiagram
 | 6 | Un evento tardío nunca reabre un proceso en estado final; las únicas excepciones son la cancelación de un proceso `CONFIRMED` y la corrección de T13. Lo mismo vale al revés: T06 solo pasa el proceso a `PHONE_SUBMITTED` si sigue en `WAITING_FOR_PHONE`, y no hace retroceder uno que T08 ya avanzó |
 | 7 | `isOpen()` es verdadero en `HELD`, `WAITING_FOR_PHONE` y `PHONE_SUBMITTED`. `hasExpired(now, margin)` es verdadero si `now` supera `expiresAt` más el margen de seguridad, que es configurable |
 | 8 | Un proceso vencido en `HELD` o `WAITING_FOR_PHONE` pasa a `EXPIRED`. Uno vencido en `PHONE_SUBMITTED` no se cierra: se marca `needsReconciliation`, porque la cátedra pudo haberlo confirmado |
-| 9 | `needsReconciliation` lo limpia T13 al reconciliar el proceso; si la cátedra no responde, sigue marcado |
+| 9 | `needsReconciliation` lo limpia T13 al reconciliar el proceso; si la cátedra no responde, sigue marcado. También se apaga cuando el proceso pasa a `CONFIRMED`, `CANCELLED` o `EXPIRED`, por un evento de la cátedra o por una operación de turnos: un proceso cerrado no tiene nada que reconciliar. Excepción: `INVALID` queda marcado. Una operación posterior puede volver a marcar un `CONFIRMED`, si no se sabe si la cátedra lo canceló (T11) |
 | 10 | `requestEventId` no cambia tras un rechazo de teléfono: sigue siendo válido para el próximo intento |
 | 11 | `rejectionReason` solo lo escribe T08, y T06 lo borra al publicar un nuevo teléfono. La validación local del teléfono responde `400` y no se guarda |
 | 12 | "Mis reservas" (T10) lista los procesos abiertos, los `CONFIRMED` y los `CANCELLED` que tienen `confirmedAt`. Los `EXPIRED`, los `INVALID` y los cancelados antes de confirmarse no se listan |

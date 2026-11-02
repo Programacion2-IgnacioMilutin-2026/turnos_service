@@ -91,6 +91,8 @@ final class CopyingReservationProcessRepository implements ReservationProcessRep
                 .professionalFirstName(p.getProfessionalFirstName()).professionalLastName(p.getProfessionalLastName())
                 .professionalCategoryName(p.getProfessionalCategoryName()).date(p.getDate())
                 .startTime(p.getStartTime()).status(p.getStatus()).expiresAt(p.getExpiresAt())
-                .needsReconciliation(p.isNeedsReconciliation()).requestEventId(p.getRequestEventId()).build();
+                .needsReconciliation(p.isNeedsReconciliation()).requestEventId(p.getRequestEventId())
+                .reservationId(p.getReservationId()).confirmedAt(p.getConfirmedAt()).cancelledAt(p.getCancelledAt())
+                .cancellationReason(p.getCancellationReason()).rejectionReason(p.getRejectionReason()).build();
     }
 }

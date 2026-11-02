@@ -5,6 +5,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.annotation.Transactional;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.application.exception.ReservationOpenProcessConflictException;
@@ -73,9 +74,14 @@ public class JpaReservationProcessRepositoryAdapter implements ReservationProces
                 .toList();
     }
 
+    // Una base caída se informa igual que al guardar: un evento de la cátedra que no se pudo leer se reintenta, no se descarta
     @Override
     public Optional<ReservationProcess> findById(String reservationProcessId) {
-        return jpaReservationProcessRepository.findById(reservationProcessId).map(reservationProcessMapper::toDomainModel);
+        try {
+            return jpaReservationProcessRepository.findById(reservationProcessId).map(reservationProcessMapper::toDomainModel);
+        } catch (DataAccessException | TransactionException e) {
+            throw new ReservationNotSavedException(reservationProcessId, e);
+        }
     }
 
     @Override

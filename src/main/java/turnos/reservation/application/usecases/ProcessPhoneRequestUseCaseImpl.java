@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import turnos.reservation.application.support.UserOperationLock;
-import turnos.reservation.domain.model.PhoneRequestOutcome;
+import turnos.reservation.domain.model.ReservationEventOutcome;
 import turnos.reservation.domain.model.ProcessedEvent;
 import turnos.reservation.domain.model.ReservationPhoneRequest;
 import turnos.reservation.domain.model.ReservationProcess;
@@ -31,7 +31,7 @@ public class ProcessPhoneRequestUseCaseImpl implements ProcessPhoneRequestUseCas
     // la confirmación termine de guardar, y así ninguna de las dos escrituras pisa a la otra.
     // Si la base falla, lanza ReservationNotSavedException sin haber cambiado nada
     @Override
-    public PhoneRequestOutcome processPhoneRequest(ReservationPhoneRequest request) {
+    public ReservationEventOutcome processPhoneRequest(ReservationPhoneRequest request) {
         Optional<ReservationProcess> found = reservationProcessRepository.findById(request.getReservationProcessId());
         if (found.isEmpty()) {
             if (processedEventRepository.existsById(request.getEventId())) {
@@ -39,12 +39,12 @@ public class ProcessPhoneRequestUseCaseImpl implements ProcessPhoneRequestUseCas
             }
             log.warn("Phone request {} refers to reservation process {}, which does not exist here",
                     request.getEventId(), request.getReservationProcessId());
-            return PhoneRequestOutcome.ORPHAN;
+            return ReservationEventOutcome.ORPHAN;
         }
         return userOperationLock.exclusivelyFor(found.get().getUserId(), () -> process(request));
     }
 
-    private PhoneRequestOutcome process(ReservationPhoneRequest request) {
+    private ReservationEventOutcome process(ReservationPhoneRequest request) {
         if (processedEventRepository.existsById(request.getEventId())) {
             return alreadyProcessed(request);
         }
@@ -53,12 +53,12 @@ public class ProcessPhoneRequestUseCaseImpl implements ProcessPhoneRequestUseCas
         if (!process.getHoldId().equals(request.getHoldId())) {
             log.warn("Phone request {} has hold {}, but reservation process {} has hold {}", request.getEventId(),
                     request.getHoldId(), process.getReservationProcessId(), process.getHoldId());
-            return PhoneRequestOutcome.HOLD_MISMATCH;
+            return ReservationEventOutcome.HOLD_MISMATCH;
         }
         if (!process.canAcceptPhoneRequest()) {
             log.info("Phone request {} ignored: reservation process {} is already {}", request.getEventId(),
                     process.getReservationProcessId(), process.getStatus());
-            return PhoneRequestOutcome.STATE_ADVANCED;
+            return ReservationEventOutcome.STATE_ADVANCED;
         }
         process.acceptPhoneRequest(request.getEventId(), request.getExpiresAt());
         // El cambio del proceso y el registro del pedido como procesado se guardan juntos o no se guarda ninguno
@@ -67,12 +67,12 @@ public class ProcessPhoneRequestUseCaseImpl implements ProcessPhoneRequestUseCas
             processedEventRepository.create(new ProcessedEvent(request.getEventId(), clock.instant()));
         });
         log.info("Phone request {} saved for reservation process {}", request.getEventId(), process.getReservationProcessId());
-        return PhoneRequestOutcome.APPLIED;
+        return ReservationEventOutcome.APPLIED;
     }
 
-    private static PhoneRequestOutcome alreadyProcessed(ReservationPhoneRequest request) {
+    private static ReservationEventOutcome alreadyProcessed(ReservationPhoneRequest request) {
         log.info("Phone request {} for reservation process {} was already processed", request.getEventId(),
                 request.getReservationProcessId());
-        return PhoneRequestOutcome.ALREADY_PROCESSED;
+        return ReservationEventOutcome.ALREADY_PROCESSED;
     }
 }

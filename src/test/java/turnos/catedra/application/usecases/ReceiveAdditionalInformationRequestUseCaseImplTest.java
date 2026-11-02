@@ -3,7 +3,9 @@ package turnos.catedra.application.usecases;
 import org.junit.jupiter.api.Test;
 import turnos.catedra.application.exception.CatedraEventNotSavedException;
 import turnos.catedra.domain.model.AdditionalInformationRequest;
-import turnos.catedra.domain.model.AdditionalInformationRequestResult;
+import turnos.catedra.domain.model.AppointmentResult;
+import turnos.catedra.domain.model.CatedraEventResult;
+import turnos.catedra.domain.ports.out.CatedraEventHandler;
 
 import java.time.Instant;
 import java.util.List;
@@ -22,31 +24,39 @@ class ReceiveAdditionalInformationRequestUseCaseImplTest {
 
     @Test
     void theRequestReachesWhoeverProcessesItAsIs() {
-        useCase(new AdditionalInformationRequestResult.Processed()).receiveAdditionalInformationRequest(REQUEST);
+        useCase(new CatedraEventResult.Processed()).receiveAdditionalInformationRequest(REQUEST);
 
         assertThat(handled).containsExactly(REQUEST);
     }
 
     @Test
     void aProcessedOrDiscardedRequestEndsWithoutError() {
-        useCase(new AdditionalInformationRequestResult.Processed()).receiveAdditionalInformationRequest(REQUEST);
-        useCase(new AdditionalInformationRequestResult.Discarded("ORPHAN")).receiveAdditionalInformationRequest(REQUEST);
+        useCase(new CatedraEventResult.Processed()).receiveAdditionalInformationRequest(REQUEST);
+        useCase(new CatedraEventResult.Discarded("ORPHAN")).receiveAdditionalInformationRequest(REQUEST);
 
         assertThat(handled).hasSize(2);
     }
 
     @Test
     void aRequestThatCouldNotBeSavedHasToBeTriedAgain() {
-        assertThatThrownBy(() -> useCase(new AdditionalInformationRequestResult.NotSaved("database down"))
+        assertThatThrownBy(() -> useCase(new CatedraEventResult.NotSaved("database down"))
                 .receiveAdditionalInformationRequest(REQUEST))
                 .isInstanceOf(CatedraEventNotSavedException.class)
                 .hasMessage("Catedra event request-event-1 could not be saved: database down");
     }
 
-    private ReceiveAdditionalInformationRequestUseCaseImpl useCase(AdditionalInformationRequestResult result) {
-        return new ReceiveAdditionalInformationRequestUseCaseImpl(request -> {
-            handled.add(request);
-            return result;
+    private ReceiveAdditionalInformationRequestUseCaseImpl useCase(CatedraEventResult result) {
+        return new ReceiveAdditionalInformationRequestUseCaseImpl(new CatedraEventHandler() {
+            @Override
+            public CatedraEventResult handleAdditionalInformationRequest(AdditionalInformationRequest request) {
+                handled.add(request);
+                return result;
+            }
+
+            @Override
+            public CatedraEventResult handleAppointmentResult(AppointmentResult appointmentResult) {
+                throw new AssertionError("A phone request does not go through the results");
+            }
         });
     }
 }

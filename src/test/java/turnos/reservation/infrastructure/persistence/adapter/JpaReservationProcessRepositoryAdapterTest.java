@@ -4,6 +4,8 @@ import jakarta.persistence.EntityManagerFactory;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
@@ -196,6 +198,47 @@ class JpaReservationProcessRepositoryAdapterTest {
         ReservationProcess old = repository.findByIdAndUserId("process-old", userId).orElseThrow();
         assertThat(old.isNeedsReconciliation()).isFalse();
         assertThat(old.getRequestEventId()).isNull();
+        assertThat(old.getReservationId()).isNull();
+        assertThat(old.getConfirmedAt()).isNull();
+        assertThat(old.getCancelledAt()).isNull();
+        assertThat(old.getCancellationReason()).isNull();
+        assertThat(old.getRejectionReason()).isNull();
+    }
+
+    @Test
+    void theResultOfAProcessIsSavedAndReadBack() {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess process = repository.create(held("process-1", userId));
+        process.setStatus(ReservationStatus.CANCELLED);
+        process.setReservationId(8251L);
+        process.setConfirmedAt(Instant.parse("2026-10-27T04:36:01Z"));
+        process.setCancelledAt(Instant.parse("2026-10-28T15:10:00Z"));
+        process.setCancellationReason("a".repeat(ReservationProcess.MAX_REASON_LENGTH));
+        process.setRejectionReason("é".repeat(ReservationProcess.MAX_REASON_LENGTH));
+
+        repository.update("process-1", process);
+        entityManager.clear();
+
+        assertThat(repository.findById("process-1").orElseThrow()).usingRecursiveComparison().isEqualTo(process);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"CONFIRMED", "CANCELLED", "INVALID"})
+    void aClosedProcessIsNotOpenAndLetsItsUserHaveAnother(ReservationStatus status) {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess closed = repository.create(held("process-1", userId));
+        closed.setStatus(status);
+        repository.update("process-1", closed);
+
+        ReservationProcess another = held("process-2", userId);
+        another.setHoldId("hold-2");
+        repository.create(another);
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findById("process-1").orElseThrow().getStatus()).isEqualTo(status);
+        assertThat(repository.findOpenByUserId(userId)).extracting(ReservationProcess::getReservationProcessId)
+                .containsExactly("process-2");
     }
 
     @Test
