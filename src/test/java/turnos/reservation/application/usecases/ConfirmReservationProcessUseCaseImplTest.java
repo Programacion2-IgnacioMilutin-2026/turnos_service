@@ -89,7 +89,7 @@ class ConfirmReservationProcessUseCaseImplTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ReservationStatus.class, names = {"WAITING_FOR_PHONE", "PHONE_SUBMITTED", "EXPIRED"})
+    @EnumSource(value = ReservationStatus.class, names = {"WAITING_FOR_PHONE", "PHONE_SUBMITTED", "EXPIRED", "CONFIRMED", "CANCELLED", "INVALID"})
     void onlyAHeldProcessIsConfirmedAndTheCurrentStatusIsReported(ReservationStatus status) {
         ReservationProcess process = held(PROCESS, USER);
         process.setStatus(status);

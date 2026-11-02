@@ -107,7 +107,7 @@ class ProcessPhoneRequestUseCaseImplTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "EXPIRED"})
+    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "EXPIRED", "CONFIRMED", "CANCELLED", "INVALID"})
     void aProcessThatAlreadyAdvancedIsNotChanged(ReservationStatus status, CapturedOutput output) {
         processes.add(process(PROCESS, USER, status));
 

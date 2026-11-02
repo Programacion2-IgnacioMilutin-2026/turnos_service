@@ -92,13 +92,14 @@ class DatabaseDownKafkaIntegrationTest {
                 RETURNING id
                 """, Long.class);
         insertHeldProcess("process-2", otherUserId);
+        jdbc.update("UPDATE reservation_processes SET status = 'PHONE_SUBMITTED' WHERE reservation_process_id = 'process-2'");
         // Pasado este tiempo, el pool comprueba que la conexión siga viva antes de usarla
         Thread.sleep(1000);
 
         pauseDatabase();
         try {
             ACTIONS.publish("process-1", phoneRequest("request-1", "process-1"));
-            ACTIONS.publish("process-2", phoneRequest("request-2", "process-2"));
+            ACTIONS.publish("process-2", confirmation("confirmation-2", "process-2"));
 
             await().atMost(Duration.ofSeconds(60)).until(() -> output.getAll().contains("could not be saved after"));
             assertThat(ACTIONS.committedOffset()).isEqualTo(-1);
@@ -108,10 +109,10 @@ class DatabaseDownKafkaIntegrationTest {
         }
 
         await().atMost(Duration.ofSeconds(60)).until(() -> "request-1".equals(requestEventId("process-1")));
-        await().atMost(Duration.ofSeconds(30)).until(() -> "request-2".equals(requestEventId("process-2")));
+        await().atMost(Duration.ofSeconds(30)).until(() -> "CONFIRMED".equals(status("process-2")));
         assertThat(status("process-1")).isEqualTo("WAITING_FOR_PHONE");
         assertThat(jdbc.queryForList("SELECT event_id FROM processed_events", String.class))
-                .containsExactlyInAnyOrder("request-1", "request-2");
+                .containsExactlyInAnyOrder("request-1", "confirmation-2");
         await().atMost(Duration.ofSeconds(10)).until(ACTIONS::allConsumed);
         assertThat(output.getAll()).doesNotContain("discarded after");
     }
@@ -129,6 +130,13 @@ class DatabaseDownKafkaIntegrationTest {
                 {"eventId":"%s","eventType":"AdditionalInformationRequested","reservationProcessId":"%s",
                  "holdId":"hold-1","requiredField":"PHONE_NUMBER","expiresAt":"%s","schemaVersion":1}
                 """.formatted(eventId, reservationProcessId, Instant.now().plusSeconds(600));
+    }
+
+    private static String confirmation(String eventId, String reservationProcessId) {
+        return """
+                {"eventId":"%s","eventType":"AppointmentConfirmed","reservationProcessId":"%s","holdId":"hold-1",
+                 "reservationId":8251,"occurredAt":"%s","schemaVersion":1}
+                """.formatted(eventId, reservationProcessId, Instant.now());
     }
 
     private String requestEventId(String reservationProcessId) {

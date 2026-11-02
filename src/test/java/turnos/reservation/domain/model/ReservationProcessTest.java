@@ -59,6 +59,15 @@ class ReservationProcessTest {
         assertThat(process.getStatus()).isEqualTo(ReservationStatus.HELD);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"CONFIRMED", "CANCELLED", "INVALID"})
+    void aProcessThatAlreadyEndedIsNotClosedByTheClock(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        assertThat(process.expireIfOverdue(EXPIRES_AT.plusSeconds(3600), MARGIN)).isFalse();
+        assertThat(process.getStatus()).isEqualTo(status);
+    }
+
     @Test
     void aProcessWithThePhoneSubmittedIsNotClosedByTheClock() {
         ReservationProcess process = process(ReservationStatus.PHONE_SUBMITTED);
@@ -79,7 +88,7 @@ class ReservationProcessTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ReservationStatus.class, names = {"WAITING_FOR_PHONE", "PHONE_SUBMITTED", "EXPIRED"})
+    @EnumSource(value = ReservationStatus.class, names = {"WAITING_FOR_PHONE", "PHONE_SUBMITTED", "EXPIRED", "CONFIRMED", "CANCELLED", "INVALID"})
     void onlyAHeldProcessCanBeConfirmed(ReservationStatus status) {
         ReservationProcess process = process(status);
 
@@ -99,7 +108,7 @@ class ReservationProcessTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "EXPIRED"})
+    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "EXPIRED", "CONFIRMED", "CANCELLED", "INVALID"})
     void aProcessThatIsNotWaitingForTheUserDoesNotExpire(ReservationStatus status) {
         ReservationProcess process = process(status);
 
@@ -153,7 +162,7 @@ class ReservationProcessTest {
     }
 
     @ParameterizedTest
-    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "EXPIRED"})
+    @EnumSource(value = ReservationStatus.class, names = {"PHONE_SUBMITTED", "EXPIRED", "CONFIRMED", "CANCELLED", "INVALID"})
     void aProcessThatAlreadyAdvancedDoesNotAcceptAPhoneRequest(ReservationStatus status) {
         ReservationProcess process = process(status);
 
