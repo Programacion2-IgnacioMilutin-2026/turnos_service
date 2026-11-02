@@ -71,6 +71,7 @@ stateDiagram-v2
     WAITING_FOR_PHONE --> PHONE_SUBMITTED : T06
     PHONE_SUBMITTED --> CONFIRMED : T08
     PHONE_SUBMITTED --> WAITING_FOR_PHONE : T08 rechazo de teléfono
+    PHONE_SUBMITTED --> WAITING_FOR_PHONE : T06 falla al publicar
     HELD --> CANCELLED : T11
     WAITING_FOR_PHONE --> CANCELLED : T11
     CONFIRMED --> CANCELLED : T11 o T08
@@ -129,7 +130,7 @@ classDiagram
 | `ReservationProcess` | `status` | `ReservationStatus` | Estado actual del proceso |
 | `ReservationProcess` | `expiresAt` | `Instant` | Vencimiento del hold en la cátedra, en UTC; lo fija T04; T05 guarda el que informa la cátedra al confirmar (el mismo del hold), y lo actualizan T07 y el rechazo de teléfono de T08 |
 | `ReservationProcess` | `requestEventId` | `String` | Vacío hasta que T07 recibe el pedido de teléfono; es el `eventId` de ese pedido y se envía como `requestEventId` al informar el teléfono (T06) |
-| `ReservationProcess` | `phoneNumber` | `String` | Vacío hasta T06; es el último teléfono informado |
+| `ReservationProcess` | `phoneNumber` | `String` | Vacío hasta T06; es el último que el usuario intentó informar, aunque no haya llegado a salir (T06 6.1) |
 | `ReservationProcess` | `rejectionReason` | `String` | Código con que la cátedra rechazó el teléfono (por ejemplo `INVALID_PHONE_NUMBER`); vacío si no hay rechazo vigente |
 | `ReservationProcess` | `reservationId` | `Long` | Lo asigna la cátedra al confirmar; vacío hasta entonces |
 | `ReservationProcess` | `confirmedAt` | `Instant` | Momento, en UTC, en que se confirmó; vacío si nunca se confirmó |
@@ -152,7 +153,7 @@ classDiagram
 | --- | --- | --- |
 | `HELD` | La cátedra concedió el hold (T04); falta la confirmación inicial (T05) o el pedido de teléfono (T07) | Sí |
 | `WAITING_FOR_PHONE` | La cátedra pidió el teléfono; el usuario debe informarlo, o volver a informarlo tras un rechazo | Sí |
-| `PHONE_SUBMITTED` | Turnos publicó el teléfono (T06) y espera el resultado de la cátedra | Sí |
+| `PHONE_SUBMITTED` | Turnos guardó el teléfono para publicarlo (T06) y espera el resultado de la cátedra | Sí |
 | `CONFIRMED` | La cátedra confirmó la reserva | No |
 | `CANCELLED` | Cancelado por el usuario (T11) o informado por la cátedra | No |
 | `EXPIRED` | Venció antes de confirmarse | No |
@@ -167,12 +168,12 @@ classDiagram
 | 3 | `User` guarda `createdDate` y `lastModifiedDate`, pero no quién los hizo (`createdBy`, `lastModifiedBy`) |
 | 4 | El proceso se identifica por `reservationProcessId`, un texto opaco que asigna la cátedra; turnos no genera identificadores propios para los procesos |
 | 5 | Un usuario tiene como máximo un proceso abierto (`HELD`, `WAITING_FOR_PHONE` o `PHONE_SUBMITTED`); las reservas confirmadas no cuentan |
-| 6 | Un evento tardío nunca reabre un proceso en estado final; las únicas excepciones son la cancelación de un proceso `CONFIRMED` y la corrección de T13. Lo mismo vale al revés: T06 solo pasa el proceso a `PHONE_SUBMITTED` si sigue en `WAITING_FOR_PHONE`, y no hace retroceder uno que T08 ya avanzó |
+| 6 | Un evento tardío nunca reabre un proceso en estado final; las únicas excepciones son la cancelación de un proceso `CONFIRMED` y la corrección de T13. Un resultado tampoco se adelanta a T06: T06 guarda `PHONE_SUBMITTED` antes de publicar, con el candado del usuario |
 | 7 | `isOpen()` es verdadero en `HELD`, `WAITING_FOR_PHONE` y `PHONE_SUBMITTED`. `hasExpired(now, margin)` es verdadero si `now` supera `expiresAt` más el margen de seguridad, que es configurable |
 | 8 | Un proceso vencido en `HELD` o `WAITING_FOR_PHONE` pasa a `EXPIRED`. Uno vencido en `PHONE_SUBMITTED` no se cierra: se marca `needsReconciliation`, porque la cátedra pudo haberlo confirmado |
 | 9 | `needsReconciliation` lo limpia T13 al reconciliar el proceso; si la cátedra no responde, sigue marcado. También se apaga cuando el proceso pasa a `CONFIRMED`, `CANCELLED` o `EXPIRED`, por un evento de la cátedra o por una operación de turnos: un proceso cerrado no tiene nada que reconciliar. Excepción: `INVALID` queda marcado. Una operación posterior puede volver a marcar un `CONFIRMED`, si no se sabe si la cátedra lo canceló (T11) |
 | 10 | `requestEventId` no cambia tras un rechazo de teléfono: sigue siendo válido para el próximo intento |
-| 11 | `rejectionReason` solo lo escribe T08, y T06 lo borra al publicar un nuevo teléfono. La validación local del teléfono responde `400` y no se guarda |
+| 11 | `rejectionReason` solo lo escribe T08, y T06 lo borra al guardar un nuevo teléfono, aunque la publicación falle después. La validación local del teléfono responde `400` y no se guarda |
 | 12 | "Mis reservas" (T10) lista los procesos abiertos, los `CONFIRMED` y los `CANCELLED` que tienen `confirmedAt`. Los `EXPIRED`, los `INVALID` y los cancelados antes de confirmarse no se listan |
 | 13 | Los datos del profesional (`professionalFirstName`, `professionalLastName`, `professionalCategoryName`) son una copia del momento de la reserva, para historial y para que T10 sea una lectura local. No se usan como catálogo vigente (enunciado §4.2) |
 | 14 | Los procesos se guardan en la base de datos de turnos, no en memoria, y los cerrados no se borran de inmediato: T09 y la idempotencia de T11 los necesitan |

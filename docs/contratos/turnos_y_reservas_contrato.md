@@ -331,8 +331,8 @@ Respuesta `200`: proceso de reserva (sección 2) en estado `PHONE_SUBMITTED`. El
 | `409` | `INVALID_PROCESS_STATE` | El proceso no está en `WAITING_FOR_PHONE` (T06 3.1). Agrega `currentStatus`. |
 | `409` | `HOLD_EXPIRED` | El plazo venció; el proceso queda `EXPIRED` y hay que repetir T04 (T06 3.2). |
 | `409` | `PHONE_REQUEST_NOT_READY` | Turnos todavía no procesó el pedido de teléfono de la cátedra. Reintentar en unos segundos (T06 3.3). |
-| `503` | `CENTRAL_UNAVAILABLE` | Kafka no está disponible tras los reintentos. Se puede reintentar mientras no venza `expiresAt` (T06 5.1 y 5.2). |
-| `500` | `LOCAL_STATE_OUT_OF_SYNC` | El evento ya se publicó pero turnos no pudo guardarlo. La app consulta el estado con T09 (T06 6.1). |
+| `503` | `CENTRAL_UNAVAILABLE` | No hay sesión técnica o hay un error de configuración: el proceso no cambia (T06 4.2). O Kafka no está disponible tras los reintentos o rechaza las credenciales: el proceso vuelve a `WAITING_FOR_PHONE`, sin el motivo de rechazo anterior (T06 6.1 y 6.2). Se puede reintentar mientras no venza `expiresAt`. |
+| `500` | `LOCAL_STATE_OUT_OF_SYNC` | Kafka no estuvo disponible y turnos no pudo devolver el proceso a `WAITING_FOR_PHONE`: figura `PHONE_SUBMITTED` aunque el teléfono no salió. La app consulta el estado con T09 (T06 6.3). |
 
 ### 3.7 T09 — Consultar estado de un proceso
 
@@ -467,7 +467,7 @@ Turnos acepta las horas en `HH:mm` y en `HH:mm:ss`. Un profesional sin horarios 
 
 #### 4.2.2 Login técnico
 
-`POST /api/authenticate`, sin JWT. Turnos lo ejecuta al iniciar y ante cualquier `401` de la cátedra (X01). También lo ejecuta ante una falla de credenciales de Kafka (T06 5.2).
+`POST /api/authenticate`, sin JWT. Turnos lo ejecuta al iniciar y ante cualquier `401` de la cátedra (X01).
 
 ```json
 {
@@ -852,9 +852,10 @@ Antes de validar, la cátedra elimina espacios, guiones, paréntesis y puntos. E
 
 | Caso | Qué hace turnos |
 | --- | --- |
-| Publicado | Guarda el teléfono y pasa el proceso a `PHONE_SUBMITTED` (T06 6). |
-| Kafka no está disponible (timeout, corte, broker caído) | Reintenta con espera creciente. Agotados, registra, marca el proceso para reconciliar y responde `503` `CENTRAL_UNAVAILABLE` (T06 5.1). |
-| Kafka rechaza las credenciales | Ejecuta el login técnico (4.2.2) y reintenta una vez. Si persiste, lo trata como el caso anterior (T06 5.2). |
+| Antes de publicar | Guarda el teléfono y pasa el proceso a `PHONE_SUBMITTED` (T06 5). Si falla, no publica nada y responde `500` `INTERNAL_ERROR` (T06 5.1). |
+| Publicado | Responde `200` (T06 7). |
+| Kafka no está disponible (timeout, corte, broker caído) | Reintenta con espera creciente. Agotados, registra, devuelve el proceso a `WAITING_FOR_PHONE`, lo marca para reconciliar y responde `503` `CENTRAL_UNAVAILABLE` (T06 6.1). |
+| Kafka rechaza las credenciales | Lo trata como el caso anterior, sin reintentar, y registra el motivo (T06 6.2). |
 
 #### 4.3.4 Eventos de resultado
 
