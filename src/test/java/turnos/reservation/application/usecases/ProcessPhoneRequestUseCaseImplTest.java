@@ -9,7 +9,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 import turnos.MutableClock;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.application.support.UserOperationLock;
-import turnos.reservation.domain.model.PhoneRequestOutcome;
+import turnos.reservation.domain.model.ReservationEventOutcome;
 import turnos.reservation.domain.model.ReservationPhoneRequest;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationStatus;
@@ -44,7 +44,7 @@ class ProcessPhoneRequestUseCaseImplTest {
     void aProcessWaitingForThePhoneKeepsTheRequestAndItsExpirationAndTheRequestIsRegistered() {
         processes.add(process(PROCESS, USER, ReservationStatus.WAITING_FOR_PHONE));
 
-        assertThat(useCase.processPhoneRequest(request("request-event-1"))).isEqualTo(PhoneRequestOutcome.APPLIED);
+        assertThat(useCase.processPhoneRequest(request("request-event-1"))).isEqualTo(ReservationEventOutcome.APPLIED);
 
         ReservationProcess stored = processes.stored(PROCESS);
         assertThat(stored.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
@@ -59,7 +59,7 @@ class ProcessPhoneRequestUseCaseImplTest {
         held.markForReconciliation();
         processes.add(held);
 
-        assertThat(useCase.processPhoneRequest(request("request-event-1"))).isEqualTo(PhoneRequestOutcome.APPLIED);
+        assertThat(useCase.processPhoneRequest(request("request-event-1"))).isEqualTo(ReservationEventOutcome.APPLIED);
 
         ReservationProcess stored = processes.stored(PROCESS);
         assertThat(stored.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
@@ -75,7 +75,7 @@ class ProcessPhoneRequestUseCaseImplTest {
         submitted.setStatus(ReservationStatus.PHONE_SUBMITTED);
         processes.update(PROCESS, submitted);
 
-        assertThat(useCase.processPhoneRequest(request("request-event-1"))).isEqualTo(PhoneRequestOutcome.ALREADY_PROCESSED);
+        assertThat(useCase.processPhoneRequest(request("request-event-1"))).isEqualTo(ReservationEventOutcome.ALREADY_PROCESSED);
 
         assertThat(processes.stored(PROCESS).getStatus()).isEqualTo(ReservationStatus.PHONE_SUBMITTED);
         assertThat(events.registered()).hasSize(1);
@@ -84,7 +84,7 @@ class ProcessPhoneRequestUseCaseImplTest {
 
     @Test
     void aRequestForAProcessThatDoesNotExistIsAnOrphanAndIsNotRegistered(CapturedOutput output) {
-        assertThat(useCase.processPhoneRequest(request("request-event-1"))).isEqualTo(PhoneRequestOutcome.ORPHAN);
+        assertThat(useCase.processPhoneRequest(request("request-event-1"))).isEqualTo(ReservationEventOutcome.ORPHAN);
 
         assertThat(events.registered()).isEmpty();
         assertThat(output.getAll()).contains("WARN")
@@ -97,7 +97,7 @@ class ProcessPhoneRequestUseCaseImplTest {
         ReservationPhoneRequest otherHold = request("request-event-1");
         otherHold.setHoldId("hold-other");
 
-        assertThat(useCase.processPhoneRequest(otherHold)).isEqualTo(PhoneRequestOutcome.HOLD_MISMATCH);
+        assertThat(useCase.processPhoneRequest(otherHold)).isEqualTo(ReservationEventOutcome.HOLD_MISMATCH);
 
         assertThat(processes.stored(PROCESS).getRequestEventId()).isNull();
         assertThat(processes.history(PROCESS)).isEmpty();
@@ -111,7 +111,7 @@ class ProcessPhoneRequestUseCaseImplTest {
     void aProcessThatAlreadyAdvancedIsNotChanged(ReservationStatus status, CapturedOutput output) {
         processes.add(process(PROCESS, USER, status));
 
-        assertThat(useCase.processPhoneRequest(request("request-event-1"))).isEqualTo(PhoneRequestOutcome.STATE_ADVANCED);
+        assertThat(useCase.processPhoneRequest(request("request-event-1"))).isEqualTo(ReservationEventOutcome.STATE_ADVANCED);
 
         assertThat(processes.stored(PROCESS).getStatus()).isEqualTo(status);
         assertThat(processes.stored(PROCESS).getRequestEventId()).isNull();
@@ -148,20 +148,20 @@ class ProcessPhoneRequestUseCaseImplTest {
         }));
         assertThat(lockTaken.await(5, TimeUnit.SECONDS)).isTrue();
 
-        CompletableFuture<PhoneRequestOutcome> sameUser = CompletableFuture.supplyAsync(
+        CompletableFuture<ReservationEventOutcome> sameUser = CompletableFuture.supplyAsync(
                 () -> useCase.processPhoneRequest(request("request-event-1")));
         ReservationPhoneRequest otherUserRequest = request("request-event-2");
         otherUserRequest.setReservationProcessId("process-2");
-        PhoneRequestOutcome otherUser = CompletableFuture.supplyAsync(() -> useCase.processPhoneRequest(otherUserRequest))
+        ReservationEventOutcome otherUser = CompletableFuture.supplyAsync(() -> useCase.processPhoneRequest(otherUserRequest))
                 .get(5, TimeUnit.SECONDS);
 
-        assertThat(otherUser).isEqualTo(PhoneRequestOutcome.APPLIED);
+        assertThat(otherUser).isEqualTo(ReservationEventOutcome.APPLIED);
         Thread.sleep(200);
         assertThat(sameUser).isNotDone();
         assertThat(processes.stored(PROCESS).getRequestEventId()).isNull();
 
         release.countDown();
-        assertThat(sameUser.get(5, TimeUnit.SECONDS)).isEqualTo(PhoneRequestOutcome.APPLIED);
+        assertThat(sameUser.get(5, TimeUnit.SECONDS)).isEqualTo(ReservationEventOutcome.APPLIED);
         operationOfTheUser.join(5000);
     }
 
@@ -179,12 +179,12 @@ class ProcessPhoneRequestUseCaseImplTest {
         }));
         assertThat(lockTaken.await(5, TimeUnit.SECONDS)).isTrue();
 
-        CompletableFuture<PhoneRequestOutcome> request = CompletableFuture.supplyAsync(
+        CompletableFuture<ReservationEventOutcome> request = CompletableFuture.supplyAsync(
                 () -> useCase.processPhoneRequest(request("request-event-1")));
         Thread.sleep(200);
         release.countDown();
 
-        assertThat(request.get(5, TimeUnit.SECONDS)).isEqualTo(PhoneRequestOutcome.STATE_ADVANCED);
+        assertThat(request.get(5, TimeUnit.SECONDS)).isEqualTo(ReservationEventOutcome.STATE_ADVANCED);
         operationOfTheUser.join(5000);
         assertThat(processes.history(PROCESS)).containsExactly(ReservationStatus.EXPIRED);
         assertThat(events.registered()).isEmpty();

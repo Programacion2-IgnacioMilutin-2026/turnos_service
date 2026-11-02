@@ -20,7 +20,7 @@ import turnos.reservation.application.exception.ReservationProfessionalNotFoundE
 import turnos.reservation.application.exception.ReservationServiceDegradedException;
 import turnos.reservation.application.exception.ReservationSlotNotAvailableException;
 import turnos.reservation.application.support.UserOperationLock;
-import turnos.reservation.domain.model.PhoneRequestOutcome;
+import turnos.reservation.domain.model.ReservationEventOutcome;
 import turnos.reservation.domain.model.ReservationHold;
 import turnos.reservation.domain.model.ReservationHoldConfirmation;
 import turnos.reservation.domain.model.ReservationPatient;
@@ -342,12 +342,12 @@ class ConfirmReservationProcessUseCaseImplTest {
 
         Thread confirmation = Thread.ofVirtual().start(() -> confirm(USER, PROCESS));
         assertThat(confirmationRequested.await(5, TimeUnit.SECONDS)).isTrue();
-        List<PhoneRequestOutcome> outcome = new CopyOnWriteArrayList<>();
+        List<ReservationEventOutcome> outcome = new CopyOnWriteArrayList<>();
         Thread phoneRequest = Thread.ofVirtual().start(() -> outcome.add(phoneRequests.processPhoneRequest(request)));
         confirmation.join(10000);
         phoneRequest.join(10000);
 
-        assertThat(outcome).containsExactly(PhoneRequestOutcome.APPLIED);
+        assertThat(outcome).containsExactly(ReservationEventOutcome.APPLIED);
         ReservationProcess stored = repository.stored(PROCESS);
         assertThat(stored.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
         assertThat(stored.getRequestEventId()).isEqualTo("request-event-1");

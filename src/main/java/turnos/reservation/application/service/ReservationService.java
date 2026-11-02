@@ -2,7 +2,7 @@ package turnos.reservation.application.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import turnos.reservation.domain.model.PhoneRequestOutcome;
+import turnos.reservation.domain.model.ReservationEventOutcome;
 import turnos.reservation.domain.model.ReservationPhoneRequest;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.ports.in.ConfirmReservationProcessUseCase;
@@ -29,7 +29,7 @@ public class ReservationService {
         return confirmReservationProcessUseCase.confirmReservationProcess(userId, reservationProcessId);
     }
 
-    public PhoneRequestOutcome processPhoneRequest(ReservationPhoneRequest request) {
+    public ReservationEventOutcome processPhoneRequest(ReservationPhoneRequest request) {
         return processPhoneRequestUseCase.processPhoneRequest(request);
     }
 }

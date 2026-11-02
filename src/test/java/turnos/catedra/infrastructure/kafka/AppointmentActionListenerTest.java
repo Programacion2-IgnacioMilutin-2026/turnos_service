@@ -7,7 +7,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import tools.jackson.databind.json.JsonMapper;
 import turnos.catedra.application.exception.CatedraEventNotSavedException;
-import turnos.catedra.application.service.AdditionalInformationRequestService;
+import turnos.catedra.application.service.CatedraEventService;
 import turnos.catedra.domain.model.AdditionalInformationRequest;
 
 import java.io.IOException;
@@ -53,7 +53,7 @@ class AppointmentActionListenerTest {
 
     private static AppointmentActionListener listener(Consumer<AdditionalInformationRequest> application) {
         return new AppointmentActionListener(new AppointmentActionReader(JsonMapper.builder().build()),
-                new AdditionalInformationRequestService(application::accept));
+                new CatedraEventService(application::accept));
     }
 
     private static ConsumerRecord<String, String> message(String value) {

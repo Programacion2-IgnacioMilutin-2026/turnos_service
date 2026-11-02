@@ -7,7 +7,7 @@ import turnos.catedra.domain.ports.in.ReceiveAdditionalInformationRequestUseCase
 
 @Service
 @RequiredArgsConstructor
-public class AdditionalInformationRequestService {
+public class CatedraEventService {
 
     private final ReceiveAdditionalInformationRequestUseCase receiveAdditionalInformationRequestUseCase;
 

@@ -7,12 +7,12 @@ Las tareas siguen el "Orden de implementación" del PLAN. Rutas relativas a `src
 
 Tandas propuestas, para que la suite quede en verde al cerrar cada una: TASK-01; TASK-02 y TASK-03; TASK-04 y TASK-05; TASK-06 y TASK-07; TASK-08; TASK-09 y TASK-10; TASK-11.
 
-- [ ] **TASK-01 · Renombrar las piezas de T07 sin cambiar el comportamiento**
+- [x] **TASK-01 · Renombrar las piezas de T07 sin cambiar el comportamiento**
   - Alcance: los renombres de P2: `AdditionalInformationRequestHandler` → `CatedraEventHandler`, `CatedraPhoneRequestAdapter` → `CatedraEventAdapter`, `AdditionalInformationRequestResult` → `CatedraEventResult`, `AdditionalInformationRequestService` → `CatedraEventService`, `PhoneRequestOutcome` → `ReservationEventOutcome`, con sus tests y comentarios. No agrega métodos ni cambia lógica. No toca `CLAUDE.md` (TASK-11).
   - Depende de: ninguna
   - Resuelve: base de P2
   - Validación: `./mvnw clean test` con el mismo conteo que al empezar (681) y sin fallos; `grep` de los cinco nombres viejos en `src/` sin coincidencias.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. Cinco clases y un test renombrados (`CatedraEventAdapterTest`), con los campos de quien los usa (`catedraEventHandler`, `catedraEventService`). Solo cambian nombres y los comentarios de esas clases, que pasan de "pedido" a "evento". `./mvnw clean test` termina bien: 681 tests en los reportes XML, 0 fallos, 0 errores, 0 salteados. `grep` de los nombres viejos en `src/`: sin coincidencias. Sin prueba en negativo: no hay comportamiento nuevo que probar. `CLAUDE.md` sigue con los nombres viejos hasta TASK-11. Sin commitear.
 
 - [ ] **TASK-02 · Estados y datos nuevos del proceso**
   - Alcance: `ReservationStatus` suma `CONFIRMED`, `CANCELLED` e `INVALID`, sin cambiar `isOpen`; `ReservationProcess` suma `reservationId`, `confirmedAt`, `cancelledAt`, `cancellationReason` y `rejectionReason`; migración `V5`; `ReservationProcessEntity` y `ReservationProcessMapper`; `CopyingReservationProcessRepository` copia los campos nuevos. Sin transiciones todavía. No toca `ReservationProcessDtoMapper` (T09).

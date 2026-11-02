@@ -18,7 +18,7 @@ import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 import turnos.KafkaTestContainer;
 import turnos.catedra.application.exception.CatedraEventNotSavedException;
-import turnos.catedra.application.service.AdditionalInformationRequestService;
+import turnos.catedra.application.service.CatedraEventService;
 import turnos.catedra.domain.model.AdditionalInformationRequest;
 import turnos.catedra.domain.model.ProvisioningStatus;
 import turnos.catedra.domain.model.TechnicalIntegration;
@@ -184,7 +184,7 @@ class KafkaConsumerManagerTest {
 
     private KafkaConsumerManager manager(CatedraKafkaProperties properties, ReceiveAdditionalInformationRequestUseCase useCase) {
         AppointmentActionListener listener = new AppointmentActionListener(new AppointmentActionReader(JSON),
-                new AdditionalInformationRequestService(useCase));
+                new CatedraEventService(useCase));
         return new KafkaConsumerManager(properties, CATEDRA,
                 new StaticListableBeanFactory(Map.of("appointmentActionListener", listener))
                         .getBeanProvider(AppointmentActionListener.class));
