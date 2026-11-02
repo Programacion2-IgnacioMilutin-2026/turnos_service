@@ -122,4 +122,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## 2026-11-02
 ### Added
-- Documentacion de SDD para el caso de uso T08-ResultadoReserva
+- Documentacion de SDD para el caso de uso T08-ResultadoReserva.
+### Changed
+- Actualizado el nombre de algunas clases para que estan mas acorde a lo que hacen, ya que se les añaden funcionalidades en T08.
