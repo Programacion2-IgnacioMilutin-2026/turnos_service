@@ -53,7 +53,7 @@ La clave de los mensajes de turnos es el `reservationProcessId`: los eventos de 
 
 ### 3.1 Autenticación (T07, D1)
 
-Si el servidor exige credenciales, son las de la cuenta técnica, las mismas de la configuración externa de X01; si no las exige, alcanza con `integration`. El protocolo y el mecanismo son configurables por configuración externa, para no fijar una suposición en el código. **Verificado (2026-10-30, TASK-02 de T07):** la prueba de conexión de solo lectura conectó con `PLAINTEXT`, sin credenciales, al primer intento. El Kafka de la cátedra no exige autenticación ni tiene control de acceso: la lista de topics muestra los de todas las integraciones. El valor por defecto (`PLAINTEXT`) es el correcto, y en la práctica no puede ocurrir un rechazo de credenciales al publicar (T06 5.2). El servicio usa solo los nombres de su `integration`, así que nunca toca topics ajenos.
+Si el servidor exige credenciales, son las de la cuenta técnica, las mismas de la configuración externa de X01; si no las exige, alcanza con `integration`. El protocolo y el mecanismo son configurables por configuración externa, para no fijar una suposición en el código. **Verificado (2026-10-30, TASK-02 de T07):** la prueba de conexión de solo lectura conectó con `PLAINTEXT`, sin credenciales, al primer intento. El Kafka de la cátedra no exige autenticación ni tiene control de acceso: la lista de topics muestra los de todas las integraciones. El valor por defecto (`PLAINTEXT`) es el correcto, y en la práctica no puede ocurrir un rechazo de credenciales al publicar (T06 6.2, ver 3.16). El servicio usa solo los nombres de su `integration`, así que nunca toca topics ajenos.
 
 ### 3.2 Eventos de resultado antes de que exista T08 (T07, D3)
 
@@ -145,6 +145,7 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 ### 3.13 Relacionadas, fuera de este documento
 
 - Un pedido que llega mientras opera el usuario se procesa con el mismo candado por usuario que bloquear y confirmar (T07 D2, decisión 013).
+- La publicación de T06 también va dentro de ese candado, con un tope de 10 s (T06 D4, decisión 013).
 - La idempotencia se guarda en `reservation`: tabla `processed_events` propia, escrita en la misma transacción que el cambio del proceso con un puerto técnico de transacción (PLAN de T07, P4). Sin control de versión además del candado (P5).
 
 ### 3.14 Eventos de resultado (SPEC de T08)
@@ -154,6 +155,42 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - **Un mensaje no puede frenar el consumo por su tamaño (D4, RF-17):** un valor más largo que su columna haría fallar el guardado, y eso se trata como una caída de la base: se reintentaría sin fin y frenaría a todos (3.3). Por eso `reason` se recorta a 500 caracteres con un warning, y un `eventId`, `reservationProcessId` o `holdId` de más de 255 caracteres hace inválido el mensaje, también en el pedido de teléfono. Lo mismo con el carácter nulo, que Postgres no acepta en un texto: invalida un identificador y se quita de `reason`, con un warning.
 - **Cómo se lee un mensaje (PLAN de T08, P3):** un solo DTO con las fechas, instantes y números como texto, y el lector convierte solo los campos que usa ese tipo de evento. Un formato distinto en un campo que no se usa no descarta el mensaje, y si hay que descartarlo, el log conserva el `eventId`. Descartadas: tipos en el DTO, que pierde el mensaje entero, y un DTO por evento.
 - **Sin prueba contra el Kafka real (SPEC de T08):** la cátedra no publica en el topic de acciones y T06 todavía no existe. Se revisa al hacer T06.
+
+### 3.15 Cuando una publicación no termina (SPEC de T06, D1 a D3)
+
+T06 guarda `PHONE_SUBMITTED` antes de publicar (D2 y D5 de T08), así que puede quedar guardado sin que el teléfono haya salido. En las dos primeras situaciones se eligió lo más simple, porque lo que se pierde no es grave:
+
+- **El servicio se cae entre guardar y publicar (D1):** T06 no agrega nada. El proceso queda en `PHONE_SUBMITTED` y el usuario no puede reenviar. Lo resuelve T13 como cualquier `PHONE_SUBMITTED`: en su ejecución de arranque lo consulta y lo cierra como `EXPIRED` cuando la cátedra lo da por vencido. Una caída es poco común y no justifica otra escritura en cada envío. Limitación aceptada: el usuario pierde el turno, y hasta que exista T13 ese proceso queda abierto y no puede bloquear otro. Descartadas: encender `needsReconciliation` al guardar y devolverla tras el acuse de Kafka, para que T13 lo devuelva a `WAITING_FOR_PHONE` (una escritura más en cada envío), y guardar el mensaje pendiente para reenviarlo al arrancar (columnas y una pieza de arranque, y confía en que la cátedra descarte repetidos por `eventId`, sin verificar).
+- **Kafka no responde y se agotan los reintentos (D2):** el proceso vuelve a `WAITING_FOR_PHONE`, queda marcado para reconciliar y T06 responde `503`; el usuario puede reintentar. No se restaura nada: un motivo de rechazo anterior no vuelve a verse, y el teléfono guardado queda el del intento fallido. Descartadas: restaurar el motivo y el teléfono anteriores (más lógica para algo poco grave) y quedarse en `PHONE_SUBMITTED` marcado aceptando un reenvío (la app mostraría "Confirmando teléfono" aunque nada salió).
+- **La base falla (D3):** después de publicar no se escribe nada, así que el caso original de T06 ("se publicó y no se pudo guardar") ya no existe. Si falla el guardado inicial, no se publicó nada: `500` `INTERNAL_ERROR`. Si Kafka falló y tampoco se puede volver atrás, el proceso queda en `PHONE_SUBMITTED` sin marca, igual que tras una caída: `500` `LOCAL_STATE_OUT_OF_SYNC` y un error grave en el log. Es el código que T05 y T11 usan cuando el estado local no refleja lo que pasó, con el mismo sentido. Descartado: `INTERNAL_ERROR` en los dos, que no distingue "no pasó nada" de "el estado quedó mal", aunque la app los trate igual (A08 5.8).
+
+**Un timeout no prueba que el mensaje no haya llegado.** Si llegó, y el proceso volvió a `WAITING_FOR_PHONE`: una confirmación se aplica, porque vale desde cualquier estado abierto, y un rechazo se ignora (D2 de T08), así que el usuario no ve el motivo, pero puede reenviar.
+
+### 3.16 Sin sesión y credenciales rechazadas al publicar (SPEC de T06, D5 y D6)
+
+- **Sin sesión técnica o con error de configuración (D5):** sin sesión no se conocen el topic ni el `groupId`, así que no se puede publicar. Se comprueba antes de guardar, con un intento de login si no hay sesión: el proceso no cambia y no se marca, porque es seguro que nada salió. Responde siempre `503` `CENTRAL_UNAVAILABLE`, también ante un error de configuración, a diferencia de T03, T04, T05 y T11, que responden `SERVICE_DEGRADED`; el motivo queda en el log. Motivo: la app trata igual todo `503` (A08 5.8). Descartado: separar los dos casos, que suma una fila al contrato y una rama al controller.
+- **Credenciales rechazadas (D6):** se tratan como Kafka no disponible (3.15), sin reintentar, porque repetir no lo arregla, y con el motivo en el log. No se hace un login técnico: hoy no puede ocurrir (3.1), ese código no se ejecutaría nunca y solo se podría probar con un doble. Limitación aceptada: si la cátedra empezara a pedir credenciales o las cambiara, T06 fallaría hasta reiniciar o hasta que otro login renueve la sesión; ahí se revisa. Descartado: el login técnico y un reintento, como decía T06 antes de este cambio. El anexo no lo exige.
+
+### 3.17 Sin prueba del productor contra el Kafka real (SPEC de T06, D8)
+
+Mientras la cátedra no publique el pedido, T06 no tiene `requestEventId` y no llega a publicar en el recorrido real. Lo publicado se comprueba en un Kafka en contenedor contra el anexo §15.5, y el E2E suma el paso de informar el teléfono, bloqueado como el de T07. Descartado: un programa de una sola vez que publique en el topic real con un `requestEventId` inventado, porque no se sabe qué hace la cátedra con ese mensaje y sería probar a la cátedra (decisión 010). Se puede sumar después como una tarea.
+
+### 3.18 Cómo se publica (PLAN de T06, P2 y P3)
+
+- **Cliente (P2):** `KafkaProducer` de `kafka-clients`, sin `KafkaTemplate`. spring-kafka se eligió para el consumo porque resuelve lo más delicado (3.8), y publicar no tiene esa dificultad. Los tests prueban rechazos y reintentos con `MockProducer`.
+- **Intentos (P2):** un bucle propio en `infrastructure/kafka`, porque el anexo §18.4 pide reintentos observables: cada intento fallido queda en el log. Solo se reintentan las `RetriableException`; el resto, como un rechazo de credenciales, corta enseguida. Descartado: dejar los reintentos solo al cliente, que no permite verlos ni contarlos. No se usa `CatedraOperationRunner`: entrega un JWT, que Kafka no necesita, y no entrega la integración.
+- **Tiempos (D4 de la SPEC):** `max.block.ms`, `request.timeout.ms` y `delivery.timeout.ms` iguales a `attempt-timeout`, y `linger.ms=0`, porque por defecto el cliente puede bloquear hasta 60 s. Un intento no empieza si no entra en el tope. Se configura bajo `turnos.catedra.kafka.publish`:
+
+  | Propiedad | Variable | Por defecto |
+  | --- | --- | --- |
+  | Tope para responderle al usuario | `TURNOS_CATEDRA_KAFKA_PUBLISH_TIMEOUT` | 10 s |
+  | Duración de un intento | `TURNOS_CATEDRA_KAFKA_PUBLISH_ATTEMPT_TIMEOUT` | 2,5 s |
+  | Intentos | `TURNOS_CATEDRA_KAFKA_PUBLISH_MAX_ATTEMPTS` | 3 |
+  | Espera inicial y multiplicador | `TURNOS_CATEDRA_KAFKA_PUBLISH_INITIAL_DELAY`, `…_MULTIPLIER` | 500 ms, 2 |
+
+- **Confirmación de escritura:** `acks=all`; la idempotencia queda en su valor por defecto. Si un intento vence, el mensaje puede haber salido y se reenvía con el mismo `eventId`: el anexo §15.1 lo prevé, pero que la cátedra descarte repetidos no está verificado.
+- **Conexión (P3):** el productor se crea en el primer envío, porque la dirección llega con el login, y la conserva hasta reiniciar, como el consumo (3.5). El topic y el `groupId` salen de la sesión vigente en cada envío. Descartado: crear otro productor si cambia la dirección, que publicaría en el Kafka nuevo mientras el consumo sigue en el viejo: el resultado no llegaría nunca y el proceso quedaría trabado en `PHONE_SUBMITTED`.
+- **`turnos.catedra.kafka.enabled`** solo apaga el consumo. Sin consumo no hay `requestEventId`, así que tampoco se llega a publicar.
 
 ## 4. Verificado y por verificar contra el Kafka real
 
@@ -166,15 +203,18 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - **El servicio consume del Kafka real** (E2E de T07, 2026-10-31): con el consumer group de tests, se conectó, recibió la asignación del topic de acciones y se posicionó desde el principio. El consumer group del servicio siguió sin posiciones después de la corrida. El pedido de teléfono no llegó porque la cátedra no publica, así que el E2E falla en ese paso (CA-14 de T07, bloqueado).
 - **La cátedra no publica en el topic de acciones:** estaba vacío desde siempre (posiciones 0 → 0), aunque se confirmaron holds el 2026-10-28, el 2026-10-29 y el 2026-10-30 (después de la confirmación de las 02:00 y después de su vencimiento de las 02:10, siguió vacío). Contradice el anexo §10 y §15.4. Le pasa también a otros alumnos: un compañero ya se lo consultó al profesor. Hipótesis sin comprobar: hay un topic `kafkaProducer-out-0`, que es el nombre por defecto de una salida de Spring Cloud Stream sin destino configurado.
 
+**Verificado solo con Kafka en contenedor (2026-11-02, T06):** con el contenedor congelado, los tres intentos y el `503` entran en el tope de 10 s; un intento vencido puede llegar cuando Kafka vuelve, así que el caso de 3.15 ocurre de verdad. No se probó contra el Kafka de la cátedra (3.17).
+
 **Por verificar:**
 
 - Cuánto conserva Kafka las posiciones de un consumer group inactivo.
+- Que el topic de teléfono exista (solo se conoce su nombre, por el login), que acepte lo que publica turnos y que la cátedra lo consuma (3.17).
 - El formato real de los mensajes frente al anexo §15, cuando la cátedra publique. Mientras tanto, los tests usan mensajes armados desde el contrato y el anexo.
 - Si `catalog_service` usará el mismo consumer group sugerido sobre su topic: dos servicios en un mismo grupo provocan reacomodos entre ellos aunque cada uno lea su topic. Se revisa al hacer catálogo.
 
 ## 5. Por definir en los PLAN
 
-- T06: configuración del productor (confirmación de escritura, reintentos y tiempos) y el caso de credenciales rechazadas al publicar. Además, T06 guarda `PHONE_SUBMITTED` antes de publicar (D5 de T08): falta definir qué pasa si el servicio se cae entre guardar y publicar.
+Nada pendiente: lo de T06 quedó en 3.15 a 3.18.
 
 ## Historial
 
@@ -186,3 +226,6 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - 2026-11-02: decisiones de la SPEC y del PLAN de T08 (3.14).
 - 2026-11-02: corregido que una falla de la base al leer descartara el mensaje (3.3).
 - 2026-11-02: T08 implementada (3.14). Comprobado contra Postgres: sin las protecciones de 3.14, un valor largo o con el carácter nulo frena el consumo. La cátedra sigue sin publicar, así que el formato real de los eventos sigue sin verificar.
+- 2026-11-02: SPEC de T06: qué pasa cuando una publicación no termina (3.15), publicación dentro del candado (3.13), sin sesión y credenciales rechazadas (3.16), sin prueba real del productor (3.17).
+- 2026-11-02: PLAN de T06: cómo se publica (3.18).
+- 2026-11-02: T06 implementada: comprobado con Kafka en contenedor (sección 4). El E2E sumó el paso de publicar, pero no se corrió: la cátedra sigue sin publicar el pedido.

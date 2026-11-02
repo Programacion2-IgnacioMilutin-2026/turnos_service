@@ -365,7 +365,6 @@ class ReservationResultKafkaIntegrationTest {
                 .doesNotContain("could not be saved after");
     }
 
-    // El teléfono se deja enviado escribiendo en la base: todavía no existe la operación que lo envía
     @Test
     void aUserWhoBlocksAndConfirmsASlotEndsUpWithAReservationAndCanBlockAnother(CapturedOutput output) {
         CATALOG.respondToAnyPath(FakeHttpServer.Response.of(200, PROFESSIONAL));
@@ -376,7 +375,10 @@ class ReservationResultKafkaIntegrationTest {
         String requestEvent = newEventId();
         ACTIONS.publish(PROCESS, phoneRequest(requestEvent));
         await().atMost(Duration.ofSeconds(30)).until(() -> requestEvent.equals(stored(PROCESS).get("request_event_id")));
-        jdbcTemplate.update("UPDATE reservation_processes SET status = 'PHONE_SUBMITTED'");
+        restTestClient.post().uri("/api/reservation-processes/{id}/phone", PROCESS)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"phoneNumber\":\"+54 9 261 555-1234\"}").exchange().expectStatus().isOk();
+        assertThat(stored(PROCESS)).containsEntry("status", "PHONE_SUBMITTED");
         String confirmation = newEventId();
         ObjectNode confirmed = node(result("appointment-confirmed.json", confirmation, PROCESS, HOLD));
         confirmed.put("professionalId", 201);

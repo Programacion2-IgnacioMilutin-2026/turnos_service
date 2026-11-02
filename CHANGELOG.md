@@ -127,7 +127,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Caso de uso de slice 'Reservation' para manejar el resultado de una reserva y sus distintos estados.}
 - En slice 'Catedra', arhcivos para manejar los resultados de una reserva.
 - Listener de kafka en slice 'Catedra' para obtener los resultados.
-- Tests para los archivos agregados. 
+- Tests para los archivos agregados en el caso de uso T08.
+- Documentacion de SDD para el caso de uso T06-InformarTelefono.
+- En slice 'Reservation', validacion del numero de telefono y transiciones en la subida de este.
+- Publisher de kafka para sunir el numerro de telefono.
+- Caso de uso para publicar el numero de telefono y su gateway para comunicarse con catedra. Dentro de slice 'Reservation'.
+- Endpoint en slice 'Reservation' para la publicacion del numero de telefono.
+- Tests para los archivos agregados en el caso de uso T06. El test E2E al momento no funciona correctamente hasta que el servicio de catedra este arreglado
 ### Changed
 - Actualizado el nombre de algunas clases para que estan mas acorde a lo que hacen, ya que se les añaden funcionalidades en T08.
 - Ahora tambien vuelve a intentar cuando falla al leer la base, antes solo cuando escribia.
+- Documentacion actualizada debido a decisiones tomadas.

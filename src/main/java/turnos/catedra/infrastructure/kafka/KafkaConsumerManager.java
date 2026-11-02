@@ -3,9 +3,7 @@ package turnos.catedra.infrastructure.kafka;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
@@ -110,23 +108,8 @@ public class KafkaConsumerManager implements TechnicalIntegrationListener {
         configuration.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
         configuration.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configuration.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        String protocol = catedraKafkaProperties.securityProtocol();
-        configuration.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, protocol);
-        // Si el servidor pide credenciales, son las de la cuenta técnica. El cliente de Kafka no las muestra en el log
-        if (protocol.startsWith("SASL")) {
-            String mechanism = catedraKafkaProperties.saslMechanism();
-            configuration.put(SaslConfigs.SASL_MECHANISM, mechanism);
-            configuration.put(SaslConfigs.SASL_JAAS_CONFIG, jaasConfiguration(mechanism));
-        }
+        configuration.putAll(catedraKafkaProperties.securityConfiguration(catedraProperties.username(), catedraProperties.password()));
         return configuration;
-    }
-
-    private String jaasConfiguration(String mechanism) {
-        String module = mechanism.equals("PLAIN")
-                ? "org.apache.kafka.common.security.plain.PlainLoginModule"
-                : "org.apache.kafka.common.security.scram.ScramLoginModule";
-        return module + " required username=\"" + escape(catedraProperties.username())
-                + "\" password=\"" + escape(catedraProperties.password()) + "\";";
     }
 
     // Una falla de la base se reintenta sin fin, con la pausa entre rondas: el mensaje no se pierde y los siguientes
@@ -178,9 +161,4 @@ public class KafkaConsumerManager implements TechnicalIntegrationListener {
             root = root.getCause();
         }
         return root.getClass().getSimpleName() + ": " + root.getMessage();
-    }
-
-    private static String escape(String value) {
-        return value == null ? "" : value.replace("\\", "\\\\").replace("\"", "\\\"");
-    }
-}
+    }}

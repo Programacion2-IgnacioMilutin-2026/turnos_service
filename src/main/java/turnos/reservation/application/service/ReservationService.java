@@ -10,6 +10,7 @@ import turnos.reservation.domain.ports.in.ConfirmReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.CreateReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.ProcessPhoneRequestUseCase;
 import turnos.reservation.domain.ports.in.ProcessReservationResultUseCase;
+import turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
 
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -22,6 +23,7 @@ public class ReservationService {
     private final ConfirmReservationProcessUseCase confirmReservationProcessUseCase;
     private final ProcessPhoneRequestUseCase processPhoneRequestUseCase;
     private final ProcessReservationResultUseCase processReservationResultUseCase;
+    private final SubmitPhoneUseCase submitPhoneUseCase;
 
     public ReservationProcess createReservationProcess(Long userId, Long professionalId, LocalDate date,
                                                        LocalTime startTime, String userToken) {
@@ -30,6 +32,10 @@ public class ReservationService {
 
     public ReservationProcess confirmReservationProcess(Long userId, String reservationProcessId) {
         return confirmReservationProcessUseCase.confirmReservationProcess(userId, reservationProcessId);
+    }
+
+    public ReservationProcess submitPhone(Long userId, String reservationProcessId, String phoneNumber) {
+        return submitPhoneUseCase.submitPhone(userId, reservationProcessId, phoneNumber);
     }
 
     public ReservationEventOutcome processPhoneRequest(ReservationPhoneRequest request) {

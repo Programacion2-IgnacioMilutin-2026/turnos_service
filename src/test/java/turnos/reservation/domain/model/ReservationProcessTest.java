@@ -20,6 +20,7 @@ class ReservationProcessTest {
     private static final Instant EXPIRES_AT = Instant.parse("2026-10-27T12:10:00Z");
     private static final Duration MARGIN = Duration.ofSeconds(30);
     private static final Instant OCCURRED_AT = Instant.parse("2026-10-27T12:01:00Z");
+    private static final ReservationPhoneNumber PHONE = ReservationPhoneNumber.parse("+5492615551234").orElseThrow();
 
     @ParameterizedTest
     @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE", "PHONE_SUBMITTED"})
@@ -420,6 +421,68 @@ class ReservationProcessTest {
 
         assertThat(rejected.getRejectionReason()).isEqualTo("INVALID_PHONE");
         assertThat(cancelled.getCancellationReason()).isEqualTo("Cambio de turno");
+    }
+
+    @Test
+    void aProcessWaitingForThePhoneReceivesItAndLosesThePreviousRejection() {
+        ReservationProcess process = rejected();
+        process.setPhoneNumber("+5492610000000");
+
+        assertThat(process.canSubmitPhone()).isTrue();
+        process.submitPhone(PHONE);
+
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.PHONE_SUBMITTED);
+        assertThat(process.getPhoneNumber()).isEqualTo("+5492615551234");
+        assertThat(process.getRejectionReason()).isNull();
+        assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT);
+    }
+
+    @Test
+    void receivingThePhoneKeepsThePhoneRequestAndTheMark() {
+        ReservationProcess process = process(ReservationStatus.WAITING_FOR_PHONE);
+        process.setRequestEventId("request-event-1");
+        process.markForReconciliation();
+
+        process.submitPhone(PHONE);
+
+        assertThat(process.getRequestEventId()).isEqualTo("request-event-1");
+        assertThat(process.isNeedsReconciliation()).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, mode = EnumSource.Mode.EXCLUDE, names = "WAITING_FOR_PHONE")
+    void onlyAProcessWaitingForThePhoneCanReceiveIt(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        assertThat(process.canSubmitPhone()).isFalse();
+        assertThatThrownBy(() -> process.submitPhone(PHONE)).isInstanceOf(IllegalStateException.class);
+        assertThat(process.getStatus()).isEqualTo(status);
+        assertThat(process.getPhoneNumber()).isNull();
+    }
+
+    @Test
+    void aPhoneThatCouldNotBePublishedLeavesTheProcessWaitingAndMarkedWithoutRestoringAnything() {
+        ReservationProcess process = rejected();
+        process.setPhoneNumber("+5492610000000");
+        process.submitPhone(PHONE);
+
+        process.revertPhoneSubmission();
+
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
+        assertThat(process.isNeedsReconciliation()).isTrue();
+        assertThat(process.getRejectionReason()).isNull();
+        assertThat(process.getPhoneNumber()).isEqualTo("+5492615551234");
+        assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, mode = EnumSource.Mode.EXCLUDE, names = "PHONE_SUBMITTED")
+    void onlyAProcessWithThePhoneSubmittedCanGoBackToWaitingForIt(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        assertThatThrownBy(process::revertPhoneSubmission).isInstanceOf(IllegalStateException.class);
+        assertThat(process.getStatus()).isEqualTo(status);
+        assertThat(process.isNeedsReconciliation()).isFalse();
     }
 
     private static Stream<Consumer<ReservationProcess>> exitsFromWaitingForThePhone() {

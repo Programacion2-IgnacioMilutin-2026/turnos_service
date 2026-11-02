@@ -30,6 +30,7 @@ class ReservationProcessMapperTest {
                 .expiresAt(Instant.parse("2026-10-27T04:44:38Z"))
                 .needsReconciliation(true)
                 .requestEventId("request-event-1")
+                .phoneNumber("+5492615551234")
                 .reservationId(8251L)
                 .confirmedAt(Instant.parse("2026-10-27T04:36:01Z"))
                 .cancelledAt(Instant.parse("2026-10-28T15:10:00Z"))

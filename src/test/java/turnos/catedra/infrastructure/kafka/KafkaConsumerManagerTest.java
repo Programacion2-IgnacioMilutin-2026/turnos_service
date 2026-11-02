@@ -198,7 +198,7 @@ class KafkaConsumerManagerTest {
     // Esperas cortas para que el test sea rápido; las reglas son las de la configuración real
     private static CatedraKafkaProperties properties(boolean enabled, String consumerGroup, String protocol) {
         return new CatedraKafkaProperties(enabled, protocol, "PLAIN", consumerGroup,
-                new CatedraKafkaProperties.Retry(Duration.ofMillis(10), 2, 2, Duration.ofMillis(200)));
+                new CatedraKafkaProperties.Retry(Duration.ofMillis(10), 2, 2, Duration.ofMillis(200)), null);
     }
 
     private TechnicalIntegration integration(String actionsTopic) {

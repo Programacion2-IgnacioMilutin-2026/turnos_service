@@ -51,6 +51,7 @@ import static org.awaitility.Awaitility.await;
 @ExtendWith(OutputCaptureExtension.class)
 class ReservationProcessE2ETest {
 
+    private static final String TEST_PHONE = "+5492610000000";
     private static final FakeHttpServer CATALOG = FakeHttpServer.start();
     // El profesional de referencia de la cátedra: lunes de 12:00 a 15:00 cada 30 minutos
     private static final String PROFESSIONAL = """
@@ -137,6 +138,17 @@ class ReservationProcessE2ETest {
             await().alias("the Catedra publishes the phone request of " + reservationProcessId + " and it is saved")
                     .atMost(Duration.ofSeconds(30)).until(() -> requestEventId() != null);
             System.out.println("E2E phone request " + requestEventId() + " saved for " + reservationProcessId);
+
+            // Se publica en el topic propio de esta cuenta. No se espera el resultado: lo que se prueba es turnos, y el
+            // teléfono es de mentira
+            String submitted = restTestClient.post().uri("/api/reservation-processes/{id}/phone", reservationProcessId)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).contentType(MediaType.APPLICATION_JSON)
+                    .body("{\"phoneNumber\":\"" + TEST_PHONE + "\"}")
+                    .exchange().expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+            assertThat(JsonPath.<String>read(submitted, "$.status")).isEqualTo("PHONE_SUBMITTED");
+            assertThat(submitted).doesNotContain(TEST_PHONE);
+            assertThat(output.getAll()).doesNotContain(TEST_PHONE);
+            System.out.println("E2E phone of " + reservationProcessId + " published");
         }
         assertThat(output.getAll()).doesNotContain(userToken).doesNotContain(technicalSessionRepository.get().token());
     }

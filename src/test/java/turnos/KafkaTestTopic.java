@@ -2,14 +2,22 @@ package turnos;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -23,6 +31,15 @@ public record KafkaTestTopic(String topic, String consumerGroup) {
         return new KafkaTestTopic("alumnos.turnos.acciones." + suffix, "alumnos-" + suffix);
     }
 
+    // Para poder consultarlo antes de que alguien publique en él
+    public void create() {
+        try (Admin admin = admin()) {
+            admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     public void publish(String key, String value) {
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(Map.of(
                 ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaTestContainer.bootstrapServers(),
@@ -31,6 +48,24 @@ public record KafkaTestTopic(String topic, String consumerGroup) {
             producer.send(new ProducerRecord<>(topic, key, value)).get(10, TimeUnit.SECONDS);
         } catch (Exception e) {
             throw new IllegalStateException(e);
+        }
+    }
+
+    // Todos los mensajes del topic, sin consumer group: leerlos no mueve ningún señalador
+    public List<ConsumerRecord<String, String>> messages() {
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(Map.of(
+                ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, KafkaTestContainer.bootstrapServers(),
+                ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class,
+                ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class))) {
+            consumer.assign(List.of(partition()));
+            consumer.seekToBeginning(List.of(partition()));
+            long end = endOffset();
+            List<ConsumerRecord<String, String>> messages = new ArrayList<>();
+            long giveUpAt = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+            while (messages.size() < end && System.nanoTime() < giveUpAt) {
+                consumer.poll(Duration.ofMillis(200)).forEach(messages::add);
+            }
+            return messages;
         }
     }
 

@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Import;
 import turnos.TestcontainersConfiguration;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.application.exception.ReservationOpenProcessConflictException;
+import turnos.reservation.domain.model.ReservationPhoneNumber;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
@@ -220,6 +221,31 @@ class JpaReservationProcessRepositoryAdapterTest {
         entityManager.clear();
 
         assertThat(repository.findById("process-1").orElseThrow()).usingRecursiveComparison().isEqualTo(process);
+    }
+
+    @Test
+    void theLongestValidPhoneIsSavedAndReadBack() {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess process = repository.create(held("process-1", userId));
+        process.setStatus(ReservationStatus.WAITING_FOR_PHONE);
+        process.submitPhone(ReservationPhoneNumber.parse("+123456789012345").orElseThrow());
+
+        repository.update("process-1", process);
+        entityManager.clear();
+
+        ReservationProcess saved = repository.findById("process-1").orElseThrow();
+        assertThat(saved.getPhoneNumber()).isEqualTo("+123456789012345");
+        assertThat(saved.getStatus()).isEqualTo(ReservationStatus.PHONE_SUBMITTED);
+    }
+
+    @Test
+    void aProcessThatNeverReceivedAPhoneHasNone() {
+        Long userId = newUser("maria.gomez");
+        repository.create(held("process-1", userId));
+        entityManager.flush();
+        entityManager.clear();
+
+        assertThat(repository.findById("process-1").orElseThrow().getPhoneNumber()).isNull();
     }
 
     @ParameterizedTest
