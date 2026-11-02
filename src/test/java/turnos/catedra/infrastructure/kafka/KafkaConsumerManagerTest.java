@@ -184,7 +184,8 @@ class KafkaConsumerManagerTest {
 
     private KafkaConsumerManager manager(CatedraKafkaProperties properties, ReceiveAdditionalInformationRequestUseCase useCase) {
         AppointmentActionListener listener = new AppointmentActionListener(new AppointmentActionReader(JSON),
-                new CatedraEventService(useCase));
+                new CatedraEventService(useCase, result -> {
+                }));
         return new KafkaConsumerManager(properties, CATEDRA,
                 new StaticListableBeanFactory(Map.of("appointmentActionListener", listener))
                         .getBeanProvider(AppointmentActionListener.class));

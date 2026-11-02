@@ -3,7 +3,9 @@ package turnos.catedra.application.usecases;
 import org.junit.jupiter.api.Test;
 import turnos.catedra.application.exception.CatedraEventNotSavedException;
 import turnos.catedra.domain.model.AdditionalInformationRequest;
+import turnos.catedra.domain.model.AppointmentResult;
 import turnos.catedra.domain.model.CatedraEventResult;
+import turnos.catedra.domain.ports.out.CatedraEventHandler;
 
 import java.time.Instant;
 import java.util.List;
@@ -44,9 +46,17 @@ class ReceiveAdditionalInformationRequestUseCaseImplTest {
     }
 
     private ReceiveAdditionalInformationRequestUseCaseImpl useCase(CatedraEventResult result) {
-        return new ReceiveAdditionalInformationRequestUseCaseImpl(request -> {
-            handled.add(request);
-            return result;
+        return new ReceiveAdditionalInformationRequestUseCaseImpl(new CatedraEventHandler() {
+            @Override
+            public CatedraEventResult handleAdditionalInformationRequest(AdditionalInformationRequest request) {
+                handled.add(request);
+                return result;
+            }
+
+            @Override
+            public CatedraEventResult handleAppointmentResult(AppointmentResult appointmentResult) {
+                throw new AssertionError("A phone request does not go through the results");
+            }
         });
     }
 }

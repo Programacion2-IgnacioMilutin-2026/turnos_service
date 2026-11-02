@@ -53,7 +53,8 @@ class AppointmentActionListenerTest {
 
     private static AppointmentActionListener listener(Consumer<AdditionalInformationRequest> application) {
         return new AppointmentActionListener(new AppointmentActionReader(JsonMapper.builder().build()),
-                new CatedraEventService(application::accept));
+                new CatedraEventService(application::accept, result -> {
+                }));
     }
 
     private static ConsumerRecord<String, String> message(String value) {

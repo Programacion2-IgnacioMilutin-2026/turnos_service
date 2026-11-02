@@ -49,19 +49,19 @@ Tandas propuestas, para que la suite quede en verde al cerrar cada una: TASK-01;
   - Validación: `CatedraEventReadFailureTest` con las dos formas de falla; `DatabaseDownKafkaIntegrationTest` con Postgres pausado de verdad y dos pedidos publicados: el mensaje no se descarta, el offset no se confirma y, al volver la base, los dos se procesan; negativo sin la traducción; `./mvnw clean test`.
   - Resultado: 2026-11-02. Las dos lecturas traducen `DataAccessException` y `TransactionException` a `ReservationNotSavedException`. `CatedraEventReadFailureTest` en verde. `DatabaseDownKafkaIntegrationTest`, con el contenedor de Postgres pausado: log `could not be saved after 2 attempts, trying again`, nunca `discarded after`, offset sin confirmar (`-1`); al reanudar, los dos pedidos quedan guardados en la base y el offset llega al final. Negativo: sin la traducción en `findById` (hash restaurado), `DatabaseDownKafkaIntegrationTest` no ve el reintento y el log vuelve a decir `discarded after`, y `CatedraEventReadFailureTest` también falla. `./mvnw clean test`: 799 tests, 0 fallos, 0 errores, 0 salteados. Probado con el pedido de teléfono: los resultados de T08 todavía no llegan por Kafka, pero usan las mismas lecturas; se comprueba de punta a punta en TASK-09. Sin commitear.
 
-- [ ] **TASK-06 · Modelo de `catedra`, puerto y gateway**
+- [x] **TASK-06 · Modelo de `catedra`, puerto y gateway**
   - Alcance: `AppointmentResult` (tipo sellado, P1); `CatedraEventHandler` suma el método de los resultados; `CatedraEventAdapter` lo implementa: convierte a `ReservationResult`, llama a `ReservationService` y traduce el resultado (`ReservationNotSavedException` → `NotSaved`). Ajusta el test de T07 que usa el puerto si dependía de que tuviera un solo método.
   - Depende de: TASK-04
   - Resuelve: RF-01, RF-12 (traducción)
   - Validación: `CatedraEventAdapterTest`: cada variante llega con todos sus campos; aplicado → `Processed`; los demás resultados → `Discarded`; base caída → `NotSaved`; los casos de T07 siguen pasando.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. `AppointmentResult` con las cinco variantes; `CatedraEventHandler` suma `handleAppointmentResult`; `CatedraEventAdapter` lo implementa y comparte con el pedido de teléfono la traducción del resultado. `ReceiveAdditionalInformationRequestUseCaseImplTest` usaba una lambda para el puerto: con dos métodos pasa a una clase anónima, como se preveía en P2; sus casos no cambian. `CatedraEventAdapterTest`: cada variante llega con todos sus campos y como su variante; `Confirmed` sin datos del turno; aplicado da `Processed`; los demás resultados, `Discarded`; base caída, `NotSaved`; otro error llega tal cual. Negativos, cada uno hizo fallar su test y se restauró con hash igual: pierde la fecha; pierde el motivo de la cancelación; un vencimiento llega como otra variante; un resultado ignorado se informa como procesado. Sin commitear.
 
-- [ ] **TASK-07 · Recibir un resultado en `catedra`**
+- [x] **TASK-07 · Recibir un resultado en `catedra`**
   - Alcance: `ReceiveAppointmentResultUseCase` y su implementación; método en `CatedraEventService`.
   - Depende de: TASK-06
   - Resuelve: RF-01, RF-12
   - Validación: `ReceiveAppointmentResultUseCaseImplTest`: `Processed` y `Discarded` terminan sin error; `NotSaved` lanza `CatedraEventNotSavedException`; `./mvnw test`.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. `ReceiveAppointmentResultUseCase` y su implementación; `CatedraEventService` suma `receiveAppointmentResult`. `ReceiveAppointmentResultUseCaseImplTest`: el resultado llega tal cual; `Processed` y `Discarded` terminan sin error; `NotSaved` lanza `CatedraEventNotSavedException`. Negativo: sin ese chequeo, falla `aResultThatCouldNotBeSavedHasToBeTriedAgain`; restaurado con hash igual. `./mvnw clean test`: 814 tests, 0 fallos, 0 errores, 0 salteados. El lector todavía descarta los resultados: nadie llama a este camino hasta TASK-08. Sin commitear.
 
 - [ ] **TASK-08 · Lector, mensaje y oyente**
   - Alcance: `AppointmentActionMessage` con los campos nuevos y los valores convertibles como texto (P3); `AppointmentActionReader`: tabla de D8, conversión según el tipo, límite de 255 caracteres también en el pedido de teléfono; `AppointmentAction` y `AppointmentActionListener` suman el resultado. Comprueba si Jackson 3 acepta un número en un campo de texto; si no, usa `JsonNode` en esos dos campos y lo anota acá. Deja de descartar los cinco eventos.
