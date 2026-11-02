@@ -123,5 +123,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## 2026-11-02
 ### Added
 - Documentacion de SDD para el caso de uso T08-ResultadoReserva.
+- Nuevos estados a 'Reservation' y los metodos que cambian estados, implementados con la alogica de cuando se deberian cambiar.
 ### Changed
 - Actualizado el nombre de algunas clases para que estan mas acorde a lo que hacen, ya que se les añaden funcionalidades en T08.

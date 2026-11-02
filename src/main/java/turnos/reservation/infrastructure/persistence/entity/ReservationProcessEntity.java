@@ -35,6 +35,11 @@ public class ReservationProcessEntity implements Persistable<String> {
     private Instant expiresAt;
     private boolean needsReconciliation;
     private String requestEventId;
+    private Long reservationId;
+    private Instant confirmedAt;
+    private Instant cancelledAt;
+    private String cancellationReason;
+    private String rejectionReason;
 
     @Transient
     @Builder.Default

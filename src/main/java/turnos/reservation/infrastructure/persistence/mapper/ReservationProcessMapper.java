@@ -25,6 +25,11 @@ public class ReservationProcessMapper {
                 .expiresAt(reservationProcess.getExpiresAt())
                 .needsReconciliation(reservationProcess.isNeedsReconciliation())
                 .requestEventId(reservationProcess.getRequestEventId())
+                .reservationId(reservationProcess.getReservationId())
+                .confirmedAt(reservationProcess.getConfirmedAt())
+                .cancelledAt(reservationProcess.getCancelledAt())
+                .cancellationReason(reservationProcess.getCancellationReason())
+                .rejectionReason(reservationProcess.getRejectionReason())
                 .build();
     }
 
@@ -46,6 +51,11 @@ public class ReservationProcessMapper {
                 .expiresAt(entity.getExpiresAt())
                 .needsReconciliation(entity.isNeedsReconciliation())
                 .requestEventId(entity.getRequestEventId())
+                .reservationId(entity.getReservationId())
+                .confirmedAt(entity.getConfirmedAt())
+                .cancelledAt(entity.getCancelledAt())
+                .cancellationReason(entity.getCancellationReason())
+                .rejectionReason(entity.getRejectionReason())
                 .build();
     }
 }
