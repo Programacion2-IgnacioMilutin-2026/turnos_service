@@ -5,33 +5,33 @@
 
 Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04; 05+06+07; 08; 09+10; 11; 12.
 
-- [ ] **TASK-01 · Validar y normalizar el teléfono**
+- [x] **TASK-01 · Validar y normalizar el teléfono**
   - Alcance: `reservation/domain/model/ReservationPhoneNumber` y su test. Quita solo espacios, guiones, paréntesis y puntos, y exige el formato con coincidencia completa. Su `toString` no muestra el número. No toca el proceso ni la web.
   - Depende de: ninguna
   - Resuelve: CA-06 (tabla de formatos), RF-05, RF-13
   - Validación: `./mvnw test -Dtest=ReservationPhoneNumberTest`, con vacío, solo espacios, 6, 7, 15 y 16 dígitos, letras, `+` fuera del principio, tabulador, salto de línea final y cada carácter permitido. Prueba en negativo: buscar con coincidencia parcial en lugar de completa y ver fallar el caso del salto de línea.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. `ReservationPhoneNumberTest`: 24 tests en verde (7 válidos normalizados, 16 inválidos incluido `null`, y `toString` sin el número). Pruebas en negativo: con búsqueda parcial en lugar de coincidencia completa falla solo el caso del salto de línea final; quitando cualquier espacio en blanco fallan dos casos; en los dos se restauró el archivo y se comprobó el hash. Se implementó como `record`, una excepción a la skill que el usuario aprobó después de hecha.
 
-- [ ] **TASK-02 · Teléfono y transiciones en el proceso**
+- [x] **TASK-02 · Teléfono y transiciones en el proceso**
   - Alcance: `ReservationProcess` (`phoneNumber`, `canSubmitPhone`, `submitPhone`, `revertPhoneSubmission`), `ReservationProcessEntity`, `ReservationProcessMapper` y `V6__add_reservation_process_phone_number.sql`, con sus tests. No toca casos de uso.
   - Depende de: TASK-01
   - Resuelve: RF-02, RF-06, RF-09 (transiciones); base de CA-01 y CA-08
   - Validación: `./mvnw test -Dtest='ReservationProcessTest,ReservationProcessMapperTest'` más el test del adaptador contra Postgres: la columna guarda 16 caracteres y sobrevive a una ida y vuelta; `submitPhone` borra el motivo; `revertPhoneSubmission` enciende la marca y no restaura nada; cada transición rechaza los demás estados.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. `ReservationProcessTest` (103), `ReservationProcessMapperTest` (3) y `JpaReservationProcessRepositoryAdapterTest` (22, contra Postgres de Testcontainers, con `V6` aplicada) en verde. Un teléfono de 16 caracteres sobrevive a guardar y leer; un proceso sin teléfono lo lee vacío. Pruebas en negativo, con restauración y hash comprobado: `submitPhone` sin borrar el motivo falla 2 tests; la vuelta atrás sin marcar, 1; el mapper sin el teléfono, el round-trip; la columna de 15 caracteres, `value too long`. Suite completa con `./mvnw clean test`: la primera corrida falló en `ReservationProcessDtoMapperTest`, porque su fixture exige todos los campos y no tenía `phoneNumber`; se sumó, y el test ahora también comprueba que la respuesta no tiene el teléfono. La segunda corrida terminó con exit 0: 981 tests contando `<testcase>`, 0 fallos, 0 errores, 0 salteados.
 
-- [ ] **TASK-03 · Configuración de la publicación y seguridad compartida**
+- [x] **TASK-03 · Configuración de la publicación y seguridad compartida**
   - Alcance: `CatedraKafkaProperties` (sub-record `Publish` y método con la configuración de seguridad, movido desde `KafkaConsumerManager`), `application.yaml` y `.env.example`. El consumo no cambia de comportamiento.
   - Depende de: ninguna
   - Resuelve: RF-15 (configurable); regresión de CA-19
   - Validación: `./mvnw test -Dtest='KafkaConsumerManagerTest,CatedraKafkaPropertiesTest'`: valores por defecto, variable vacía, `SASL` armado igual y la contraseña fuera del log.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. `CatedraKafkaPropertiesTest` (9) y `KafkaConsumerManagerTest` (8, contra Kafka en contenedor, sin cambios salvo un parámetro nuevo del constructor) en verde: valores por defecto, variable vacía, `SASL` con `PLAIN` y `SCRAM`, escape de la contraseña, peor caso de 9 s dentro del tope de 10 s, y la contraseña fuera del log.
 
-- [ ] **TASK-04 · Publicador de Kafka**
+- [x] **TASK-04 · Publicador de Kafka**
   - Alcance: `AdditionalInformationSubmission`, `AdditionalInformationSubmissionResult`, `AdditionalInformationPublisher`, `KafkaAdditionalInformationPublisher`, `dto/AdditionalInformationSubmittedMessage` y `src/test/resources/catedra/kafka/additional-information-submitted.json`, armado desde el anexo §15.5. No toca `reservation`.
   - Depende de: TASK-03
   - Resuelve: RF-07, RF-09, RF-10, RF-15; CA-09, CA-10; CA-16 (unitario)
   - Validación: `./mvnw test -Dtest=KafkaAdditionalInformationPublisherTest`. Con `MockProducer`: mismo registro en cada intento; `max-attempts`; esperas crecientes; `AuthenticationException` con un solo intento; un intento que no entra en el tope no empieza; ningún log con el teléfono. Con Kafka en contenedor: el mensaje leído coincide con el JSON de ejemplo y su clave es `reservationProcessId`.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. `KafkaAdditionalInformationPublisherTest` (17) en verde. Con un productor simulado: mismo mensaje en cada intento, máximo de intentos, esperas crecientes, credenciales y topic sin autorización con un solo intento, intento fuera del tope que no empieza, interrupción y teléfono fuera del log. Con Kafka en contenedor: el mensaje leído coincide con el JSON de ejemplo y lleva la clave del proceso. Con `localhost:1`, `KafkaProducer` real: `NotPublished` dentro del tope de 3 s. Pruebas en negativo, con restauración y hash comprobado: reintentar todo falla 2 tests; sin el control del tope, 1; registrar el mensaje de un error no previsto, 1; otra clave, 3; sin limitar `max.block.ms`, el test del Kafka inalcanzable falla después de bloquear (71 s en total). Suite completa con `./mvnw clean test`: exit 0, 1004 tests contando `<testcase>`, 0 fallos, 0 errores, 0 salteados. **Sin verificar:** el rechazo real de credenciales (CA-10 se prueba con un doble) y publicar en el Kafka real (D8).
 
 - [ ] **TASK-05 · Casos de uso de `catedra`**
   - Alcance: `CheckTechnicalIntegrationUseCase` y `SubmitAdditionalInformationUseCase`, con sus `Impl` y tests. El `eventId` y `occurredAt` se generan una vez por envío; el topic y el `groupId` salen de la sesión vigente.

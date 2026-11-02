@@ -129,6 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Listener de kafka en slice 'Catedra' para obtener los resultados.
 - Tests para los archivos agregados. 
 - Documentacion de SDD para el caso de uso T06-InformarTelefono.
+- En slice 'Reservation', validacion del  umero de telefono y transiciones en la subida de este.
 ### Changed
 - Actualizado el nombre de algunas clases para que estan mas acorde a lo que hacen, ya que se les añaden funcionalidades en T08.
 - Ahora tambien vuelve a intentar cuando falla al leer la base, antes solo cuando escribia.
