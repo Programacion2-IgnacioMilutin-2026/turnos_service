@@ -33,26 +33,26 @@ Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04; 05+06+07; 08; 
   - Validación: `./mvnw test -Dtest=KafkaAdditionalInformationPublisherTest`. Con `MockProducer`: mismo registro en cada intento; `max-attempts`; esperas crecientes; `AuthenticationException` con un solo intento; un intento que no entra en el tope no empieza; ningún log con el teléfono. Con Kafka en contenedor: el mensaje leído coincide con el JSON de ejemplo y su clave es `reservationProcessId`.
   - Resultado: 2026-11-02. `KafkaAdditionalInformationPublisherTest` (17) en verde. Con un productor simulado: mismo mensaje en cada intento, máximo de intentos, esperas crecientes, credenciales y topic sin autorización con un solo intento, intento fuera del tope que no empieza, interrupción y teléfono fuera del log. Con Kafka en contenedor: el mensaje leído coincide con el JSON de ejemplo y lleva la clave del proceso. Con `localhost:1`, `KafkaProducer` real: `NotPublished` dentro del tope de 3 s. Pruebas en negativo, con restauración y hash comprobado: reintentar todo falla 2 tests; sin el control del tope, 1; registrar el mensaje de un error no previsto, 1; otra clave, 3; sin limitar `max.block.ms`, el test del Kafka inalcanzable falla después de bloquear (71 s en total). Suite completa con `./mvnw clean test`: exit 0, 1004 tests contando `<testcase>`, 0 fallos, 0 errores, 0 salteados. **Sin verificar:** el rechazo real de credenciales (CA-10 se prueba con un doble) y publicar en el Kafka real (D8).
 
-- [ ] **TASK-05 · Casos de uso de `catedra`**
+- [x] **TASK-05 · Casos de uso de `catedra`**
   - Alcance: `CheckTechnicalIntegrationUseCase` y `SubmitAdditionalInformationUseCase`, con sus `Impl` y tests. El `eventId` y `occurredAt` se generan una vez por envío; el topic y el `groupId` salen de la sesión vigente.
   - Depende de: TASK-04
   - Resuelve: RF-07, RF-16; CA-07 (`catedra`)
   - Validación: `./mvnw test -Dtest='CheckTechnicalIntegrationUseCaseImplTest,SubmitAdditionalInformationUseCaseImplTest'`: sesión habilitada, degradada con renovación que funciona y que falla, error de configuración y sesión conectando, con el motivo en el log; dos envíos dan dos `eventId`.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. `CheckTechnicalIntegrationUseCaseImplTest` (5) y `SubmitAdditionalInformationUseCaseImplTest` (5) en verde: sesión habilitada sin login, degradada con renovación que funciona y que falla, conectando y error de configuración, con el motivo en el log; dos envíos dan dos `eventId` con el mismo `requestEventId`; topic y `groupId` de la sesión vigente. Prueba en negativo, con hash comprobado: pedir login con error de configuración falla 1 test.
 
-- [ ] **TASK-06 · Caso de uso T06**
+- [x] **TASK-06 · Caso de uso T06**
   - Alcance: `PhoneSubmitter`, `CatedraPhoneAdapter`, `SubmitPhoneUseCase` e `Impl`, `ReservationInvalidPhoneNumberException` y `ReservationPhoneRequestNotReadyException`, con sus tests. Sin web.
   - Depende de: TASK-02, TASK-05
   - Resuelve: RF-01 a RF-11, RF-14, RF-16; CA-03, CA-04, CA-05, CA-07; CA-06 (no toca el repositorio); CA-08, CA-11 y CA-12 (con dobles)
   - Validación: `./mvnw test -Dtest='SubmitPhoneUseCaseImplTest,CatedraPhoneAdapterTest'`. Pruebas en negativo: publicar antes de guardar, y no volver atrás tras fallar, y ver fallar los tests.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. `SubmitPhoneUseCaseImplTest` y `CatedraPhoneAdapterTest` (3) en verde, con dobles. Comprobado: guardar antes de publicar; formato antes de la base y del candado; cada `409`; sin integración no cambia nada; al fallar la publicación vuelve a `WAITING_FOR_PHONE`, marcado y sin restaurar; falla al guardar sin publicar; falla al volver atrás con error grave. Pruebas en negativo, con hash comprobado: publicar antes de guardar falla 5 tests; no volver atrás, 5; sin comprobar la integración, 1; validar dentro del candado, 1. Dos ajustes respecto del PLAN: la vuelta atrás también cubre un error no previsto al publicar, y el mensaje de `ReservationLocalStateOutOfSyncException` pasó a ser genérico, porque decía que la cátedra había confirmado. **Con dobles:** persistencia y Kafka reales se comprueban en TASK-09 y TASK-10.
 
-- [ ] **TASK-07 · Concurrencia con el candado**
+- [x] **TASK-07 · Concurrencia con el candado**
   - Alcance: tests de `SubmitPhoneUseCaseImpl` con `CopyingReservationProcessRepository` y un publicador demorado, junto con `ProcessReservationResultUseCaseImpl` y el mismo `UserOperationLock`. Si un test muestra un defecto, se corrige en el caso de uso.
   - Depende de: TASK-06
   - Resuelve: RF-12; CA-14 y CA-15 (con dobles)
   - Validación: `./mvnw test -Dtest=SubmitPhoneUseCaseImplTest`: dos envíos del mismo usuario dan un éxito y un `INVALID_PROCESS_STATE`, con un solo mensaje; otro usuario no espera; un resultado durante la espera se aplica después y nada se pisa. Prueba en negativo: publicar fuera del candado y ver fallar CA-15.
-  - Resultado: pendiente
+  - Resultado: 2026-11-02. En `SubmitPhoneUseCaseImplTest` (27 en total, incluidos los de TASK-06), con `CopyingReservationProcessRepository`: dos envíos del mismo usuario dan un éxito y un `INVALID_PROCESS_STATE`, con una sola publicación; otro usuario no espera; un rechazo durante la publicación se aplica después, sin pisar nada; una confirmación durante una publicación que falla queda `CONFIRMED`. Prueba en negativo, con hash comprobado: sin el candado fallan 3 tests. Suite completa con `./mvnw clean test`: exit 0, 1044 tests contando `<testcase>`, 0 fallos, 0 errores, 0 salteados. **Con dobles:** el caso real de CA-14 se comprueba en TASK-09.
 
 - [ ] **TASK-08 · Endpoint y errores**
   - Alcance: `PhoneSubmissionRequest`, `ReservationService.submitPhone` y `ReservationProcessController`, con sus tests. `toResponse` no cambia.
