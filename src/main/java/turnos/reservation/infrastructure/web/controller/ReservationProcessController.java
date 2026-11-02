@@ -20,11 +20,13 @@ import turnos.reservation.application.exception.ReservationException;
 import turnos.reservation.application.exception.ReservationHoldExpiredException;
 import turnos.reservation.application.exception.ReservationHoldNotFoundException;
 import turnos.reservation.application.exception.ReservationHoldNotSavedException;
+import turnos.reservation.application.exception.ReservationInvalidPhoneNumberException;
 import turnos.reservation.application.exception.ReservationInvalidProcessStateException;
 import turnos.reservation.application.exception.ReservationInvalidSlotException;
 import turnos.reservation.application.exception.ReservationLocalStateOutOfSyncException;
 import turnos.reservation.application.exception.ReservationOpenProcessExistsException;
 import turnos.reservation.application.exception.ReservationPatientMismatchException;
+import turnos.reservation.application.exception.ReservationPhoneRequestNotReadyException;
 import turnos.reservation.application.exception.ReservationProcessNotFoundException;
 import turnos.reservation.application.exception.ReservationProfessionalDisabledException;
 import turnos.reservation.application.exception.ReservationProfessionalNotFoundException;
@@ -34,6 +36,7 @@ import turnos.reservation.application.exception.ReservationSlotNotAvailableExcep
 import turnos.reservation.application.exception.ReservationUserNotFoundException;
 import turnos.reservation.application.service.ReservationService;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.infrastructure.web.dto.PhoneSubmissionRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessResponse;
 import turnos.reservation.infrastructure.web.mapper.ReservationProcessDtoMapper;
@@ -140,6 +143,38 @@ public class ReservationProcessController {
         } catch (ReservationLocalStateOutOfSyncException e) {
             throw error(HttpStatus.INTERNAL_SERVER_ERROR, "LOCAL_STATE_OUT_OF_SYNC",
                     "The reservation process was confirmed but its state could not be saved");
+        } catch (ReservationException e) {
+            throw error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
+        }
+    }
+
+    // El teléfono llega tal como lo escribió el usuario; ni él ni el motivo de un error salen en la respuesta
+    @PostMapping("/reservation-processes/{reservationProcessId}/phone")
+    public ResponseEntity<ReservationProcessResponse> submitPhone(@PathVariable String reservationProcessId,
+                                                                  @Valid @RequestBody PhoneSubmissionRequest request,
+                                                                  @AuthenticationPrincipal Jwt jwt) {
+        try {
+            ReservationProcess submitted = reservationService.submitPhone(Long.valueOf(jwt.getSubject()),
+                    reservationProcessId, request.getPhoneNumber());
+            return ResponseEntity.ok(reservationProcessDtoMapper.toResponse(submitted));
+        } catch (ReservationInvalidPhoneNumberException e) {
+            throw error(HttpStatus.BAD_REQUEST, "INVALID_PHONE_NUMBER", "The phone number does not have a valid format");
+        } catch (ReservationProcessNotFoundException e) {
+            throw error(HttpStatus.NOT_FOUND, "RESERVATION_PROCESS_NOT_FOUND", "Reservation process not found");
+        } catch (ReservationInvalidProcessStateException e) {
+            ErrorResponseException exception = error(HttpStatus.CONFLICT, "INVALID_PROCESS_STATE",
+                    "The reservation process is not in the required state");
+            exception.getBody().setProperty("currentStatus", e.getCurrentStatus().name());
+            throw exception;
+        } catch (ReservationHoldExpiredException e) {
+            throw error(HttpStatus.CONFLICT, "HOLD_EXPIRED", "The hold has expired");
+        } catch (ReservationPhoneRequestNotReadyException e) {
+            throw error(HttpStatus.CONFLICT, "PHONE_REQUEST_NOT_READY", "The phone request has not been processed yet");
+        } catch (ReservationCentralUnavailableException e) {
+            throw error(HttpStatus.SERVICE_UNAVAILABLE, "CENTRAL_UNAVAILABLE", "Central system is unavailable");
+        } catch (ReservationLocalStateOutOfSyncException e) {
+            throw error(HttpStatus.INTERNAL_SERVER_ERROR, "LOCAL_STATE_OUT_OF_SYNC",
+                    "The phone could not be published and the state of the reservation process could not be saved");
         } catch (ReservationException e) {
             throw error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
         }
