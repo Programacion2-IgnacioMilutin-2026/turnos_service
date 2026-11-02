@@ -119,3 +119,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Caso de uso y archivos en slice 'Catedra' para que pueda recibir peticion de telefono y reenviarlo al slice 'Reservation'.
 ### Changed
 - Ahora la escritura en el repositorio de ReservationProcess, junto con la del evento, lo hace TransactionRunner para que sean consitente entre ellas.
+
+## 2026-11-02
+### Added
+- Documentacion de SDD para el caso de uso T08-ResultadoReserva

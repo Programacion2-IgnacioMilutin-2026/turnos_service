@@ -57,7 +57,7 @@ Si el servidor exige credenciales, son las de la cuenta técnica, las mismas de 
 
 ### 3.2 Eventos de resultado antes de que exista T08 (T07, D3)
 
-Mientras T08 no existe, los cinco eventos de resultado se descartan con un registro en el log y se confirma el offset, sin registrarlos como procesados. No confirmarlos detendría la partición: Kafka entrega en orden y un mensaje sin confirmar frena a los que vienen detrás. Lo que se descarte en ese lapso solo puede venir de procesos de prueba. Se revisa al implementar T08.
+Mientras T08 no existe, los cinco eventos de resultado se descartan con un registro en el log y se confirma el offset, sin registrarlos como procesados. No confirmarlos detendría la partición: Kafka entrega en orden y un mensaje sin confirmar frena a los que vienen detrás. Lo que se descarte en ese lapso solo puede venir de procesos de prueba. Se revisa al implementar T08. **Reemplazada por T08 al implementarse (ver 3.14).**
 
 ### 3.3 Falla de la base al procesar un mensaje (T07, D5)
 
@@ -147,6 +147,14 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - Un pedido que llega mientras opera el usuario se procesa con el mismo candado por usuario que bloquear y confirmar (T07 D2, decisión 013).
 - La idempotencia se guarda en `reservation`: tabla `processed_events` propia, escrita en la misma transacción que el cambio del proceso con un puerto técnico de transacción (PLAN de T07, P4). Sin control de versión además del candado (P5).
 
+### 3.14 Eventos de resultado (SPEC de T08)
+
+- **Un solo camino (D1):** los cinco eventos entran por un solo caso de uso en cada slice, porque validar, correlacionar, registrar el evento y tomar el candado es igual para los cinco.
+- **Campos obligatorios (D8):** solo los que el efecto necesita, con el mismo criterio que el pedido de teléfono: un descarte no tiene vuelta atrás, y nunca se vio un mensaje real.
+- **Un mensaje no puede frenar el consumo por su tamaño (D4, RF-17):** un valor más largo que su columna haría fallar el guardado, y eso se trata como una caída de la base: se reintentaría sin fin y frenaría a todos (3.3). Por eso `reason` se recorta a 500 caracteres con un warning, y un `eventId`, `reservationProcessId` o `holdId` de más de 255 caracteres hace inválido el mensaje, también en el pedido de teléfono.
+- **Cómo se lee un mensaje (PLAN de T08, P3):** un solo DTO con las fechas, instantes y números como texto, y el lector convierte solo los campos que usa ese tipo de evento. Un formato distinto en un campo que no se usa no descarta el mensaje, y si hay que descartarlo, el log conserva el `eventId`. Descartadas: tipos en el DTO, que pierde el mensaje entero, y un DTO por evento.
+- **Sin prueba contra el Kafka real (SPEC de T08):** la cátedra no publica en el topic de acciones y T06 todavía no existe. Se revisa al hacer T06.
+
 ## 4. Verificado y por verificar contra el Kafka real
 
 **Verificado (2026-10-30, TASK-02 de T07, lecturas sin consumer group corridas por el usuario):**
@@ -166,8 +174,8 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 
 ## 5. Por definir en los PLAN
 
-- T08: los efectos de los cinco eventos de resultado (hoy se descartan, 3.2).
-- T06: configuración del productor (confirmación de escritura, reintentos y tiempos) y el caso de credenciales rechazadas al publicar.
+- T08: cómo se implementan los efectos de los cinco eventos de resultado (hoy se descartan, 3.2; lo decidido en la SPEC, en 3.14).
+- T06: configuración del productor (confirmación de escritura, reintentos y tiempos) y el caso de credenciales rechazadas al publicar. Además, T06 guarda `PHONE_SUBMITTED` antes de publicar (D5 de T08): falta definir qué pasa si el servicio se cae entre guardar y publicar.
 
 ## Historial
 
@@ -176,3 +184,4 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - 2026-10-30: resultados de la prueba de conexión (3.1 y sección 4): `PLAINTEXT` sin credenciales, consumer group libre, 1 partición, 7 días de retención; la cátedra no publica en el topic de acciones (consultado al profesor).
 - 2026-10-31: detalles de la implementación del consumo (3.8); la cátedra sigue sin publicar, los tests usan mensajes armados desde el anexo.
 - 2026-10-31: E2E con el consumer group de tests: el consumo real funciona; el plan B de 3.6 no se implementó. Cierre de T07 con CA-14 y las grabaciones reales pendientes.
+- 2026-11-02: decisiones de la SPEC y del PLAN de T08 (3.14).
