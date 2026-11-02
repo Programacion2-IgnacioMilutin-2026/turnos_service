@@ -2,6 +2,7 @@ package turnos;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.OffsetSpec;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -28,6 +29,15 @@ public record KafkaTestTopic(String topic, String consumerGroup) {
     public static KafkaTestTopic random(String name) {
         String suffix = name + "-" + UUID.randomUUID();
         return new KafkaTestTopic("alumnos.turnos.acciones." + suffix, "alumnos-" + suffix);
+    }
+
+    // Para poder consultarlo antes de que alguien publique en él
+    public void create() {
+        try (Admin admin = admin()) {
+            admin.createTopics(List.of(new NewTopic(topic, 1, (short) 1))).all().get(10, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     public void publish(String key, String value) {

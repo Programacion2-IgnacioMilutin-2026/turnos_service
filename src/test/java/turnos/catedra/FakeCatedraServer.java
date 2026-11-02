@@ -56,6 +56,13 @@ public final class FakeCatedraServer implements AutoCloseable {
     // La misma respuesta, con el Kafka que use el test (por ejemplo, el de Testcontainers)
     public static String provisionedLoginResponse(String provisioningStatus, String kafkaBootstrapServers,
                                                   String actionsTopic, String consumerGroup) {
+        return provisionedLoginResponse(provisioningStatus, kafkaBootstrapServers, actionsTopic, consumerGroup,
+                "catedra.turnos.telefono.proyecto-juan-perez");
+    }
+
+    // También con el topic de teléfono del test, para leer lo que publica el servicio
+    public static String provisionedLoginResponse(String provisioningStatus, String kafkaBootstrapServers,
+                                                  String actionsTopic, String consumerGroup, String phoneTopic) {
         return """
                 {"id_token":"%s","integration":{"groupId":"proyecto-juan-perez","redisHost":"redis.catedra.internal",
                  "redisPort":6379,"redisUsername":"grp_proyecto-juan-perez","redisPassword":"secreto-redis",
@@ -63,9 +70,9 @@ public final class FakeCatedraServer implements AutoCloseable {
                  "kafkaBootstrapServers":"%s","kafkaConsumerGroupId":"%s",
                  "kafkaCatalogTopic":"catedra.catalog.proyecto-juan-perez",
                  "kafkaAppointmentActionsTopic":"%s",
-                 "kafkaAppointmentPhoneTopic":"catedra.turnos.telefono.proyecto-juan-perez",
+                 "kafkaAppointmentPhoneTopic":"%s",
                  "provisioningStatus":"%s"}}
-                """.formatted(TOKEN, kafkaBootstrapServers, consumerGroup, actionsTopic, provisioningStatus);
+                """.formatted(TOKEN, kafkaBootstrapServers, consumerGroup, actionsTopic, phoneTopic, provisioningStatus);
     }
 
     public static String problem(int status, String code) {
