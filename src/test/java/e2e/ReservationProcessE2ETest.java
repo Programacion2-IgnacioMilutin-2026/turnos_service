@@ -40,9 +40,10 @@ import static org.awaitility.Awaitility.await;
 
 // Contra la cátedra real, con la cuenta técnica del .env local: solo con ./mvnw test -Pe2e. Sin credenciales se saltea.
 // Crea un hold real en un turno libre, lo confirma y, si el .env define el consumer group de los E2E, espera el pedido
-// de teléfono que la cátedra publica por Kafka. Al terminar intenta cancelarlo directamente en la cátedra, para no
-// dejarlo tomado.
-// Si la cátedra no lo permite, lo avisa sin fallar: lo que se prueba es la creación del hold, y el hold vence solo
+// de teléfono que la cátedra publica por Kafka, informa un teléfono y espera la reserva confirmada para cancelarla: una
+// reserva confirmada no vence sola. Al terminar siempre intenta cancelar directamente en la cátedra, para no dejar nada
+// tomado, también si este servicio no llegó a enterarse de una confirmación.
+// Si la cátedra no lo permite, lo avisa sin fallar: un proceso sin confirmar vence solo
 @Tag("e2e")
 @EnabledIf(value = "e2e.E2ECredentials#available", disabledReason = "No catedra credentials in the local .env: E2E tests skipped")
 @SpringBootTest(classes = TurnosServiceApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -52,6 +53,8 @@ import static org.awaitility.Awaitility.await;
 class ReservationProcessE2ETest {
 
     private static final String TEST_PHONE = "+5492610000000";
+    private static final Duration RESULT_WAIT = Duration.ofSeconds(60);
+    private static final Duration RESULT_POLL = Duration.ofSeconds(2);
     private static final FakeHttpServer CATALOG = FakeHttpServer.start();
     // El profesional de referencia de la cátedra: lunes de 12:00 a 15:00 cada 30 minutos
     private static final String PROFESSIONAL = """
@@ -139,8 +142,7 @@ class ReservationProcessE2ETest {
                     .atMost(Duration.ofSeconds(30)).until(() -> requestEventId() != null);
             System.out.println("E2E phone request " + requestEventId() + " saved for " + reservationProcessId);
 
-            // Se publica en el topic propio de esta cuenta. No se espera el resultado: lo que se prueba es turnos, y el
-            // teléfono es de mentira
+            // Se publica en el topic propio de esta cuenta. El teléfono es de mentira, pero con un formato válido
             String submitted = restTestClient.post().uri("/api/reservation-processes/{id}/phone", reservationProcessId)
                     .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).contentType(MediaType.APPLICATION_JSON)
                     .body("{\"phoneNumber\":\"" + TEST_PHONE + "\"}")
@@ -149,8 +151,37 @@ class ReservationProcessE2ETest {
             assertThat(submitted).doesNotContain(TEST_PHONE);
             assertThat(output.getAll()).doesNotContain(TEST_PHONE);
             System.out.println("E2E phone of " + reservationProcessId + " published");
+
+            // La app sigue el resultado con esta misma consulta
+            await().alias("the Catedra answers the phone of " + reservationProcessId + " and the result is saved")
+                    .atMost(RESULT_WAIT).pollInterval(RESULT_POLL).until(() -> !"PHONE_SUBMITTED".equals(status(query(userToken))));
+            String result = query(userToken);
+            assertThat(status(result)).as("result of the phone of " + reservationProcessId + ": " + result).isEqualTo("CONFIRMED");
+            assertThat(JsonPath.<Object>read(result, "$.reservationId")).isNotNull();
+            assertThat(JsonPath.<String>read(result, "$.confirmedAt")).isNotNull();
+            assertThat(JsonPath.<String>read(result, "$.expiresAt")).isNull();
+            System.out.println("E2E reservation " + JsonPath.<Object>read(result, "$.reservationId") + " of "
+                    + reservationProcessId + " confirmed");
+
+            assertThat(cancelInTheCatedra()).isEqualTo(200);
+            await().alias("the cancellation of " + reservationProcessId + " is saved")
+                    .atMost(RESULT_WAIT).pollInterval(RESULT_POLL).until(() -> "CANCELLED".equals(status(query(userToken))));
+            String cancelled = query(userToken);
+            assertThat(JsonPath.<Object>read(cancelled, "$.reservationId")).isNotNull();
+            assertThat(JsonPath.<String>read(cancelled, "$.cancelledAt")).isNotNull();
+            System.out.println("E2E reservation of " + reservationProcessId + " cancelled and saved");
         }
         assertThat(output.getAll()).doesNotContain(userToken).doesNotContain(technicalSessionRepository.get().token());
+    }
+
+    private String query(String userToken) {
+        return restTestClient.get().uri("/api/reservation-processes/{id}", reservationProcessId)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).exchange()
+                .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+    }
+
+    private static String status(String process) {
+        return JsonPath.read(process, "$.status");
     }
 
     private String requestEventId() {
@@ -159,12 +190,23 @@ class ReservationProcessE2ETest {
                 reservationProcessId);
     }
 
-    // Deshace en la cátedra real lo que creó el test. Nunca muestra la URL ni el token técnico
+    // Deshace en la cátedra real lo que creó el test. Si ya estaba cancelado, la cátedra responde lo mismo
     @AfterEach
     void cancelTheProcess() {
         if (reservationProcessId == null) {
             return;
         }
+        int status = cancelInTheCatedra();
+        if (status == 200) {
+            System.out.println("E2E: process " + reservationProcessId + " cancelled");
+        } else {
+            System.out.println("E2E: process " + reservationProcessId + " could not be cancelled (HTTP " + status
+                    + "); it expires at " + expiresAt + " unless the Catedra confirms it: then it has to be cancelled by hand");
+        }
+    }
+
+    // Una llamada directa, porque el servicio todavía no cancela. Nunca muestra la URL ni el token técnico
+    private int cancelInTheCatedra() {
         ResponseEntity<String> response = RestClient.create().post()
                 .uri(environment.getProperty("turnos.catedra.base-url") + "/api/appointments/{id}/cancel", reservationProcessId)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + technicalSessionRepository.get().token())
@@ -173,12 +215,6 @@ class ReservationProcessE2ETest {
                     // la respuesta se revisa abajo, sin lanzar una excepción
                 })
                 .toEntity(String.class);
-        int status = response.getStatusCode().value();
-        if (status == 200) {
-            System.out.println("E2E: process " + reservationProcessId + " cancelled");
-        } else {
-            System.out.println("E2E: process " + reservationProcessId + " could not be cancelled (HTTP " + status
-                    + "); it expires at " + expiresAt);
-        }
+        return response.getStatusCode().value();
     }
 }
