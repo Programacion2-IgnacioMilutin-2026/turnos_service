@@ -10,6 +10,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.ErrorResponseException;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -37,7 +38,10 @@ import turnos.reservation.application.exception.ReservationSlotNotAvailableExcep
 import turnos.reservation.application.exception.ReservationUserNotFoundException;
 import turnos.reservation.application.service.ReservationService;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.infrastructure.web.dto.PhoneSubmissionRequest;
+import turnos.reservation.infrastructure.web.dto.ReservationProcessListRequest;
+import turnos.reservation.infrastructure.web.dto.ReservationProcessPageResponse;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessResponse;
 import turnos.reservation.infrastructure.web.mapper.ReservationProcessDtoMapper;
@@ -196,6 +200,17 @@ public class ReservationProcessController {
         } catch (ReservationException e) {
             throw error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
         }
+    }
+
+    // Las reservas del dueño del token. No traduce errores: solo lee, y una falla al leer llega al manejador global
+    @GetMapping("/reservation-processes")
+    public ResponseEntity<ReservationProcessPageResponse> findReservationProcessesByUser(
+            @Valid @ModelAttribute ReservationProcessListRequest request, @AuthenticationPrincipal Jwt jwt) {
+        int page = reservationProcessDtoMapper.toPage(request);
+        int size = reservationProcessDtoMapper.toSize(request);
+        ReservationProcessPage result = reservationService.findReservationProcessesByUser(Long.valueOf(jwt.getSubject()),
+                reservationProcessDtoMapper.toStatus(request), page, size);
+        return ResponseEntity.ok(reservationProcessDtoMapper.toPageResponse(result, page, size));
     }
 
     private static ErrorResponseException error(HttpStatus status, String code, String detail) {
