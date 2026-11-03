@@ -144,5 +144,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentacion de SDD para el caso de uso T09-Consultar estado de un proceso de reserva.
 - Metodos para manejar vencimientos para un proceso de reserva.
 - Caso de uso en slice 'Reservation' para ver el estado de un proceso y decidir que hacer.
+- Endpoint para traer un proceso de reserva por su id.
 ### Changed
 - Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09

@@ -463,6 +463,116 @@ class ReservationProcessControllerTest {
         verify(reservationService).submitPhone(42L, "process-1", "2615551234");
     }
 
+    @Test
+    void aProcessIsReturnedWithItsFieldsAndWithoutTheHoldTheMarkThePhoneRequestOrThePhone() throws Exception {
+        when(reservationService.getReservationProcessById(42L, "process-1")).thenReturn(ReservationProcess.builder()
+                .reservationProcessId("process-1").holdId("hold-1").userId(42L).professionalId(201L)
+                .professionalFirstName("Ana").professionalLastName("Gomez").professionalCategoryName("Clinica medica")
+                .date(DATE).startTime(TEN_THIRTY).status(ReservationStatus.CONFIRMED)
+                .expiresAt(Instant.parse("2026-10-27T04:44:38Z")).requestEventId("request-event-1")
+                .phoneNumber("+5492615551234").needsReconciliation(true).reservationId(8251L)
+                .confirmedAt(Instant.parse("2026-10-27T04:36:01.987654Z")).build());
+
+        MockHttpServletResponse response = query("process-1", TOKEN)
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.APPLICATION_JSON))
+                .andReturn().getResponse();
+
+        Map<String, Object> body = JsonPath.read(response.getContentAsString(), "$");
+        assertThat(body).containsOnlyKeys("reservationProcessId", "status", "professionalId", "professionalFirstName",
+                "professionalLastName", "professionalCategoryName", "date", "startTime", "expiresAt", "rejectionReason",
+                "reservationId", "confirmedAt", "cancelledAt", "cancellationReason");
+        assertThat(body).containsEntry("reservationProcessId", "process-1").containsEntry("status", "CONFIRMED")
+                .containsEntry("startTime", "10:30").containsEntry("reservationId", 8251)
+                .containsEntry("confirmedAt", "2026-10-27T04:36:01Z").containsEntry("expiresAt", null);
+        assertThat(response.getContentAsString()).doesNotContain("hold-1").doesNotContain("request-event-1")
+                .doesNotContain("5492615551234");
+    }
+
+    @Test
+    void theOwnerOfTheQueryComesFromTheTokenAndTheProcessFromThePath() throws Exception {
+        when(reservationService.getReservationProcessById(7L, "process-9")).thenReturn(HELD);
+
+        query("process-9", TestTokens.forUser("7", "ROLE_ADMIN")).andExpect(status().isOk());
+
+        verify(reservationService).getReservationProcessById(7L, "process-9");
+    }
+
+    @Test
+    void aProcessThatIsNotFoundAnswersItsCodeWithoutTheId() throws Exception {
+        when(reservationService.getReservationProcessById(42L, "process-1"))
+                .thenThrow(new ReservationProcessNotFoundException("process-1"));
+
+        String body = expectProblem(query("process-1", TOKEN), 404, "RESERVATION_PROCESS_NOT_FOUND")
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(JsonPath.<String>read(body, "$.detail")).isEqualTo("Reservation process not found");
+    }
+
+    @Test
+    void aFailureSavingTheOverdueProcessIsAnInternalErrorWithoutTheReason() throws Exception {
+        when(reservationService.getReservationProcessById(42L, "process-1"))
+                .thenThrow(new ReservationNotSavedException("process-1", new IllegalStateException("database down")));
+
+        String body = expectProblem(query("process-1", TOKEN), 500, "INTERNAL_ERROR")
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("database down").doesNotContain("could not be saved");
+    }
+
+    @Test
+    void thePhoneInTheCauseOfAFailedSaveNeverReachesTheLog(CapturedOutput output) throws Exception {
+        when(reservationService.getReservationProcessById(42L, "process-1")).thenThrow(new ReservationNotSavedException(
+                "process-1", new IllegalStateException("could not write the row with +5492615551234")));
+
+        expectProblem(query("process-1", TOKEN), 500, "INTERNAL_ERROR");
+
+        assertThat(output.getAll()).doesNotContain("5492615551234");
+    }
+
+    @Test
+    void aFailureReadingTheDatabaseIsAnInternalErrorWithoutTheReason() throws Exception {
+        when(reservationService.getReservationProcessById(42L, "process-1"))
+                .thenThrow(new IllegalStateException("database down"));
+
+        String body = expectProblem(query("process-1", TOKEN), 500, "INTERNAL_ERROR")
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("database down");
+    }
+
+    @Test
+    void withoutATokenTheProcessIsNeverQueried() throws Exception {
+        mockMvc.perform(get(PATH + "/process-1")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void anInvalidTokenNeverQueriesTheProcess() throws Exception {
+        query("process-1", "not-a-token").andExpect(status().isUnauthorized());
+        verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void anExpiredTokenNeverQueriesTheProcess() throws Exception {
+        Instant now = Instant.now();
+        String expired = TestTokens.signed(claims -> claims.subject("42").claim("auth", "ROLE_USER")
+                .issuedAt(now.minusSeconds(3600)).expiresAt(now.minusSeconds(1)));
+
+        query("process-1", expired).andExpect(status().isUnauthorized());
+        verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void aTokenWithoutAValidRoleNeverQueriesTheProcess() throws Exception {
+        query("process-1", TestTokens.forUser("42", "ROLE_OTRO")).andExpect(status().isForbidden());
+        verifyNoInteractions(reservationService);
+    }
+
+    private ResultActions query(String reservationProcessId, String token) throws Exception {
+        return mockMvc.perform(get(PATH + "/" + reservationProcessId).header(HttpHeaders.AUTHORIZATION, "Bearer " + token));
+    }
+
     private static ReservationProcess submittedProcess() {
         return ReservationProcess.builder()
                 .reservationProcessId("process-1").holdId("hold-1").userId(42L).professionalId(201L)

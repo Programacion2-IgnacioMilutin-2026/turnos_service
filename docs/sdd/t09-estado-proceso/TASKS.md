@@ -40,12 +40,12 @@ Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04+05; 06; 07+08+0
   - Validación: `./mvnw test -Dtest=GetReservationProcessByIdUseCaseImplTest`. Prueba en negativo: registrar la excepción completa y ver fallar el test.
   - Resultado: 2026-11-03. Tests en verde: al fallar el `update` lanza `ReservationNotSavedException`, el proceso queda igual y la consulta siguiente cierra o marca; el log tiene solo el tipo de error, también con una excepción cuyo mensaje incluye el teléfono; una falla de lectura llega sin traducir. Prueba en negativo: registrar el mensaje de la excepción hace fallar `thePhoneNeverReachesTheLogWhenSavingFails`; archivo restaurado y hash comprobado. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1126 `<testcase>` (1096 + 30), 0 fallas, 0 errores, 0 salteados, 101 XML.
 
-- [ ] **TASK-06 · El endpoint**
+- [x] **TASK-06 · El endpoint**
   - Alcance: `GET /api/reservation-processes/{reservationProcessId}` en `ReservationProcessController`, con `404` `RESERVATION_PROCESS_NOT_FOUND` y `500` `INTERNAL_ERROR`. Tests en `ReservationProcessControllerTest`: `200`, `404`, `500`, y `401` sin token, con token inválido y vencido, sin llamar al service.
   - Depende de: TASK-03
   - Resuelve: CA-01, CA-02 y CA-12 (capa web)
   - Validación: `./mvnw test -Dtest=ReservationProcessControllerTest`
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. `ReservationProcessControllerTest`: 69 tests en verde, 10 nuevos: `200` con los campos y sin datos privados, dueño del token con otro rol (`ROLE_ADMIN`), `404`, `500` al leer y al guardar, teléfono de la causa fuera del log, `401` sin token, inválido y vencido, y `403` con un rol no válido, sin llamar al service. Pruebas en negativo: sin el `catch` del `404` falla 1 test; con el dueño fijo falla 1. Sin el `catch` de `ReservationException` al principio no falló ningún test, porque el manejador global responde lo mismo: lo que evita ese `catch` es registrar la causa, así que se sumó `thePhoneInTheCauseOfAFailedSaveNeverReachesTheLog`, que con esa rotura falla. Archivo restaurado y hash comprobado. Suite completa: `./mvnw clean test`, exit 0, 1136 `<testcase>` (1126 + 10), 0 fallas, 0 errores, 0 salteados, 101 XML.
 
 - [ ] **TASK-07 · Integración sobre Postgres real**
   - Alcance: crea `ReservationProcessStatusIntegrationTest`, con la app completa, Postgres en Testcontainers, y cátedra y catálogo simulados. Escribe el estado de partida en la base. Cubre inexistente y ajeno vencido, cierre, marca, cada estado con sus campos, sin requests a los servidores simulados, y JSON y log sin los datos privados.
