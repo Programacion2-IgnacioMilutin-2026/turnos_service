@@ -146,5 +146,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Caso de uso en slice 'Reservation' para ver el estado de un proceso y decidir que hacer.
 - Endpoint para traer un proceso de reserva por su id.
 - Tests de los archvios agregados en el caso de uso T09.
+- Tiempo que espera del servicio a al base de datos. Colocado en 30 segundos.
 ### Changed
 - Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09

@@ -9,6 +9,11 @@ spring:
     url: jdbc:postgresql://${TURNOS_DB_HOST:localhost}:${TURNOS_DB_PORT:5432}/${TURNOS_DB_NAME:turnos}
     username: ${TURNOS_DB_USER:turnos}
     password: ${TURNOS_DB_PASSWORD}
+    hikari:
+      data-source-properties:
+        # Segundos que se espera una respuesta de Postgres. Sin este límite, una base que deja de responder sin cerrar la
+        # conexión deja el pedido esperando para siempre, también con el candado de un usuario tomado
+        socketTimeout: ${TURNOS_DB_SOCKET_TIMEOUT:30}
   jpa:
     hibernate:
       # El esquema lo crean las migraciones de Flyway; Hibernate solo verifica que coincida

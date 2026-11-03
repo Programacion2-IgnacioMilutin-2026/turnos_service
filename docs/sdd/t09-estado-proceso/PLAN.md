@@ -1,7 +1,7 @@
 # PLAN: T09 — Consultar estado de un proceso
 
 **SPEC de referencia:** `docs/sdd/t09-estado-proceso/SPEC.md`
-**Versión de la spec revisada:** aprobada el 2026-11-03 (D1 a D4, RF-01 a RF-09, CA-01 a CA-13), sin commitear
+**Versión de la spec revisada:** aprobada el 2026-11-03 (D1 a D5, RF-01 a RF-10, CA-01 a CA-14; D5, RF-10 y CA-14 se sumaron por indicación del usuario al implementar TASK-10)
 **Estado:** Aprobado <!-- Borrador | En revisión | Aprobado -->
 
 <!-- PARA LA PERSONA
@@ -85,6 +85,8 @@ El recorrido es el de la secuencia §5, ya ajustada:
 - **P4 · El caso de uso devuelve `Optional`, y el service lanza el `404` (opción a, decidida por el usuario el 2026-11-03).** Así lo define la skill para `Get{Entity}ByIdUseCase`. T05 y T06 lanzan desde el caso de uso porque no son una consulta.
 - **P5 · Un id con el carácter nulo, CA-13 (opción a, decidida por el usuario el 2026-11-03).** Primero se comprueba con un test contra el servidor real, sin cambiar código. Si no llega a la base, el test queda como evidencia. Si llega y Postgres lo rechaza, el caso de uso lo trata como proceso inexistente (`Optional` vacío, `404`), sin ir a la base.
 
+- **P6 · Límite de espera de la base (D5, agregado al implementar TASK-10).** `socketTimeout` del driver de Postgres, por `spring.datasource.hikari.data-source-properties`, con `TURNOS_DB_SOCKET_TIMEOUT` y 30 s por defecto. Se configura ahí y no en la URL porque los tests con `@ServiceConnection` reemplazan la URL. Al vencer, el driver cierra la conexión y lanza una falla de base, que cada operación ya sabe tratar. Si la variable se define vacía, la aplicación no arranca: el driver exige un entero. Eso se documenta en `.env.example` y `CLAUDE.md`, sin agregar código para evitarlo.
+
 ## Slices y componentes afectados
 
 <!-- Aplica la skill hexagonal-vertical-slicing: un paquete por slice, con sus
@@ -110,6 +112,7 @@ propuestas. Señala impacto sobre modelos, contratos o componentes compartidos. 
 | `reservation`, web | `infrastructure/web/mapper/ReservationProcessDtoMapper.java` | Modificar | Cinco campos más; los instantes en segundos, como `expiresAt` | RF-03 |
 | `reservation`, puerto y adaptador | `ReservationProcessRepository`, `JpaReservationProcessRepositoryAdapter` | Reutilizar | `findByIdAndUserId` y `update`, sin cambios | RF-02, RF-04, RF-05 |
 | `reservation`, soporte | `UserOperationLock` | Reutilizar | Sin cambios | RF-07 |
+| Configuración | `src/main/resources/application.yaml`, `.env.example` | Modificar | Límite de espera de la base (P6) | RF-10 |
 | Documentación | `CLAUDE.md`, `docs/decisiones/013-operaciones-de-un-usuario-de-a-una.md` | Modificar | Anotar la excepción de la lectura sin candado (D2), sumar T09 al slice y a la lista de `docs/sdd` | RF-07 |
 
 ## Datos y contratos
@@ -143,7 +146,7 @@ afectados. Verifica compatibilidad con el proyecto y justifica las incorporacion
 No agregues dependencias por defecto. Los valores sensibles y los parámetros
 ajustables se externalizan. -->
 
-- Sin dependencias ni propiedades nuevas. Se reutiliza `TURNOS_RESERVATION_SAFETY_MARGIN`.
+- Sin dependencias nuevas. Se reutiliza `TURNOS_RESERVATION_SAFETY_MARGIN`. Propiedad nueva, opcional: `TURNOS_DB_SOCKET_TIMEOUT` (P6). También limita a las migraciones de Flyway, que usan la misma conexión.
 
 ## Estrategia de validación
 
@@ -167,6 +170,7 @@ demuestra persistencia, transacciones ni idempotencia. -->
 | CA-10 | `GetReservationProcessByIdUseCaseImplTest` con `CopyingReservationProcessRepository`; integración sobre Postgres real (P2) | El test toma el candado, consulta, escribe `CONFIRMED` y suelta | Responde `CONFIRMED`; sin `EXPIRED` ni marca en la fila |
 | CA-11 | `GetReservationProcessByIdUseCaseImplTest` | `PHONE_SUBMITTED` vencido marcado, con el candado tomado | Responde enseguida; `history` vacío |
 | CA-12 | Unitario con `failUpdatesWhen`; web; integración con un repositorio que falla sobre la base real (patrón de `PhoneSubmissionKafkaIntegrationTest`); nuevo `DatabaseDownStatusQueryIntegrationTest`, con Postgres propio en pausa | Fila con teléfono; log capturado; `hikari.connection-timeout` corto | `500` `INTERNAL_ERROR`; fila igual; sin teléfono en el log; la consulta siguiente resuelve |
+| CA-14 | `DatabaseDownStatusQueryIntegrationTest` con Postgres en pausa después de la lectura y con la escritura pendiente, y `pg_sleep`; `TurnosServiceApplicationTests` para el valor por defecto | `TURNOS_DB_SOCKET_TIMEOUT` corto en el test | `500`, candado libre y la consulta siguiente resuelve; con el límite en 0 los tests no terminan a tiempo |
 | CA-13 | Integración contra el servidor real (P5) | `RestTestClient` con `%00` | Rechazo de la ruta o `404`, nunca `500` |
 
 **Comprobaciones de regresión:** suite completa, y tests existentes del mapper, del controller y de integración de T04 a T08. Además, pruebas en negativo: quitar la lectura 2 (CA-10 tiene que fallar), tomar siempre el candado (CA-09 y CA-11), ignorar la marca (CA-11), sacar un campo del mapper (CA-08), y registrar la excepción completa al fallar el `update` (CA-12).
@@ -202,7 +206,9 @@ Escribe Ninguna en las decisiones pendientes cuando estén resueltas. -->
 
 - **Riesgos y medidas acordadas:**
   - **Volver a encender `open-in-view` rompería la relectura en silencio:** lo detecta CA-10 sobre Postgres real (P2).
-  - **Espera con la base caída:** Hikari no está configurado en `application.yaml`, así que usa su valor por defecto, 30 s según su documentación. No se midió. Una consulta podría tardar eso antes del `500`, igual que cualquier otro endpoint del servicio. La app ya trata esa demora como "no pudo actualizar" (A09 1.1). No se cambia en T09.
+  - **Espera con la base caída:** el tiempo para obtener una conexión de Hikari sigue en su valor por defecto, 30 s según su documentación, sin medir. El límite de P6 se suma a ese tiempo. Una consulta podría tardar eso antes del `500`, igual que cualquier otro endpoint del servicio. La app ya trata esa demora como "no pudo actualizar" (A09 1.1).
+  - **El límite de P6 corta cualquier operación más lenta:** hoy las consultas son simples, y las migraciones existentes no se midieron. Una migración futura que tarde más de 30 s necesitaría subir la variable.
+  - **Una escritura cortada por tiempo pudo haberse aplicado:** si la respuesta se pierde después de que Postgres confirmó, se informa una falla aunque el cambio quedó guardado. En T09 no daña: la consulta siguiente ve el estado real.
   - **Espera sin límite del candado:** una consulta que tiene que escribir espera lo que tarde la operación en curso. T06 tiene un tope de 10 s, y T05 depende de la cátedra. No se agrega otro tope: pasa poco y la espera termina cuando termina esa operación.
   - **Riesgo heredado, ya aceptado (D6 de T08):** T09 puede cerrar como `EXPIRED` un proceso marcado, y una confirmación tardía se ignora con un error en el log.
 - **Decisiones pendientes:** Ninguna.

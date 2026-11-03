@@ -85,6 +85,7 @@ referencia no tengan sin consultarlo. -->
 - **RF-06** · T09 postcondición: en cualquier otro caso la consulta no modifica nada. Tampoco llama a la cátedra ni a catálogo.
 - **RF-07** · Guía de backend (concurrencia), decisión 013: la consulta no espera a las demás operaciones del usuario, salvo cuando tiene que escribir. Antes de cerrar o marcar, se asegura de que nadie la haya adelantado: si el proceso ya cambió, no lo pisa y responde lo que encontró. Un proceso ya marcado no se vuelve a escribir (D2).
 - **RF-08** · T09 alternativo 3.2, contrato §3: si falla la lectura de la base, o la escritura de RF-04 o RF-05, se registra y responde `500` `INTERNAL_ERROR`, sin informar un estado que no se guardó. La próxima consulta reintenta sola, porque el proceso sigue vencido. Al fallar una escritura se registra solo el tipo de error, porque la fila puede llevar el teléfono (D3).
+- **RF-10** · D5: una operación con la base no espera su respuesta sin límite. Si Postgres deja de responder sin cerrar la conexión, la consulta termina como RF-08 y, si tenía el candado, lo suelta. Vale para todo el servicio, porque es la conexión a la base.
 - **RF-09** · Contrato §2, guía de backend (privacidad): la respuesta nunca expone `holdId`, `requestEventId`, el teléfono ni la marca de reconciliación. El teléfono tampoco aparece en logs ni en errores.
 
 ## Fuera de alcance
@@ -136,7 +137,7 @@ publicado), no mecanismos técnicos. -->
 | Sin sesión o sin permiso | T09 2.1: `401` o `403` de la capa de seguridad |
 | Recurso inexistente o ajeno | T09 3.1: `404`, sin distinguirlos (RF-02) |
 | Dependencia no disponible (cátedra, catálogo, Redis, Kafka) | No aplica: es una lectura local (RF-06) |
-| Timeout o espera excesiva | La consulta común no espera. La que tiene que escribir espera lo que dure la operación en curso del usuario (T05 o T06, D2) |
+| Timeout o espera excesiva | La consulta común no espera. La que tiene que escribir espera lo que dure la operación en curso del usuario (T05 o T06, D2). Una base que no responde corta la espera por tiempo (RF-10, D5) |
 | Operación o mensaje repetido | Consultas repetidas responden lo mismo. Un proceso ya marcado o cerrado no se vuelve a escribir (RF-06, RF-07) |
 | Evento tardío o fuera de orden | Un resultado de T08 entre dos consultas se ve en la siguiente (T09 postcondición). Si llega mientras la consulta decide cerrar, gana el resultado: la segunda lectura lo ve y no se pisa (RF-07). Si llega después del cierre, se aplica lo aceptado en D6 de T08 |
 | Falla de persistencia | `500` `INTERNAL_ERROR` al leer (T09 3.2) y al escribir (RF-08). El estado en la base no cambia |
@@ -179,6 +180,7 @@ Repite el formato según sea necesario. -->
 - **CA-10 · RF-07:** Si entre la primera lectura y el candado el proceso pasó a `CONFIRMED` u otro estado final, la consulta responde ese estado y no lo cambia: ni lo pasa a `EXPIRED` ni le pone la marca.
 - **CA-11 · RF-07:** Un `PHONE_SUBMITTED` vencido ya marcado responde sin tomar el candado y sin escribir.
 - **CA-12 · RF-08:** Si falla la lectura, o la escritura de un cierre o de una marca, responde `500` `INTERNAL_ERROR` sin detalles internos. Tras fallar la escritura, el proceso sigue como estaba y la consulta siguiente, con la base disponible, aplica el cierre o la marca. Si la fila tiene teléfono, no aparece en el log.
+- **CA-14 · RF-10:** Con Postgres sin responder y una conexión que ya envió la lectura o la escritura, la consulta responde `500` `INTERNAL_ERROR` en lugar de quedarse esperando; el candado queda libre y la consulta siguiente, con la base disponible, resuelve el proceso. El límite por defecto es de 30 s.
 - **CA-13 · Entrada inválida:** Un id con caracteres que la ruta o la base rechazan, como el carácter nulo, no responde `500`.
 
 ## Cómo se comprueba el comportamiento
@@ -201,6 +203,7 @@ No marques los criterios como superados durante la especificación. -->
 | CA-10 | Proceso vencido que un resultado cierra entre la lectura y el candado | Responde el estado final, sin cambios en la base |
 | CA-11 | `PHONE_SUBMITTED` vencido y marcado, con el candado tomado | Responde enseguida, sin escritura |
 | CA-12 | Falla al leer y al escribir el cierre y la marca; salida capturada; luego una consulta con la base disponible | `500`; sin cambios ni teléfono en el log; la siguiente lo resuelve |
+| CA-14 | Postgres congelado después de una lectura; con la escritura pendiente; respuesta más lenta que el límite | `500` y la consulta siguiente resuelve; la operación lenta falla por tiempo |
 | CA-13 | Consulta con un id con el carácter nulo | Rechazo de la ruta o `404`, nunca `500` |
 
 ## Decisiones pendientes
@@ -215,4 +218,5 @@ Decisiones tomadas:
 - **D1 · Campos de la respuesta (opción a, decidida por el usuario el 2026-11-03):** se usa el nombre que ya tiene el proyecto, `rejectionReason` (contrato §2, dominio y código), con el objeto completo. Se corrigieron T09 paso 5, T10 paso 7, A08 paso 1, A09 3.1 y la secuencia §5, en `documentacion` y en la copia de este servicio. El `reason` de T08 (campo del evento de la cátedra) y el de T11 (entrada de la cancelación) son correctos y no cambian.
 - **D2 · Convivencia con las demás operaciones del usuario (opción a, decidida por el usuario el 2026-11-03):** leer sin candado y, solo si hay que escribir, tomarlo, volver a leer, comprobar de nuevo y escribir. La consulta se repite cada pocos segundos y no debe esperar a T05 o T06. Es una excepción a `CLAUDE.md` y a la decisión 013, que se anota en ambos.
 - **D3 · Falla al escribir el cierre reactivo (opción a, decidida por el usuario el 2026-11-03):** `500` `INTERNAL_ERROR`, como contrato §3 y T10 4.1. La próxima consulta reintenta, y A09 1.5 ya trata ese error como "no pudo actualizar".
+- **D5 · Límite de espera de la base (opción b, decidida por el usuario el 2026-11-03, al implementar TASK-10):** se agrega ahora, aunque afecta a todo el servicio. Motivo: una prueba con Postgres congelado dejó una consulta bloqueada más de 5 minutos leyendo el socket, y con el candado tomado también esperarían las demás operaciones del usuario. El valor de 30 s es una propuesta del agente, configurable, igual que la espera de una conexión del pool; el usuario puede cambiarlo.
 - **D4 · Prueba contra la cátedra real (opción a, decidida por el usuario el 2026-11-03):** no se agrega al E2E. T09 no habla con la cátedra; alcanza con integración sobre Postgres real.

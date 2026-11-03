@@ -3,7 +3,7 @@
 **SPEC:** `docs/sdd/t09-estado-proceso/SPEC.md` (aprobada el 2026-11-03)
 **PLAN:** `docs/sdd/t09-estado-proceso/PLAN.md` (aprobado el 2026-11-03)
 
-Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04+05; 06; 07+08+09; 10; 11+12.
+Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04+05; 06; 07+08+09; 10+13; 11+12.
 
 - [x] **TASK-01 · La regla del vencido en el modelo**
   - Alcance: `needsOverdueResolution` y `resolveOverdue` en `ReservationProcess`, y sus tests en `ReservationProcessTest` (P1): cada estado, dentro y fuera del margen, y con la marca encendida o apagada. No toca el caso de uso ni los métodos existentes.
@@ -68,23 +68,30 @@ Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04+05; 06; 07+08+0
   - Validación: `./mvnw test -Dtest=ReservationProcessStatusIntegrationTest`, y registrar qué respondió de verdad.
   - Resultado: 2026-11-03. `GET` con `%00` contra el servidor real: `400`, página HTML de Tomcat. También `400` sin token, y `400` en `POST /confirm` y `POST /phone`, así que el servidor lo rechaza antes de la seguridad y de los controllers: no llega a la base y no hace falta cambiar código (P5). Esa respuesta no es `problem+json`. Un id de 300 caracteres responde `404`. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1164 `<testcase>` (1136 + 28), 0 fallas, 0 errores, 0 salteados, 102 XML.
 
-- [ ] **TASK-10 · Consulta con la base caída de verdad**
+- [x] **TASK-10 · Consulta con la base caída de verdad**
   - Alcance: crea `DatabaseDownStatusQueryIntegrationTest`, con Postgres propio en pausa y `hikari.connection-timeout` corto, como `DatabaseDownKafkaIntegrationTest`. Comprueba `500` `INTERNAL_ERROR` y que, al reanudar, la consulta siguiente cierra el proceso.
   - Depende de: TASK-07
   - Resuelve: CA-12 (lectura real, y la consulta siguiente resuelve)
   - Validación: `./mvnw test -Dtest=DatabaseDownStatusQueryIntegrationTest`
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. `DatabaseDownStatusQueryIntegrationTest`, con Postgres propio en pausa: `500` `INTERNAL_ERROR`, fila igual, teléfono fuera del log, y al reanudar la consulta siguiente cierra o marca. Prueba en negativo: si el caso de uso convierte la falla de lectura en vacío, fallan 3 tests. Archivo restaurado y hash comprobado. Una primera versión del test se colgó más de 5 minutos: leía la base justo antes de pausarla, y Hikari entrega sin comprobar una conexión recién usada. La consulta quedó bloqueada leyendo el socket, lo que dio lugar a D5 y TASK-13. Se corrigió el test y se le puso un tiempo máximo de 45 s.
+
+- [x] **TASK-13 · Límite de espera de la base**
+  - Alcance: agregada al implementar TASK-10, por D5. `socketTimeout` en `application.yaml` y `.env.example`, y tests en `TurnosServiceApplicationTests` y `DatabaseDownStatusQueryIntegrationTest`. No toca código de los casos de uso.
+  - Depende de: TASK-10
+  - Resuelve: CA-14
+  - Validación: `./mvnw test -Dtest='DatabaseDownStatusQueryIntegrationTest,TurnosServiceApplicationTests'`, con pruebas en negativo: límite en 0 y sin la propiedad en el yaml.
+  - Resultado: 2026-11-03. `DatabaseDownStatusQueryIntegrationTest` (5 tests) y `TurnosServiceApplicationTests` (4) en verde. Con el límite en 2 s: una lectura sobre una conexión congelada responde `500`; una escritura con la base congelada, con el candado tomado, responde `500` y la consulta siguiente cierra el proceso; `pg_sleep(10)` falla en menos de 8 s. Pruebas en negativo: con el límite en 0, los 5 tests dan error (dos se cuelgan hasta los 45 s, y el contenedor pausado arrastra a los demás); sin la propiedad en el yaml falla `theDatabaseConnectionHasALimitToWaitForAnAnswer`. Archivos restaurados y hash comprobado. Con la variable vacía la aplicación no arranca (`socketTimeout parameter value must be an integer`), comprobado con un test temporal ya borrado. El valor de 30 s no se midió contra operaciones reales. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1170 `<testcase>` (1164 + 6), 0 fallas, 0 errores, 0 salteados, 103 XML.
 
 - [ ] **TASK-11 · Documentación del servicio**
-  - Alcance: `CLAUDE.md` (excepción de la lectura sin candado, T09 en el slice y en la lista de `docs/sdd`, las transiciones nuevas) y una actualización en `docs/decisiones/013-operaciones-de-un-usuario-de-a-una.md`. No toca contratos ni casos de uso.
+  - Alcance: `CLAUDE.md` (excepción de la lectura sin candado, T09 en el slice y en la lista de `docs/sdd`, las transiciones nuevas, `TURNOS_DB_SOCKET_TIMEOUT` y que no puede quedar vacía) y una actualización en `docs/decisiones/013-operaciones-de-un-usuario-de-a-una.md`. No toca contratos ni casos de uso.
   - Depende de: TASK-03
   - Resuelve: restricción de la SPEC (D2)
   - Validación: releer los dos textos contra el código final.
   - Resultado: pendiente
 
 - [ ] **TASK-12 · Suite completa y revisión de los criterios**
-  - Alcance: correr toda la suite y revisar CA-01 a CA-13 contra lo observado. Comprobar que los tests existentes solo cambiaron en lo previsto por TASK-02.
-  - Depende de: TASK-01 a TASK-11
+  - Alcance: correr toda la suite y revisar CA-01 a CA-14 contra lo observado. Comprobar que los tests existentes solo cambiaron en lo previsto por TASK-02.
+  - Depende de: TASK-01 a TASK-11 y TASK-13
   - Resuelve: CA-07
   - Validación: `./mvnw clean test`, con el conteo tomado de `target/surefire-reports/TEST-*.xml` (partida: 1079 tests, 0 fallas, 0 errores).
   - Resultado: pendiente
