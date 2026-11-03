@@ -10,12 +10,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.resttestclient.autoconfigure.AutoConfigureRestTestClient;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -31,10 +28,7 @@ import turnos.KafkaTestTopic;
 import turnos.TestcontainersConfiguration;
 import turnos.catedra.FakeCatedraServer;
 import turnos.catedra.domain.ports.out.TechnicalSessionRepository;
-import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationStatus;
-import turnos.reservation.domain.ports.out.ReservationProcessRepository;
-import turnos.reservation.infrastructure.persistence.adapter.JpaReservationProcessRepositoryAdapter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -51,10 +45,8 @@ import java.time.temporal.ChronoUnit;
 import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
@@ -65,7 +57,7 @@ import static org.awaitility.Awaitility.await;
 // configuración real, así que los tests con Kafka congelado tardan lo que tardaría un usuario
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureRestTestClient
-@Import({TestcontainersConfiguration.class, PhoneSubmissionKafkaIntegrationTest.ControllableDatabase.class})
+@Import({TestcontainersConfiguration.class, ControllableProcessRepository.Configuration.class})
 @ExtendWith(OutputCaptureExtension.class)
 class PhoneSubmissionKafkaIntegrationTest {
 
@@ -487,68 +479,6 @@ class PhoneSubmissionKafkaIntegrationTest {
             return new String(input.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
-        }
-    }
-
-    @TestConfiguration(proxyBeanMethods = false)
-    static class ControllableDatabase {
-
-        @Bean
-        @Primary
-        ControllableProcessRepository controllableProcessRepository(JpaReservationProcessRepositoryAdapter realDatabase) {
-            return new ControllableProcessRepository(realDatabase);
-        }
-    }
-
-    // La base real, que falla al guardar cuando el test lo indica
-    static final class ControllableProcessRepository implements ReservationProcessRepository {
-
-        private final ReservationProcessRepository realDatabase;
-        private volatile Predicate<ReservationProcess> failUpdate = process -> false;
-
-        ControllableProcessRepository(ReservationProcessRepository realDatabase) {
-            this.realDatabase = realDatabase;
-        }
-
-        void failUpdatesWhen(Predicate<ReservationProcess> condition) {
-            failUpdate = condition;
-        }
-
-        void reset() {
-            failUpdate = process -> false;
-        }
-
-        @Override
-        public ReservationProcess create(ReservationProcess reservationProcess) {
-            return realDatabase.create(reservationProcess);
-        }
-
-        @Override
-        public Optional<ReservationProcess> update(String reservationProcessId, ReservationProcess reservationProcess) {
-            if (failUpdate.test(reservationProcess)) {
-                throw new IllegalStateException("database down");
-            }
-            return realDatabase.update(reservationProcessId, reservationProcess);
-        }
-
-        @Override
-        public List<ReservationProcess> findOpenByUserId(Long userId) {
-            return realDatabase.findOpenByUserId(userId);
-        }
-
-        @Override
-        public Optional<ReservationProcess> findById(String reservationProcessId) {
-            return realDatabase.findById(reservationProcessId);
-        }
-
-        @Override
-        public Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId) {
-            return realDatabase.findByIdAndUserId(reservationProcessId, userId);
-        }
-
-        @Override
-        public void markForReconciliation(String reservationProcessId) {
-            realDatabase.markForReconciliation(reservationProcessId);
         }
     }
 }

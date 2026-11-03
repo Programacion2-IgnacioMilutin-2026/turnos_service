@@ -47,26 +47,26 @@ Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04+05; 06; 07+08+0
   - Validación: `./mvnw test -Dtest=ReservationProcessControllerTest`
   - Resultado: 2026-11-03. `ReservationProcessControllerTest`: 69 tests en verde, 10 nuevos: `200` con los campos y sin datos privados, dueño del token con otro rol (`ROLE_ADMIN`), `404`, `500` al leer y al guardar, teléfono de la causa fuera del log, `401` sin token, inválido y vencido, y `403` con un rol no válido, sin llamar al service. Pruebas en negativo: sin el `catch` del `404` falla 1 test; con el dueño fijo falla 1. Sin el `catch` de `ReservationException` al principio no falló ningún test, porque el manejador global responde lo mismo: lo que evita ese `catch` es registrar la causa, así que se sumó `thePhoneInTheCauseOfAFailedSaveNeverReachesTheLog`, que con esa rotura falla. Archivo restaurado y hash comprobado. Suite completa: `./mvnw clean test`, exit 0, 1136 `<testcase>` (1126 + 10), 0 fallas, 0 errores, 0 salteados, 101 XML.
 
-- [ ] **TASK-07 · Integración sobre Postgres real**
+- [x] **TASK-07 · Integración sobre Postgres real**
   - Alcance: crea `ReservationProcessStatusIntegrationTest`, con la app completa, Postgres en Testcontainers, y cátedra y catálogo simulados. Escribe el estado de partida en la base. Cubre inexistente y ajeno vencido, cierre, marca, cada estado con sus campos, sin requests a los servidores simulados, y JSON y log sin los datos privados.
   - Depende de: TASK-02, TASK-05, TASK-06
   - Resuelve: CA-02, CA-03, CA-04, CA-05, CA-06, CA-08
   - Validación: `./mvnw test -Dtest=ReservationProcessStatusIntegrationTest`
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. `ReservationProcessStatusIntegrationTest` en verde (28 tests en total con TASK-08 y TASK-09): inexistente y ajeno vencido con el mismo `404` y la fila ajena igual; cierre y marca en la respuesta y en la fila; sin cambios dentro del margen; dos consultas de un `PHONE_SUBMITTED` vencido escriben una sola vez; estados cerrados sin escritura ni requests a los servidores simulados; JSON sin datos privados y teléfono fuera del log en los siete estados; campos por estado, con instantes en segundos.
 
-- [ ] **TASK-08 · Carrera y falla de escritura sobre la base real**
+- [x] **TASK-08 · Carrera y falla de escritura sobre la base real**
   - Alcance: en `ReservationProcessStatusIntegrationTest`: un `CONFIRMED` escrito en la base mientras la consulta espera el candado; y un `update` que falla a pedido sobre la base real, seguido de una consulta que resuelve. Si hace falta el repositorio controlable de `PhoneSubmissionKafkaIntegrationTest`, se extrae a su propio archivo para compartirlo, sin copiarlo.
   - Depende de: TASK-07
   - Resuelve: CA-10 (real, P2), CA-12 (escritura real)
   - Validación: `./mvnw test -Dtest='ReservationProcessStatusIntegrationTest,PhoneSubmissionKafkaIntegrationTest'`. Prueba en negativo: quitar la lectura 2 y ver fallar el test.
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. El repositorio controlable se extrajo a `ControllableProcessRepository`; `PhoneSubmissionKafkaIntegrationTest` solo cambió su `@Import` y sigue en verde (11 tests). Un `CONFIRMED` escrito en Postgres mientras la consulta espera el candado se responde y no se pisa. Con un `update` que falla con el teléfono en el mensaje: `500` `INTERNAL_ERROR`, fila igual, teléfono fuera del log, y la consulta siguiente cierra o marca. Pruebas en negativo: `open-in-view: true` hace fallar `aReservationConfirmedWhileTheQueryWaitsForTheLockIsNotOverwritten` (confirma P2), y quitar la lectura 2 hace fallar el mismo test. Archivos restaurados y hash comprobado.
 
-- [ ] **TASK-09 · Id con el carácter nulo**
+- [x] **TASK-09 · Id con el carácter nulo**
   - Alcance: consulta con `%00` contra el servidor real, en `ReservationProcessStatusIntegrationTest` (P5). Si responde `500`, el caso de uso trata ese id como inexistente, sin ir a la base, y se avisa al usuario. Si T05 o T06 tienen el mismo problema, se avisa y no se arregla acá.
   - Depende de: TASK-07
   - Resuelve: CA-13
   - Validación: `./mvnw test -Dtest=ReservationProcessStatusIntegrationTest`, y registrar qué respondió de verdad.
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. `GET` con `%00` contra el servidor real: `400`, página HTML de Tomcat. También `400` sin token, y `400` en `POST /confirm` y `POST /phone`, así que el servidor lo rechaza antes de la seguridad y de los controllers: no llega a la base y no hace falta cambiar código (P5). Esa respuesta no es `problem+json`. Un id de 300 caracteres responde `404`. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1164 `<testcase>` (1136 + 28), 0 fallas, 0 errores, 0 salteados, 102 XML.
 
 - [ ] **TASK-10 · Consulta con la base caída de verdad**
   - Alcance: crea `DatabaseDownStatusQueryIntegrationTest`, con Postgres propio en pausa y `hikari.connection-timeout` corto, como `DatabaseDownKafkaIntegrationTest`. Comprueba `500` `INTERNAL_ERROR` y que, al reanudar, la consulta siguiente cierra el proceso.
