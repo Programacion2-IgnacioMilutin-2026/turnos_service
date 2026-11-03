@@ -24,7 +24,9 @@ import turnos.reservation.domain.model.ReservationHold;
 import turnos.reservation.domain.model.ReservationHoldConfirmation;
 import turnos.reservation.domain.model.ReservationPatient;
 import turnos.reservation.domain.model.ReservationPolicy;
+import turnos.reservation.domain.model.ReservationListCriteria;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationProfessional;
 import turnos.reservation.domain.model.ReservationSchedule;
 import turnos.reservation.domain.model.ReservationStatus;
@@ -360,6 +362,11 @@ class CreateReservationProcessUseCaseImplTest {
         public Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId) {
             return processes.stream().filter(p -> p.getReservationProcessId().equals(reservationProcessId)
                     && p.getUserId().equals(userId)).findFirst();
+        }
+
+        @Override
+        public ReservationProcessPage findListable(ReservationListCriteria criteria) {
+            throw new UnsupportedOperationException("Blocking a slot does not list");
         }
 
         @Override

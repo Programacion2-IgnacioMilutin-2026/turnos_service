@@ -5,19 +5,19 @@
 
 Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04; 05; 06; 07+08.
 
-- [ ] **TASK-01 · Dominio y puerto**
-  - Alcance: `ReservationStatus.isListable`, los `record` `ReservationListCriteria` y `ReservationProcessPage`, el método `findListable` en `ReservationProcessRepository` y su implementación mínima en los dobles de test (`CopyingReservationProcessRepository`, `ControllableProcessRepository`). Sin consulta real todavía: el adaptador se completa en TASK-02.
+- [x] **TASK-01 · Dominio y puerto**
+  - Alcance: `ReservationStatus.isListable`, los `record` `ReservationListCriteria` y `ReservationProcessPage`, el método `findListable` en `ReservationProcessRepository` y su implementación mínima en los cuatro dobles de test que implementan el puerto (`CopyingReservationProcessRepository`, `ControllableProcessRepository`, y los de `CreateReservationProcessUseCaseImplTest` y `ProcessReservationResultAtomicityTest`). Sin consulta real todavía: el adaptador se completa en TASK-02.
   - Depende de: ninguna
   - Resuelve: CA-08 (qué estados son listables)
   - Validación: `./mvnw test -Dtest=ReservationStatusTest`, con cada estado.
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. `ReservationStatusTest`: 7 tests en verde, uno por estado. El doble de `CopyingReservationProcessRepository` y el de `CreateReservationProcessUseCaseImplTest` lanzan un error si se les pide listar: el listado se prueba contra Postgres.
 
-- [ ] **TASK-02 · Consulta sobre Postgres e índice**
+- [x] **TASK-02 · Consulta sobre Postgres e índice**
   - Alcance: las dos `@Query` en `JpaReservationProcessRepository`, `findListable` en el adaptador (P5 y P6) y la migración `V7`. Tests en `JpaReservationProcessRepositoryAdapterTest`. **Lo primero es comprobar que Hibernate y Postgres aceptan el `CASE` del `ORDER BY`: si no, se frena y se avisa, porque cambiaría P1.** No toca el caso de uso ni la web.
   - Depende de: TASK-01
   - Resuelve: CA-02, CA-06, CA-07, CA-08, CA-09 y CA-10 (consulta), P2
   - Validación: `./mvnw test -Dtest=JpaReservationProcessRepositoryAdapterTest`, con un instante fijo: orden completo, empates, recorrido por páginas sin repetidos ni faltantes, vencido comparado con `hasExpired` en los mismos casos, también en el límite exacto, y el índice presente en la base. Pruebas en negativo: sacar la exclusión de vencidos, sacar la de cancelados sin confirmar, invertir el orden de los pasados, quitar el desempate, sacar P5 y sacar el filtro por usuario.
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. Hibernate y Postgres aceptan el `CASE` con parámetros en el `ORDER BY`: P1 se mantiene. `JpaReservationProcessRepositoryAdapterTest`: 47 tests en verde, 25 nuevos: orden completo, empates en los dos grupos, recorrido por páginas, más allá de la última, página enorme, sin reservas, otro usuario, filtro por estado, estados no listables, cancelado sin confirmar, vencido contra `hasExpired` en 1 s antes, en el límite exacto y 1 s después, `PHONE_SUBMITTED` vencido, confirmado con vencimiento viejo, todos los campos e índice presente. Pruebas en negativo, todas detectadas: sin excluir vencidos, 2 fallas; límite con `>` en lugar de `>=`, 2; cancelados sin confirmar, 1; pasados ascendentes, 1; próximos descendentes, 1; sin desempate, 2; sin contar primero, error en `anEnormousPageNumberIsJustAnEmptyPage`, que confirma P5; sin filtro por usuario, 1. Archivos restaurados y hash comprobado. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1202 `<testcase>` (1170 + 32), 0 fallas, 0 errores, 0 salteados, 104 XML.
 
 - [ ] **TASK-03 · Caso de uso y service**
   - Alcance: `FindReservationProcessesByUserUseCase` y su `Impl`, que arma el criterio con el `Clock` y `ReservationPolicy`, sin candado ni escrituras. `findReservationProcessesByUser` en `ReservationService`. Crea su test y actualiza los que arman el service a mano.
