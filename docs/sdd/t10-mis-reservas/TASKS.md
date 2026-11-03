@@ -40,12 +40,12 @@ Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04; 05; 06; 07+08.
   - Validación: `./mvnw test -Dtest=ReservationProcessListIntegrationTest`, registrando qué respondió de verdad con parámetros vacíos.
   - Resultado: 2026-11-03. `ReservationProcessListIntegrationTest`: 37 tests en verde, con Postgres real. **D3 comprobada:** `?status=&page=&size=` contra el servidor real responde exactamente lo mismo que sin parámetros, sin ajustar el mapper ni el DTO. También: valores por defecto, 8 valores inválidos con su campo, `401`, dueño, filtro por estado, vencidos sin listar y sin cambios en la fila, dentro del margen, `PHONE_SUBMITTED` vencido listado y sin marca, no listables, recorrido por páginas con el abierto, turnos de hoy y empates, más allá de la última con un número enorme, campos por estado, respuesta con el candado tomado, ninguna fila cambiada ni request externo, y JSON y log sin datos privados. Pruebas en negativo: si el listado espera el candado, `itAnswersWhileAnotherOperationOfTheUserHoldsTheLock` falla a los 45 s; si escribe la marca, fallan 2; si rechaza el vacío, falla 1. La primera versión de la rotura del candado no compiló y no valió como evidencia: se repitió sin cambiar el constructor. Archivos restaurados y hash comprobado. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1280 `<testcase>` (1243 + 37), 0 fallas, 0 errores, 0 salteados, 106 XML.
 
-- [ ] **TASK-06 · Listado con la base caída de verdad**
+- [x] **TASK-06 · Listado con la base caída de verdad**
   - Alcance: amplía `DatabaseDownStatusQueryIntegrationTest` con el listado: Postgres en pausa, con la conexión comprobada y con una recién usada, y al reanudar responde con la página.
   - Depende de: TASK-04
   - Resuelve: CA-13
   - Validación: `./mvnw test -Dtest=DatabaseDownStatusQueryIntegrationTest`
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. `DatabaseDownStatusQueryIntegrationTest`: 7 tests en verde, 2 nuevos: con Postgres en pausa, tanto al pedir la conexión como con una recién usada, el listado responde `500` `INTERNAL_ERROR`, la fila queda igual y, al reanudar, responde la página. El teléfono de la fila no llega al log. Pruebas en negativo: si el caso de uso convierte la falla en una lista vacía, fallan los 2; sin el límite de espera, la consulta con la conexión recién usada se corta a los 45 s. Archivos restaurados y hash comprobado. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1282 `<testcase>` (1280 + 2), 0 fallas, 0 errores, 0 salteados, 106 XML, 3 min 15 s.
 
 - [ ] **TASK-07 · Documentación del servicio**
   - Alcance: `CLAUDE.md` (T10 en el slice y en la lista de `docs/sdd`, `V7`, cómo se resuelve la regla del vencido en la consulta) y `docs/decisiones/012-persistencia-del-proceso-de-reserva.md` (el índice y su motivo). No toca contratos ni casos de uso, que ya se ajustaron en la SPEC.

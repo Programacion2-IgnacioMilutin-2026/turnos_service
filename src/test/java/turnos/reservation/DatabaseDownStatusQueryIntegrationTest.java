@@ -142,6 +142,42 @@ class DatabaseDownStatusQueryIntegrationTest {
     }
 
     @Test
+    void aListWithTheDatabaseDownIsAnInternalErrorAndAnswersWhenItComesBack(CapturedOutput output) throws InterruptedException {
+        insertOverdueProcess("PHONE_SUBMITTED");
+        Map<String, Object> before = stored();
+        // Pasado este tiempo, el pool comprueba que la conexión siga viva antes de usarla: falla sin llegar a leer
+        Thread.sleep(1000);
+
+        pauseDatabase();
+        try {
+            expectInternalError(list());
+        } finally {
+            unpauseDatabase();
+        }
+
+        assertThat(output.getAll()).contains("Unexpected error").doesNotContain("5492615551234");
+        expectUnchanged(before);
+        expectTheProcessInTheList();
+    }
+
+    // Una conexión recién usada se entrega sin comprobar: la lectura llega a salir y nunca recibe respuesta
+    @Test
+    void aListOnAConnectionThatStoppedRespondingEndsInAnInternalError() {
+        insertOverdueProcess("PHONE_SUBMITTED");
+        Map<String, Object> before = stored();
+
+        pauseDatabase();
+        try {
+            expectInternalError(list());
+        } finally {
+            unpauseDatabase();
+        }
+
+        expectUnchanged(before);
+        expectTheProcessInTheList();
+    }
+
+    @Test
     void anAnswerThatTakesLongerThanTheLimitFailsInsteadOfWaiting() {
         Instant start = Instant.now();
 
@@ -152,7 +188,11 @@ class DatabaseDownStatusQueryIntegrationTest {
     }
 
     private void expectInternalError() {
-        String body = query().expectStatus().isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
+        expectInternalError(query());
+    }
+
+    private void expectInternalError(RestTestClient.ResponseSpec response) {
+        String body = response.expectStatus().isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR)
                 .expectBody(String.class).returnResult().getResponseBody();
         assertThat(JsonPath.<String>read(body, "$.code")).isEqualTo("INTERNAL_ERROR");
     }
@@ -195,6 +235,18 @@ class DatabaseDownStatusQueryIntegrationTest {
 
     private Map<String, Object> stored() {
         return jdbc.queryForMap("SELECT * FROM reservation_processes WHERE reservation_process_id = ?", PROCESS);
+    }
+
+    private void expectTheProcessInTheList() {
+        String body = list().expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+        assertThat(JsonPath.<String>read(body, "$.items[0].reservationProcessId")).isEqualTo(PROCESS);
+        assertThat(JsonPath.<Integer>read(body, "$.totalItems")).isEqualTo(1);
+    }
+
+    private RestTestClient.ResponseSpec list() {
+        return restTestClient.get().uri("/api/reservation-processes")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .exchange();
     }
 
     private RestTestClient.ResponseSpec query() {
