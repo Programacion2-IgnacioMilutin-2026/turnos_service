@@ -82,16 +82,16 @@ Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04+05; 06; 07+08+0
   - Validación: `./mvnw test -Dtest='DatabaseDownStatusQueryIntegrationTest,TurnosServiceApplicationTests'`, con pruebas en negativo: límite en 0 y sin la propiedad en el yaml.
   - Resultado: 2026-11-03. `DatabaseDownStatusQueryIntegrationTest` (5 tests) y `TurnosServiceApplicationTests` (4) en verde. Con el límite en 2 s: una lectura sobre una conexión congelada responde `500`; una escritura con la base congelada, con el candado tomado, responde `500` y la consulta siguiente cierra el proceso; `pg_sleep(10)` falla en menos de 8 s. Pruebas en negativo: con el límite en 0, los 5 tests dan error (dos se cuelgan hasta los 45 s, y el contenedor pausado arrastra a los demás); sin la propiedad en el yaml falla `theDatabaseConnectionHasALimitToWaitForAnAnswer`. Archivos restaurados y hash comprobado. Con la variable vacía la aplicación no arranca (`socketTimeout parameter value must be an integer`), comprobado con un test temporal ya borrado. El valor de 30 s no se midió contra operaciones reales. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1170 `<testcase>` (1164 + 6), 0 fallas, 0 errores, 0 salteados, 103 XML.
 
-- [ ] **TASK-11 · Documentación del servicio**
+- [x] **TASK-11 · Documentación del servicio**
   - Alcance: `CLAUDE.md` (excepción de la lectura sin candado, T09 en el slice y en la lista de `docs/sdd`, las transiciones nuevas, `TURNOS_DB_SOCKET_TIMEOUT` y que no puede quedar vacía) y una actualización en `docs/decisiones/013-operaciones-de-un-usuario-de-a-una.md`. No toca contratos ni casos de uso.
   - Depende de: TASK-03
   - Resuelve: restricción de la SPEC (D2)
   - Validación: releer los dos textos contra el código final.
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. `CLAUDE.md`: T09 en el slice y en la lista de `docs/sdd`, `resolveOverdue` y `needsOverdueResolution`, la excepción de la lectura sin candado y su dependencia de `open-in-view`, `TURNOS_DB_SOCKET_TIMEOUT` y que no puede quedar vacía, `ControllableProcessRepository` y cómo pausar Postgres en un test. Decisión 013: actualización con D2 y D5. Comparado contra el código: los métodos, las clases de test y las propiedades citadas existen.
 
-- [ ] **TASK-12 · Suite completa y revisión de los criterios**
+- [x] **TASK-12 · Suite completa y revisión de los criterios**
   - Alcance: correr toda la suite y revisar CA-01 a CA-14 contra lo observado. Comprobar que los tests existentes solo cambiaron en lo previsto por TASK-02.
   - Depende de: TASK-01 a TASK-11 y TASK-13
   - Resuelve: CA-07
   - Validación: `./mvnw clean test`, con el conteo tomado de `target/surefire-reports/TEST-*.xml` (partida: 1079 tests, 0 fallas, 0 errores).
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. `./mvnw clean test`, exit 0, 1170 `<testcase>` (partida: 1079), 0 fallas, 0 errores, 0 salteados, 103 XML. CA-01 a CA-14 revisados contra la evidencia de TASK-01 a TASK-10 y TASK-13: todos cubiertos por tests ejecutados. Tests existentes cambiados, comparando contra `develop`: `ReservationProcessDtoMapperTest` (lo previsto en TASK-02), `CatedraEventAdapterTest` (constructor del service), `CopyingReservationProcessRepository` (dos métodos nuevos), `PhoneSubmissionKafkaIntegrationTest` (repositorio extraído), y solo agregados en `ReservationProcessTest`, `ReservationProcessControllerTest` y `TurnosServiceApplicationTests`. Copias de contratos, casos de uso y secuencia iguales a `documentacion`. No verificado: la app levantada con el `.env` real, porque hace el login contra la cátedra (D4), y Postgres caído cerrando sus conexiones; solo se probó congelado.
