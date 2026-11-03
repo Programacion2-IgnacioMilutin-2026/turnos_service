@@ -1,5 +1,6 @@
 package turnos;
 
+import com.zaxxer.hikari.HikariDataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,6 +17,12 @@ class TurnosServiceApplicationTests {
 
 	@Test
 	void contextLoads() {
+	}
+
+	// Sin este límite, una base que deja de responder sin cerrar la conexión deja el pedido esperando para siempre
+	@Test
+	void theDatabaseConnectionHasALimitToWaitForAnAnswer(@Autowired HikariDataSource dataSource) {
+		assertThat(dataSource.getDataSourceProperties().getProperty("socketTimeout")).isEqualTo("30");
 	}
 
 	// El endpoint de prueba de la seguridad solo existe en los tests que lo importan

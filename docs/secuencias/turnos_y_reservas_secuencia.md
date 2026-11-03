@@ -450,13 +450,22 @@ sequenceDiagram
         break Process does not exist or belongs to another user
             Service-->>App: 404 (same answer for both cases)
         end
-        opt Process is HELD or WAITING_FOR_PHONE and expiresAt plus safety margin already reached
-            Service->>DB: Mark process EXPIRED
+        opt Process is open, expiresAt plus safety margin already reached, and it still needs closing or marking
+            Note over Service,DB: Only here the query takes the user lock, so it can wait for T05, T06 or T08 of this user
+            Service->>DB: Find the process again, it may have changed while waiting
+            DB-->>Service: Process
+            opt Process is still HELD or WAITING_FOR_PHONE and overdue
+                Service->>DB: Mark process EXPIRED
+            end
+            opt Process is still PHONE_SUBMITTED, overdue and not marked
+                Service->>DB: Mark process for reconciliation (T13), it stays PHONE_SUBMITTED
+            end
+            break Local database access fails
+                Service->>Service: Log error
+                Service-->>App: 500 (the next query tries again)
+            end
         end
-        opt Process is PHONE_SUBMITTED and expiresAt plus safety margin already reached
-            Service->>DB: Mark process for reconciliation (T13), it stays PHONE_SUBMITTED
-        end
-        Service-->>App: Status (status, professionalId, date, startTime, expiresAt if still open, reservationId if CONFIRMED, rejection reason if the last event was a rejection)
+        Service-->>App: 200 (reservation process with the contract fields, including expiresAt if still open, reservationId if CONFIRMED, rejectionReason if the last event was a rejection)
         Note over Service,DB: T08 (section 4) can update the process between two queries
     end
 
@@ -478,7 +487,7 @@ sequenceDiagram
         Service->>Service: Log error
         Service-->>App: 500
     end
-    Service-->>App: 200 (page with total, each item with reservationProcessId, status, professionalId, professional name and category, date, startTime, expiresAt and rejection reason if open, cancellation reason if cancelled, reservationId if it exists)
+    Service-->>App: 200 (page with total, each item with reservationProcessId, status, professionalId, professional name and category, date, startTime, expiresAt and rejectionReason if open, cancellationReason if cancelled, reservationId if it exists)
     Note over Service,App: No matches, or a page beyond the last, gives an empty page with the real total (0 if there are none)
 ```
 

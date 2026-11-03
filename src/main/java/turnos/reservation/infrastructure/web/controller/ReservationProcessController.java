@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.ErrorResponseException;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -175,6 +176,23 @@ public class ReservationProcessController {
         } catch (ReservationLocalStateOutOfSyncException e) {
             throw error(HttpStatus.INTERNAL_SERVER_ERROR, "LOCAL_STATE_OUT_OF_SYNC",
                     "The phone could not be published and the state of the reservation process could not be saved");
+        } catch (ReservationException e) {
+            throw error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
+        }
+    }
+
+    // Se busca entre los procesos del usuario, así que uno ajeno responde igual que uno inexistente. Una falla al leer
+    // llega al manejador global, que responde el mismo error interno. Una falla al guardar se atrapa acá porque el
+    // manejador registra la excepción completa, y su causa podría incluir la fila, que puede llevar el teléfono
+    @GetMapping("/reservation-processes/{reservationProcessId}")
+    public ResponseEntity<ReservationProcessResponse> getReservationProcessById(@PathVariable String reservationProcessId,
+                                                                                @AuthenticationPrincipal Jwt jwt) {
+        try {
+            ReservationProcess found = reservationService.getReservationProcessById(Long.valueOf(jwt.getSubject()),
+                    reservationProcessId);
+            return ResponseEntity.ok(reservationProcessDtoMapper.toResponse(found));
+        } catch (ReservationProcessNotFoundException e) {
+            throw error(HttpStatus.NOT_FOUND, "RESERVATION_PROCESS_NOT_FOUND", "Reservation process not found");
         } catch (ReservationException e) {
             throw error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
         }
