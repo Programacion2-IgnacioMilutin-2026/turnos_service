@@ -52,6 +52,68 @@ class ReservationProcessTest {
         assertThat(process.getStatus()).isEqualTo(ReservationStatus.EXPIRED);
     }
 
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE"})
+    void anOverdueProcessWaitingForTheUserIsResolvedByClosingIt(ReservationStatus status) {
+        ReservationProcess process = process(status);
+        process.setRejectionReason("INVALID_PHONE_NUMBER");
+        process.markForReconciliation();
+
+        assertThat(process.needsOverdueResolution(EXPIRES_AT.plusSeconds(31), MARGIN)).isTrue();
+        assertThat(process.resolveOverdue(EXPIRES_AT.plusSeconds(31), MARGIN)).isTrue();
+
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.EXPIRED);
+        assertThat(process.getRejectionReason()).isNull();
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
+    void anOverdueProcessWithThePhoneSubmittedIsResolvedByMarkingItWithoutClosingIt() {
+        ReservationProcess process = process(ReservationStatus.PHONE_SUBMITTED);
+
+        assertThat(process.needsOverdueResolution(EXPIRES_AT.plusSeconds(31), MARGIN)).isTrue();
+        assertThat(process.resolveOverdue(EXPIRES_AT.plusSeconds(31), MARGIN)).isTrue();
+
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.PHONE_SUBMITTED);
+        assertThat(process.isNeedsReconciliation()).isTrue();
+    }
+
+    @Test
+    void aProcessWithThePhoneSubmittedAlreadyMarkedHasNothingLeftToResolve() {
+        ReservationProcess process = process(ReservationStatus.PHONE_SUBMITTED);
+        process.markForReconciliation();
+
+        assertThat(process.needsOverdueResolution(EXPIRES_AT.plusSeconds(31), MARGIN)).isFalse();
+        assertThat(process.resolveOverdue(EXPIRES_AT.plusSeconds(31), MARGIN)).isFalse();
+
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.PHONE_SUBMITTED);
+        assertThat(process.isNeedsReconciliation()).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE", "PHONE_SUBMITTED"})
+    void anOpenProcessInsideTheMarginHasNothingToResolve(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        assertThat(process.needsOverdueResolution(EXPIRES_AT.plusSeconds(30), MARGIN)).isFalse();
+        assertThat(process.resolveOverdue(EXPIRES_AT.plusSeconds(30), MARGIN)).isFalse();
+
+        assertThat(process.getStatus()).isEqualTo(status);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"CONFIRMED", "CANCELLED", "EXPIRED", "INVALID"})
+    void aClosedProcessHasNothingToResolveNoMatterHowOldItIs(ReservationStatus status) {
+        ReservationProcess process = process(status);
+
+        assertThat(process.needsOverdueResolution(EXPIRES_AT.plusSeconds(3600), MARGIN)).isFalse();
+        assertThat(process.resolveOverdue(EXPIRES_AT.plusSeconds(3600), MARGIN)).isFalse();
+
+        assertThat(process.getStatus()).isEqualTo(status);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
     @Test
     void aProcessIsNotClosedBeforeItExpires() {
         ReservationProcess process = process(ReservationStatus.HELD);

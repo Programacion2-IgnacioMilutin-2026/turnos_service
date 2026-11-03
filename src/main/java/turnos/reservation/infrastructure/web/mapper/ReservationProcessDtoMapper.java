@@ -5,6 +5,7 @@ import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessResponse;
 
+import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 
@@ -35,7 +36,16 @@ public class ReservationProcessDtoMapper {
                 .professionalCategoryName(domain.getProfessionalCategoryName())
                 .date(domain.getDate())
                 .startTime(domain.getStartTime().format(HOUR_AND_MINUTE))
-                .expiresAt(domain.isOpen() ? domain.getExpiresAt().truncatedTo(ChronoUnit.SECONDS) : null)
+                .expiresAt(domain.isOpen() ? inSeconds(domain.getExpiresAt()) : null)
+                .rejectionReason(domain.getRejectionReason())
+                .reservationId(domain.getReservationId())
+                .confirmedAt(inSeconds(domain.getConfirmedAt()))
+                .cancelledAt(inSeconds(domain.getCancelledAt()))
+                .cancellationReason(domain.getCancellationReason())
                 .build();
+    }
+
+    private static Instant inSeconds(Instant instant) {
+        return instant == null ? null : instant.truncatedTo(ChronoUnit.SECONDS);
     }
 }
