@@ -2,12 +2,14 @@ package turnos.reservation.application.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import turnos.reservation.application.exception.ReservationProcessNotFoundException;
 import turnos.reservation.domain.model.ReservationEventOutcome;
 import turnos.reservation.domain.model.ReservationPhoneRequest;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationResult;
 import turnos.reservation.domain.ports.in.ConfirmReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.CreateReservationProcessUseCase;
+import turnos.reservation.domain.ports.in.GetReservationProcessByIdUseCase;
 import turnos.reservation.domain.ports.in.ProcessPhoneRequestUseCase;
 import turnos.reservation.domain.ports.in.ProcessReservationResultUseCase;
 import turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
@@ -24,6 +26,7 @@ public class ReservationService {
     private final ProcessPhoneRequestUseCase processPhoneRequestUseCase;
     private final ProcessReservationResultUseCase processReservationResultUseCase;
     private final SubmitPhoneUseCase submitPhoneUseCase;
+    private final GetReservationProcessByIdUseCase getReservationProcessByIdUseCase;
 
     public ReservationProcess createReservationProcess(Long userId, Long professionalId, LocalDate date,
                                                        LocalTime startTime, String userToken) {
@@ -36,6 +39,11 @@ public class ReservationService {
 
     public ReservationProcess submitPhone(Long userId, String reservationProcessId, String phoneNumber) {
         return submitPhoneUseCase.submitPhone(userId, reservationProcessId, phoneNumber);
+    }
+
+    public ReservationProcess getReservationProcessById(Long userId, String reservationProcessId) {
+        return getReservationProcessByIdUseCase.getReservationProcessById(userId, reservationProcessId)
+                .orElseThrow(() -> new ReservationProcessNotFoundException(reservationProcessId));
     }
 
     public ReservationEventOutcome processPhoneRequest(ReservationPhoneRequest request) {
