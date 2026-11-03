@@ -372,7 +372,7 @@ Respuesta `200`, con el formato de página de `contratos_comunes.md`, sección 3
 }
 ```
 
-Solo lista las reservas del usuario autenticado: el proceso abierto, si lo hay, las confirmadas y las canceladas después de confirmarse. No lista los `EXPIRED`, los `INVALID` ni los cancelados antes de confirmarse. El orden es: primero el proceso abierto y después por fecha y hora del turno. Una página fuera de rango o un filtro sin resultados responden `200` con `items` vacío y el `totalItems` real.
+Solo lista las reservas del usuario autenticado: el proceso abierto, si lo hay, las confirmadas y las canceladas después de confirmarse. No lista los `EXPIRED`, los `INVALID`, los cancelados antes de confirmarse ni los `HELD` o `WAITING_FOR_PHONE` cuyo `expiresAt`, más el margen de seguridad, ya venció. El orden es: primero el proceso abierto, después los turnos que todavía no comenzaron, del más cercano al más lejano, y después los ya comenzados, del más reciente al más antiguo. Una página fuera de rango o un filtro sin resultados responden `200` con `items` vacío y el `totalItems` real.
 
 | Estado | `code` | Cuándo |
 | --- | --- | --- |

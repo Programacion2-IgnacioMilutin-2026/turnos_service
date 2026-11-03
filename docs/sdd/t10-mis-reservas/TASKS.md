@@ -1,0 +1,62 @@
+# TASKS: T10 — Consultar mis reservas
+
+**SPEC:** `docs/sdd/t10-mis-reservas/SPEC.md` (aprobada el 2026-11-03)
+**PLAN:** `docs/sdd/t10-mis-reservas/PLAN.md` (aprobado el 2026-11-03)
+
+Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04; 05; 06; 07+08.
+
+- [ ] **TASK-01 · Dominio y puerto**
+  - Alcance: `ReservationStatus.isListable`, los `record` `ReservationListCriteria` y `ReservationProcessPage`, el método `findListable` en `ReservationProcessRepository` y su implementación mínima en los dobles de test (`CopyingReservationProcessRepository`, `ControllableProcessRepository`). Sin consulta real todavía: el adaptador se completa en TASK-02.
+  - Depende de: ninguna
+  - Resuelve: CA-08 (qué estados son listables)
+  - Validación: `./mvnw test -Dtest=ReservationStatusTest`, con cada estado.
+  - Resultado: pendiente
+
+- [ ] **TASK-02 · Consulta sobre Postgres e índice**
+  - Alcance: las dos `@Query` en `JpaReservationProcessRepository`, `findListable` en el adaptador (P5 y P6) y la migración `V7`. Tests en `JpaReservationProcessRepositoryAdapterTest`. **Lo primero es comprobar que Hibernate y Postgres aceptan el `CASE` del `ORDER BY`: si no, se frena y se avisa, porque cambiaría P1.** No toca el caso de uso ni la web.
+  - Depende de: TASK-01
+  - Resuelve: CA-02, CA-06, CA-07, CA-08, CA-09 y CA-10 (consulta), P2
+  - Validación: `./mvnw test -Dtest=JpaReservationProcessRepositoryAdapterTest`, con un instante fijo: orden completo, empates, recorrido por páginas sin repetidos ni faltantes, vencido comparado con `hasExpired` en los mismos casos, también en el límite exacto, y el índice presente en la base. Pruebas en negativo: sacar la exclusión de vencidos, sacar la de cancelados sin confirmar, invertir el orden de los pasados, quitar el desempate, sacar P5 y sacar el filtro por usuario.
+  - Resultado: pendiente
+
+- [ ] **TASK-03 · Caso de uso y service**
+  - Alcance: `FindReservationProcessesByUserUseCase` y su `Impl`, que arma el criterio con el `Clock` y `ReservationPolicy`, sin candado ni escrituras. `findReservationProcessesByUser` en `ReservationService`. Crea su test y actualiza los que arman el service a mano.
+  - Depende de: TASK-02
+  - Resuelve: CA-03, CA-06 y CA-09 (el límite del vencido y la fecha y hora en la zona de atención), CA-12 y CA-14 (lógica)
+  - Validación: `./mvnw test -Dtest='FindReservationProcessesByUserUseCaseImplTest,ReservationServiceTest,CatedraEventAdapterTest'`. Prueba en negativo: usar otra zona o no restar el margen.
+  - Resultado: pendiente
+
+- [ ] **TASK-04 · El endpoint**
+  - Alcance: `ReservationProcessListRequest` (P3), `ReservationProcessPageResponse`, el mapper (valores por defecto, vacío como ausente y página) y el `GET /api/reservation-processes` en el controller, con sus tests.
+  - Depende de: TASK-03
+  - Resuelve: CA-01, CA-03, CA-04, CA-11 y CA-13 (capa web), P3
+  - Validación: `./mvnw test -Dtest='ReservationProcessControllerTest,ReservationProcessDtoMapperTest'`: `401` y `403` sin llamar al service; cada valor inválido con su campo en `fieldErrors`, sin llamar al service; lo que acepta el `@Pattern` coincide con `isListable`; `500` sin motivo interno.
+  - Resultado: pendiente
+
+- [ ] **TASK-05 · Integración con la app completa**
+  - Alcance: crea `ReservationProcessListIntegrationTest`, con Postgres real, cátedra y catálogo simulados, y el estado de partida escrito en la base. Cubre el recorrido por HTTP, el parámetro vacío (D3), la página enorme, el candado tomado, sin cambios en las filas ni requests externos, y JSON y log sin datos privados. Si D3 no funciona como se espera, se ajusta el mapper o el DTO y se avisa.
+  - Depende de: TASK-04
+  - Resuelve: CA-02, CA-03, CA-05, CA-06, CA-07, CA-09, CA-10, CA-11, CA-12, CA-14 y CA-15
+  - Validación: `./mvnw test -Dtest=ReservationProcessListIntegrationTest`, registrando qué respondió de verdad con parámetros vacíos.
+  - Resultado: pendiente
+
+- [ ] **TASK-06 · Listado con la base caída de verdad**
+  - Alcance: amplía `DatabaseDownStatusQueryIntegrationTest` con el listado: Postgres en pausa, con la conexión comprobada y con una recién usada, y al reanudar responde con la página.
+  - Depende de: TASK-04
+  - Resuelve: CA-13
+  - Validación: `./mvnw test -Dtest=DatabaseDownStatusQueryIntegrationTest`
+  - Resultado: pendiente
+
+- [ ] **TASK-07 · Documentación del servicio**
+  - Alcance: `CLAUDE.md` (T10 en el slice y en la lista de `docs/sdd`, `V7`, cómo se resuelve la regla del vencido en la consulta) y `docs/decisiones/012-persistencia-del-proceso-de-reserva.md` (el índice y su motivo). No toca contratos ni casos de uso, que ya se ajustaron en la SPEC.
+  - Depende de: TASK-02, TASK-04
+  - Resuelve: P2 (documentar el índice)
+  - Validación: releer los dos textos contra el código final.
+  - Resultado: pendiente
+
+- [ ] **TASK-08 · Suite completa y revisión de los criterios**
+  - Alcance: correr toda la suite y revisar CA-01 a CA-16 contra lo observado. Comprobar que los tests existentes solo cambiaron en lo previsto.
+  - Depende de: TASK-01 a TASK-07
+  - Resuelve: CA-16
+  - Validación: `./mvnw clean test`, con el conteo tomado de `target/surefire-reports/TEST-*.xml` por `<testcase>`.
+  - Resultado: pendiente
