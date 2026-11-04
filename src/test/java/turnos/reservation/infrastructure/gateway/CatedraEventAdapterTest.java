@@ -142,7 +142,7 @@ class CatedraEventAdapterTest {
             receivedResults.add(result);
             return useCase.processReservationResult(result);
         };
-        return new CatedraEventAdapter(new ReservationService(null, null, null, recording, null, null, null));
+        return new CatedraEventAdapter(new ReservationService(null, null, null, recording, null, null, null, null));
     }
 
     private CatedraEventAdapter adapter(ProcessPhoneRequestUseCase useCase) {
@@ -150,6 +150,6 @@ class CatedraEventAdapterTest {
             received.add(request);
             return useCase.processPhoneRequest(request);
         };
-        return new CatedraEventAdapter(new ReservationService(null, null, recording, null, null, null, null));
+        return new CatedraEventAdapter(new ReservationService(null, null, recording, null, null, null, null, null));
     }
 }

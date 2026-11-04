@@ -20,6 +20,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import turnos.TestSecurityConfiguration;
 import turnos.TestTokens;
+import turnos.reservation.application.exception.ReservationAppointmentNotFoundException;
+import turnos.reservation.application.exception.ReservationAppointmentOwnerMismatchException;
 import turnos.reservation.application.exception.ReservationCatalogUnavailableException;
 import turnos.reservation.application.exception.ReservationCentralUnavailableException;
 import turnos.reservation.application.exception.ReservationHoldExpiredException;
@@ -30,6 +32,7 @@ import turnos.reservation.application.exception.ReservationInvalidPhoneNumberExc
 import turnos.reservation.application.exception.ReservationInvalidProcessStateException;
 import turnos.reservation.application.exception.ReservationInvalidSlotException;
 import turnos.reservation.application.exception.ReservationLocalStateOutOfSyncException;
+import turnos.reservation.application.exception.ReservationNotCancellableException;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.application.exception.ReservationOpenProcessExistsException;
 import turnos.reservation.application.exception.ReservationPatientMismatchException;
@@ -687,6 +690,165 @@ class ReservationProcessControllerTest {
         mockMvc.perform(get(PATH).header(HttpHeaders.AUTHORIZATION, "Bearer " + TestTokens.forUser("42", "ROLE_OTRO")))
                 .andExpect(status().isForbidden());
         verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void aCancellationAnswersTheProcessWithoutPrivateData() throws Exception {
+        ReservationProcess cancelled = submittedProcess();
+        cancelled.setStatus(ReservationStatus.CANCELLED);
+        cancelled.setCancelledAt(Instant.parse("2026-11-04T15:10:00.987Z"));
+        cancelled.setCancellationReason("Cambio");
+        when(reservationService.cancelReservationProcess(42L, "process-1", "Cambio")).thenReturn(cancelled);
+
+        String body = cancel("process-1", "{\"reason\":\"Cambio\"}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.cancelledAt").value("2026-11-04T15:10:00Z"))
+                .andExpect(jsonPath("$.cancellationReason").value("Cambio"))
+                .andExpect(jsonPath("$.expiresAt").isEmpty())
+                .andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("hold-1").doesNotContain("request-event-1").doesNotContain("5492615551234")
+                .doesNotContain("needsReconciliation");
+    }
+
+    @Test
+    void theOwnerOfTheCancellationComesFromTheTokenAndTheProcessFromThePath() throws Exception {
+        when(reservationService.cancelReservationProcess(7L, "process-9", null)).thenReturn(HELD);
+
+        mockMvc.perform(post(PATH + "/process-9/cancel").header(HttpHeaders.AUTHORIZATION, "Bearer " + TestTokens.forUser("7", "ROLE_ADMIN")))
+                .andExpect(status().isOk());
+
+        verify(reservationService).cancelReservationProcess(7L, "process-9", null);
+    }
+
+    @Test
+    void withoutABodyTheCancellationHasNoReason() throws Exception {
+        when(reservationService.cancelReservationProcess(42L, "process-1", null)).thenReturn(HELD);
+
+        mockMvc.perform(post(PATH + "/process-1/cancel").header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN))
+                .andExpect(status().isOk());
+
+        verify(reservationService).cancelReservationProcess(42L, "process-1", null);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"{}", "{\"reason\":null}", "{\"reason\":\"\"}", "{\"reason\":\"   \"}", "{\"other\":\"ignored\"}"})
+    void aBodyWithoutAUsefulReasonHasNoReason(String body) throws Exception {
+        when(reservationService.cancelReservationProcess(42L, "process-1", null)).thenReturn(HELD);
+
+        cancel("process-1", body).andExpect(status().isOk());
+
+        verify(reservationService).cancelReservationProcess(42L, "process-1", null);
+    }
+
+    @Test
+    void aReasonOfTheMaximumLengthIsAccepted() throws Exception {
+        String reason = "x".repeat(500);
+        when(reservationService.cancelReservationProcess(42L, "process-1", reason)).thenReturn(HELD);
+
+        cancel("process-1", "{\"reason\":\"" + reason + "\"}").andExpect(status().isOk());
+    }
+
+    @Test
+    void aLongerReasonIsAValidationErrorAndNeverReachesTheService() throws Exception {
+        expectProblem(cancel("process-1", "{\"reason\":\"" + "x".repeat(501) + "\"}"), 400, "VALIDATION_ERROR")
+                .andExpect(jsonPath("$.fieldErrors[0].field").value("reason"));
+
+        verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void aBadlyWrittenBodyNeverReachesTheService() throws Exception {
+        expectProblem(cancel("process-1", "{not json"), 400, "VALIDATION_ERROR");
+
+        verifyNoInteractions(reservationService);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"ReservationProcessNotFoundException, 404, RESERVATION_PROCESS_NOT_FOUND",
+            "ReservationNotCancellableException, 409, RESERVATION_NOT_CANCELLABLE",
+            "ReservationServiceDegradedException, 503, SERVICE_DEGRADED",
+            "ReservationCentralUnavailableException, 503, CENTRAL_UNAVAILABLE",
+            "ReservationLocalStateOutOfSyncException, 500, LOCAL_STATE_OUT_OF_SYNC",
+            "ReservationAppointmentNotFoundException, 500, INTERNAL_ERROR",
+            "ReservationAppointmentOwnerMismatchException, 500, INTERNAL_ERROR",
+            "ReservationIntegrationException, 500, INTERNAL_ERROR",
+            "ReservationNotSavedException, 500, INTERNAL_ERROR"})
+    void eachCancellationErrorAnswersItsStatusAndCodeWithoutTheInternalReason(String exception, int status, String code) throws Exception {
+        RuntimeException failure = switch (exception) {
+            case "ReservationProcessNotFoundException" -> new ReservationProcessNotFoundException("secret-process");
+            case "ReservationNotCancellableException" -> new ReservationNotCancellableException("secret-process");
+            case "ReservationServiceDegradedException" -> new ReservationServiceDegradedException("secret-reason");
+            case "ReservationCentralUnavailableException" -> new ReservationCentralUnavailableException("secret-reason");
+            case "ReservationLocalStateOutOfSyncException" -> new ReservationLocalStateOutOfSyncException("secret-process", new IllegalStateException("secret-cause"));
+            case "ReservationAppointmentNotFoundException" -> new ReservationAppointmentNotFoundException("secret-process");
+            case "ReservationAppointmentOwnerMismatchException" -> new ReservationAppointmentOwnerMismatchException("secret-process");
+            case "ReservationIntegrationException" -> new ReservationIntegrationException("secret-reason");
+            default -> new ReservationNotSavedException("secret-process", new IllegalStateException("secret-cause"));
+        };
+        when(reservationService.cancelReservationProcess(42L, "process-1", null)).thenThrow(failure);
+
+        String body = expectProblem(cancel("process-1", "{}"), status, code).andReturn().getResponse().getContentAsString();
+
+        assertThat(body).doesNotContain("secret");
+    }
+
+    @Test
+    void aProcessThatCannotBeCancelledAnswersItsCurrentStatus() throws Exception {
+        when(reservationService.cancelReservationProcess(42L, "process-1", null))
+                .thenThrow(new ReservationInvalidProcessStateException("process-1", ReservationStatus.PHONE_SUBMITTED));
+
+        expectProblem(cancel("process-1", "{}"), 409, "INVALID_PROCESS_STATE")
+                .andExpect(jsonPath("$.currentStatus").value("PHONE_SUBMITTED"));
+    }
+
+    @Test
+    void thePhoneInTheCauseOfAFailedCancellationNeverReachesTheLog(CapturedOutput output) throws Exception {
+        when(reservationService.cancelReservationProcess(42L, "process-1", null))
+                .thenThrow(new ReservationNotSavedException("process-1", new IllegalStateException("row with +5492615551234")))
+                .thenThrow(new ReservationLocalStateOutOfSyncException("process-1", new IllegalStateException("row with +5492615551234")));
+
+        expectProblem(cancel("process-1", "{}"), 500, "INTERNAL_ERROR");
+        expectProblem(cancel("process-1", "{}"), 500, "LOCAL_STATE_OUT_OF_SYNC");
+
+        assertThat(output.getAll()).doesNotContain("5492615551234");
+    }
+
+    @Test
+    void withoutATokenNothingIsCancelled() throws Exception {
+        mockMvc.perform(post(PATH + "/process-1/cancel")).andExpect(status().isUnauthorized());
+        verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void anInvalidTokenCancelsNothing() throws Exception {
+        mockMvc.perform(post(PATH + "/process-1/cancel").header(HttpHeaders.AUTHORIZATION, "Bearer not-a-token"))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void anExpiredTokenCancelsNothing() throws Exception {
+        Instant now = Instant.now();
+        String expired = TestTokens.signed(claims -> claims.subject("42").claim("auth", "ROLE_USER")
+                .issuedAt(now.minusSeconds(3600)).expiresAt(now.minusSeconds(1)));
+
+        mockMvc.perform(post(PATH + "/process-1/cancel").header(HttpHeaders.AUTHORIZATION, "Bearer " + expired))
+                .andExpect(status().isUnauthorized());
+        verifyNoInteractions(reservationService);
+    }
+
+    @Test
+    void aTokenWithoutAValidRoleCancelsNothing() throws Exception {
+        mockMvc.perform(post(PATH + "/process-1/cancel").header(HttpHeaders.AUTHORIZATION, "Bearer " + TestTokens.forUser("42", "ROLE_OTRO")))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(reservationService);
+    }
+
+    private ResultActions cancel(String reservationProcessId, String body) throws Exception {
+        return mockMvc.perform(post(PATH + "/" + reservationProcessId + "/cancel")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + TOKEN)
+                .contentType(MediaType.APPLICATION_JSON).content(body));
     }
 
     private ResultActions list(String parameters) throws Exception {

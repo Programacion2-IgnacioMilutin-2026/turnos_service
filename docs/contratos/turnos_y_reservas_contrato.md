@@ -390,18 +390,18 @@ Solo lista las reservas del usuario autenticado: el proceso abierto, si lo hay, 
 
 El body es opcional. `reason` admite hasta 500 caracteres.
 
-Respuesta `200`: proceso de reserva (sección 2) en estado `CANCELLED`, con `cancelledAt` y `cancellationReason`. Si ya estaba cancelado, también responde `200` con su estado actual, sin llamar a la cátedra (T11 5.1).
+Respuesta `200`: proceso de reserva (sección 2) en estado `CANCELLED`, con `cancelledAt` y `cancellationReason`. Si ya estaba cancelado, también responde `200` con su estado actual, sin llamar a la cátedra (T11 5.1). Un proceso en `HELD` o `WAITING_FOR_PHONE` sin marcar se cierra solo en turnos, sin llamar a la cátedra y aunque su plazo haya vencido (T11 5.3). Un `reason` vacío o solo con espacios cuenta como si no viniera.
 
 | Estado | `code` | Cuándo |
 | --- | --- | --- |
 | `400` | `VALIDATION_ERROR` | `reason` supera los 500 caracteres (T11 3.1). |
 | `404` | `RESERVATION_PROCESS_NOT_FOUND` | El proceso no existe o no es del usuario (T11 4.1). |
-| `409` | `INVALID_PROCESS_STATE` | El estado no es cancelable: `PHONE_SUBMITTED`, `EXPIRED` o `INVALID` (T11 5.2). Agrega `currentStatus`. |
-| `409` | `HOLD_EXPIRED` | Es un proceso abierto cuyo plazo venció; queda `EXPIRED` (T11 5.3). |
+| `409` | `INVALID_PROCESS_STATE` | El estado no es cancelable: `PHONE_SUBMITTED`, `EXPIRED`, `INVALID`, o `HELD` o `WAITING_FOR_PHONE` marcado para reconciliar (T11 5.2). Agrega `currentStatus`. |
 | `409` | `RESERVATION_NOT_CANCELLABLE` | La cátedra no permite cancelarlo; queda marcado para reconciliar (T11 6.5). |
 | `503` | `SERVICE_DEGRADED` | Error de configuración con la cátedra (T11 6.2). |
 | `503` | `CENTRAL_UNAVAILABLE` | La cátedra no responde tras los reintentos. El estado local no cambia (T11 6.6). |
 | `500` | `LOCAL_STATE_OUT_OF_SYNC` | La cátedra canceló pero turnos no pudo guardarlo. La app consulta el estado con T09 (T11 8.1). |
+| `500` | `INTERNAL_ERROR` | No se pudo guardar el cierre de un proceso en curso; no cambió nada (T11 5.3). |
 
 `RESERVATION_NOT_FOUND` y `RESERVATION_OWNER_MISMATCH` de la cátedra responden `500` `INTERNAL_ERROR` (T11 6.3 y 6.4).
 
@@ -755,7 +755,7 @@ Respuesta `200`:
 
 La cancelación de una reserva ya `CANCELLED` es idempotente y devuelve su estado actual. La operación publica `AppointmentCancelled` (4.3).
 
-Nota: el anexo (§13.1) indica que solo se puede cancelar una reserva en `CONFIRMED` o `CANCELLED`. El profesor confirmó que este endpoint también acepta un proceso en `HELD` o `WAITING_FOR_PHONE`. En ese caso `reservationId` puede faltar, porque la reserva todavía no se confirmó.
+Nota: el anexo (§13.1) indica que solo se puede cancelar una reserva en `CONFIRMED` o `CANCELLED`, y la cátedra real respondió `404` en `HELD` y `409` en `WAITING_FOR_PHONE`. Por eso turnos solo llama a este endpoint con un proceso `CONFIRMED`; un proceso en curso se cierra solo en turnos (T11 5.3, decisión 015).
 
 | Respuesta de la cátedra | Qué hace turnos |
 | --- | --- |

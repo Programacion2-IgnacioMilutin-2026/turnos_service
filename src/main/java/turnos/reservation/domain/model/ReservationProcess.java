@@ -206,6 +206,19 @@ public class ReservationProcess {
         cancellationReason = storable(reason);
     }
 
+    // Se cierra solo en turnos: la cátedra no permite cancelarlo, y su hold vence solo. Uno marcado no: no se sabe qué
+    // tiene la cátedra, y un teléfono que se creyó no publicado podría confirmar una reserva que ya nadie vería
+    public boolean canBeAbandoned() {
+        return (status == ReservationStatus.HELD || status == ReservationStatus.WAITING_FOR_PHONE) && !needsReconciliation;
+    }
+
+    public void abandon(Instant occurredAt, String reason) {
+        if (!canBeAbandoned()) {
+            throw new IllegalStateException("Only a process waiting for the user and not marked can be abandoned, this one is " + status);
+        }
+        cancel(occurredAt, reason);
+    }
+
     private void requireOpen(String action) {
         if (!isOpen()) {
             throw new IllegalStateException("Only an open process can be " + action + ", this one is " + status);

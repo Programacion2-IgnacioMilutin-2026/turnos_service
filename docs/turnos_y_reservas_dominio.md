@@ -85,10 +85,11 @@ Además de las transiciones del diagrama, los eventos de la cátedra pueden cerr
 | --- | --- | --- |
 | Estado abierto | `CONFIRMED` | T08 (`AppointmentConfirmed`); T13 |
 | Estado abierto | `EXPIRED` | T08 (`AppointmentProcessExpired`); T13 |
-| `HELD` o `WAITING_FOR_PHONE` | `EXPIRED` | Cierre por vencimiento en T04, T05, T06, T09, T11 y T12 |
+| `HELD` o `WAITING_FOR_PHONE` | `EXPIRED` | Cierre por vencimiento en T04, T05, T06, T09 y T12 |
 | Estado abierto | `INVALID` | T08 (`AppointmentProcessInvalid`) |
 | Estado abierto o `CONFIRMED` | `CANCELLED` | T08 (`AppointmentCancelled`); T13 |
-| `HELD`, `WAITING_FOR_PHONE` o `CONFIRMED` | `CANCELLED` | T11 |
+| `CONFIRMED` | `CANCELLED` | T11, en la cátedra |
+| `HELD` o `WAITING_FOR_PHONE` sin marcar | `CANCELLED` | T11, solo en turnos (decisión 015) |
 
 Los estados abiertos son `HELD`, `WAITING_FOR_PHONE` y `PHONE_SUBMITTED`.
 
@@ -181,3 +182,4 @@ classDiagram
 | 16 | `date` y `startTime` son `LocalDate` y `LocalTime` (sin zona horaria) y los instantes son `Instant` en UTC |
 | 17 | `ProcessedEvent` se identifica por `eventId` y se registra por cada mensaje de Kafka que turnos consume (T07 y T08), en la misma transacción que el cambio de estado y antes de confirmar el offset. Si llega un `eventId` ya registrado, no se repite ningún efecto y se confirma el offset |
 | 18 | El caché de ocupaciones de T03 no es una entidad del dominio: vive en memoria, con clave (`professionalId`, `date`), y guarda la lista de ocupaciones (`startTime`, `status`, `expiresAt`) y el `dataAsOf`. Solo se usa si la cátedra no responde y el `dataAsOf` no supera la antigüedad máxima configurada. El caché no conserva entradas más viejas que la antigüedad máxima configurada: las descarta por sí mismo al vencer y también al encontrarlas vencidas en una consulta (T03, 5.3). |
+| 19 | Un proceso en `HELD` o `WAITING_FOR_PHONE` se puede cancelar solo en turnos (T11), sin avisar a la cátedra: su hold vence solo. Uno marcado para reconciliar no, porque un teléfono que se creyó no publicado podría confirmar una reserva real (decisión 015) |

@@ -9,6 +9,7 @@ import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationResult;
 import turnos.reservation.domain.model.ReservationStatus;
+import turnos.reservation.domain.ports.in.CancelReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.ConfirmReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.CreateReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.FindReservationProcessesByUserUseCase;
@@ -31,6 +32,7 @@ public class ReservationService {
     private final SubmitPhoneUseCase submitPhoneUseCase;
     private final GetReservationProcessByIdUseCase getReservationProcessByIdUseCase;
     private final FindReservationProcessesByUserUseCase findReservationProcessesByUserUseCase;
+    private final CancelReservationProcessUseCase cancelReservationProcessUseCase;
 
     public ReservationProcess createReservationProcess(Long userId, Long professionalId, LocalDate date,
                                                        LocalTime startTime, String userToken) {
@@ -52,6 +54,10 @@ public class ReservationService {
 
     public ReservationProcessPage findReservationProcessesByUser(Long userId, ReservationStatus status, int page, int size) {
         return findReservationProcessesByUserUseCase.findReservationProcessesByUser(userId, status, page, size);
+    }
+
+    public ReservationProcess cancelReservationProcess(Long userId, String reservationProcessId, String reason) {
+        return cancelReservationProcessUseCase.cancelReservationProcess(userId, reservationProcessId, reason);
     }
 
     public ReservationEventOutcome processPhoneRequest(ReservationPhoneRequest request) {

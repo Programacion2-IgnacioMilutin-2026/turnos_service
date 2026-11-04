@@ -5,6 +5,7 @@ import turnos.reservation.application.exception.ReservationProcessNotFoundExcept
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
+import turnos.reservation.domain.ports.in.CancelReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.ConfirmReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.CreateReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.FindReservationProcessesByUserUseCase;
@@ -25,10 +26,11 @@ class ReservationServiceTest {
 
     private final GetReservationProcessByIdUseCase getReservationProcessById = mock(GetReservationProcessByIdUseCase.class);
     private final FindReservationProcessesByUserUseCase findReservationProcessesByUser = mock(FindReservationProcessesByUserUseCase.class);
+    private final CancelReservationProcessUseCase cancelReservationProcess = mock(CancelReservationProcessUseCase.class);
     private final ReservationService service = new ReservationService(mock(CreateReservationProcessUseCase.class),
             mock(ConfirmReservationProcessUseCase.class), mock(ProcessPhoneRequestUseCase.class),
             mock(ProcessReservationResultUseCase.class), mock(SubmitPhoneUseCase.class), getReservationProcessById,
-            findReservationProcessesByUser);
+            findReservationProcessesByUser, cancelReservationProcess);
 
     @Test
     void aProcessFoundIsReturned() {
@@ -44,6 +46,14 @@ class ReservationServiceTest {
         when(findReservationProcessesByUser.findReservationProcessesByUser(42L, ReservationStatus.CONFIRMED, 2, 25)).thenReturn(page);
 
         assertThat(service.findReservationProcessesByUser(42L, ReservationStatus.CONFIRMED, 2, 25)).isSameAs(page);
+    }
+
+    @Test
+    void aCancellationIsAskedAsItCame() {
+        ReservationProcess process = new ReservationProcess();
+        when(cancelReservationProcess.cancelReservationProcess(42L, "process-1", "Cambio")).thenReturn(process);
+
+        assertThat(service.cancelReservationProcess(42L, "process-1", "Cambio")).isSameAs(process);
     }
 
     @Test
