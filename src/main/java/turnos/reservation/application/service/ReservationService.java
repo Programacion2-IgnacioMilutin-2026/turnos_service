@@ -6,9 +6,12 @@ import turnos.reservation.application.exception.ReservationProcessNotFoundExcept
 import turnos.reservation.domain.model.ReservationEventOutcome;
 import turnos.reservation.domain.model.ReservationPhoneRequest;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationResult;
+import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.in.ConfirmReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.CreateReservationProcessUseCase;
+import turnos.reservation.domain.ports.in.FindReservationProcessesByUserUseCase;
 import turnos.reservation.domain.ports.in.GetReservationProcessByIdUseCase;
 import turnos.reservation.domain.ports.in.ProcessPhoneRequestUseCase;
 import turnos.reservation.domain.ports.in.ProcessReservationResultUseCase;
@@ -27,6 +30,7 @@ public class ReservationService {
     private final ProcessReservationResultUseCase processReservationResultUseCase;
     private final SubmitPhoneUseCase submitPhoneUseCase;
     private final GetReservationProcessByIdUseCase getReservationProcessByIdUseCase;
+    private final FindReservationProcessesByUserUseCase findReservationProcessesByUserUseCase;
 
     public ReservationProcess createReservationProcess(Long userId, Long professionalId, LocalDate date,
                                                        LocalTime startTime, String userToken) {
@@ -44,6 +48,10 @@ public class ReservationService {
     public ReservationProcess getReservationProcessById(Long userId, String reservationProcessId) {
         return getReservationProcessByIdUseCase.getReservationProcessById(userId, reservationProcessId)
                 .orElseThrow(() -> new ReservationProcessNotFoundException(reservationProcessId));
+    }
+
+    public ReservationProcessPage findReservationProcessesByUser(Long userId, ReservationStatus status, int page, int size) {
+        return findReservationProcessesByUserUseCase.findReservationProcessesByUser(userId, status, page, size);
     }
 
     public ReservationEventOutcome processPhoneRequest(ReservationPhoneRequest request) {

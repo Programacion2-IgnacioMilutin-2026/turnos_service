@@ -1,6 +1,8 @@
 package turnos.reservation.application.usecases;
 
+import turnos.reservation.domain.model.ReservationListCriteria;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 
@@ -91,6 +93,12 @@ final class CopyingReservationProcessRepository implements ReservationProcessRep
         afterOwnerRead = () -> { };
         action.run();
         return found;
+    }
+
+    // Filtrar y ordenar lo hace la base: se prueba contra Postgres, no acá
+    @Override
+    public ReservationProcessPage findListable(ReservationListCriteria criteria) {
+        throw new UnsupportedOperationException("Listing is tested against the database");
     }
 
     @Override

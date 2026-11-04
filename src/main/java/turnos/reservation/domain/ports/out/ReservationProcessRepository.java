@@ -1,6 +1,8 @@
 package turnos.reservation.domain.ports.out;
 
+import turnos.reservation.domain.model.ReservationListCriteria;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 
 import java.util.List;
 import java.util.Optional;
@@ -16,6 +18,9 @@ public interface ReservationProcessRepository {
 
     // Solo si es de ese usuario: un proceso ajeno no se distingue de uno inexistente
     Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId);
+
+    // Solo lectura: lo que vencía y no se lista queda como estaba
+    ReservationProcessPage findListable(ReservationListCriteria criteria);
 
     // Enciende la marca sin tocar el resto del proceso
     void markForReconciliation(String reservationProcessId);

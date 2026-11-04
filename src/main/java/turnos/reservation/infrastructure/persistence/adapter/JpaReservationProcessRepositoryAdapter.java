@@ -4,12 +4,15 @@ import lombok.RequiredArgsConstructor;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.TransactionException;
 import org.springframework.transaction.annotation.Transactional;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.application.exception.ReservationOpenProcessConflictException;
+import turnos.reservation.domain.model.ReservationListCriteria;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 import turnos.reservation.infrastructure.persistence.entity.ReservationProcessEntity;
@@ -29,6 +32,10 @@ public class JpaReservationProcessRepositoryAdapter implements ReservationProces
     private static final String ONE_OPEN_PER_USER = "ux_reservation_processes_one_open_per_user";
     private static final List<ReservationStatus> OPEN_STATUSES =
             Arrays.stream(ReservationStatus.values()).filter(ReservationStatus::isOpen).toList();
+    private static final List<ReservationStatus> LISTABLE_STATUSES =
+            Arrays.stream(ReservationStatus.values()).filter(ReservationStatus::isListable).toList();
+    private static final List<ReservationStatus> WAITING_FOR_USER_STATUSES =
+            List.of(ReservationStatus.HELD, ReservationStatus.WAITING_FOR_PHONE);
 
     private final JpaReservationProcessRepository jpaReservationProcessRepository;
     private final ReservationProcessMapper reservationProcessMapper;
@@ -88,6 +95,24 @@ public class JpaReservationProcessRepositoryAdapter implements ReservationProces
     public Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId) {
         return jpaReservationProcessRepository.findByReservationProcessIdAndUserId(reservationProcessId, userId)
                 .map(reservationProcessMapper::toDomainModel);
+    }
+
+    // Cuenta primero: una página más allá del total ya se sabe vacía, y un número de página enorme no entraría en el
+    // desplazamiento de la consulta, que la base limita a un int. Una falla al leer llega sin traducir
+    @Override
+    public ReservationProcessPage findListable(ReservationListCriteria criteria) {
+        List<ReservationStatus> statuses = criteria.status() != null ? List.of(criteria.status()) : LISTABLE_STATUSES;
+        long total = jpaReservationProcessRepository.countListable(criteria.userId(), statuses, WAITING_FOR_USER_STATUSES,
+                criteria.expiredBefore(), ReservationStatus.CANCELLED);
+        if ((long) criteria.page() * criteria.size() >= total) {
+            return new ReservationProcessPage(List.of(), total);
+        }
+        List<ReservationProcess> items = jpaReservationProcessRepository.findListable(criteria.userId(), statuses,
+                        WAITING_FOR_USER_STATUSES, criteria.expiredBefore(), ReservationStatus.CANCELLED, OPEN_STATUSES,
+                        criteria.today(), criteria.currentTime(), PageRequest.of(criteria.page(), criteria.size())).stream()
+                .map(reservationProcessMapper::toDomainModel)
+                .toList();
+        return new ReservationProcessPage(items, total);
     }
 
     // Un UPDATE de una sola columna: si guardar el proceso completo acaba de fallar, esto no repite esa escritura

@@ -147,5 +147,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Endpoint para traer un proceso de reserva por su id.
 - Tests de los archvios agregados en el caso de uso T09.
 - Tiempo que espera del servicio a al base de datos. Colocado en 30 segundos.
+- Documentacion de SDD para el caso de uso T10-ConsultarMisReservas.}
+- Query para obtener el listado de reservas, con paginado y filtro de estados.
+- Caso de uso, service y endpoint para obtner las reservas de un usuario
 ### Changed
-- Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09
+- Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09 y T10.

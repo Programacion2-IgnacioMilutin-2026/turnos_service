@@ -3,13 +3,17 @@ package turnos.reservation.application.service;
 import org.junit.jupiter.api.Test;
 import turnos.reservation.application.exception.ReservationProcessNotFoundException;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
+import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.in.ConfirmReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.CreateReservationProcessUseCase;
+import turnos.reservation.domain.ports.in.FindReservationProcessesByUserUseCase;
 import turnos.reservation.domain.ports.in.GetReservationProcessByIdUseCase;
 import turnos.reservation.domain.ports.in.ProcessPhoneRequestUseCase;
 import turnos.reservation.domain.ports.in.ProcessReservationResultUseCase;
 import turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -20,9 +24,11 @@ import static org.mockito.Mockito.when;
 class ReservationServiceTest {
 
     private final GetReservationProcessByIdUseCase getReservationProcessById = mock(GetReservationProcessByIdUseCase.class);
+    private final FindReservationProcessesByUserUseCase findReservationProcessesByUser = mock(FindReservationProcessesByUserUseCase.class);
     private final ReservationService service = new ReservationService(mock(CreateReservationProcessUseCase.class),
             mock(ConfirmReservationProcessUseCase.class), mock(ProcessPhoneRequestUseCase.class),
-            mock(ProcessReservationResultUseCase.class), mock(SubmitPhoneUseCase.class), getReservationProcessById);
+            mock(ProcessReservationResultUseCase.class), mock(SubmitPhoneUseCase.class), getReservationProcessById,
+            findReservationProcessesByUser);
 
     @Test
     void aProcessFoundIsReturned() {
@@ -30,6 +36,14 @@ class ReservationServiceTest {
         when(getReservationProcessById.getReservationProcessById(42L, "process-1")).thenReturn(Optional.of(process));
 
         assertThat(service.getReservationProcessById(42L, "process-1")).isSameAs(process);
+    }
+
+    @Test
+    void theReservationsOfAUserAreAskedAsTheyCame() {
+        ReservationProcessPage page = new ReservationProcessPage(List.of(), 0);
+        when(findReservationProcessesByUser.findReservationProcessesByUser(42L, ReservationStatus.CONFIRMED, 2, 25)).thenReturn(page);
+
+        assertThat(service.findReservationProcessesByUser(42L, ReservationStatus.CONFIRMED, 2, 25)).isSameAs(page);
     }
 
     @Test

@@ -4,7 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
+import turnos.reservation.infrastructure.web.dto.ReservationProcessListRequest;
+import turnos.reservation.infrastructure.web.dto.ReservationProcessPageResponse;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessResponse;
 
@@ -14,6 +17,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Arrays;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -140,6 +144,48 @@ class ReservationProcessDtoMapperTest {
     void nullMapsToNull() {
         assertThat(mapper.toResponse(null)).isNull();
         assertThat(mapper.toProfessionalId(null)).isNull();
+    }
+
+    @Test
+    void aMissingOrEmptyStatusIsNoFilter() {
+        assertThat(mapper.toStatus(new ReservationProcessListRequest(null, null, null))).isNull();
+        assertThat(mapper.toStatus(new ReservationProcessListRequest("", null, null))).isNull();
+    }
+
+    @Test
+    void aStatusBecomesTheEnum() {
+        assertThat(mapper.toStatus(new ReservationProcessListRequest("CONFIRMED", null, null))).isEqualTo(ReservationStatus.CONFIRMED);
+    }
+
+    @Test
+    void aMissingPageAndSizeUseTheirDefaults() {
+        ReservationProcessListRequest request = new ReservationProcessListRequest(null, null, null);
+
+        assertThat(mapper.toPage(request)).isZero();
+        assertThat(mapper.toSize(request)).isEqualTo(10);
+    }
+
+    @Test
+    void aPageAndSizeAreKept() {
+        ReservationProcessListRequest request = new ReservationProcessListRequest(null, 2, 25);
+
+        assertThat(mapper.toPage(request)).isEqualTo(2);
+        assertThat(mapper.toSize(request)).isEqualTo(25);
+    }
+
+    @Test
+    void thePageKeepsTheItemsInTheirOrderAndTheTotal() {
+        ReservationProcessPage page = new ReservationProcessPage(List.of(
+                baseProcess(ReservationStatus.CONFIRMED).reservationProcessId("process-2").build(),
+                baseProcess(ReservationStatus.CANCELLED).reservationProcessId("process-1").build()), 7);
+
+        ReservationProcessPageResponse response = mapper.toPageResponse(page, 2, 25);
+
+        assertThat(response.getItems()).extracting(ReservationProcessResponse::getReservationProcessId)
+                .containsExactly("process-2", "process-1");
+        assertThat(response.getPage()).isEqualTo(2);
+        assertThat(response.getSize()).isEqualTo(25);
+        assertThat(response.getTotalItems()).isEqualTo(7);
     }
 
     private static ReservationProcess.ReservationProcessBuilder baseProcess(ReservationStatus status) {

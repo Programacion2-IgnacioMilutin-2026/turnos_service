@@ -243,7 +243,7 @@ No marques los criterios como superados durante la especificación. -->
 | CA-21 | Recorrido completo con la aplicación levantada | Proceso `CONFIRMED` en la base; nuevo bloqueo posible |
 | CA-22 | Suite existente; T05 y pedido de teléfono sobre los estados nuevos | Sin cambios en las respuestas; `409`; estado ya avanzado |
 
-**Sin prueba contra la cátedra real:** no hay un criterio E2E para T08, porque la cátedra no publica en el topic de acciones y T06 todavía no existe, así que no se puede provocar un resultado real. Los mensajes se arman desde el anexo. Queda sin verificar el formato real de los eventos; se revisa al hacer T06 o cuando la cátedra publique (decisión 014 §4).
+**Sin prueba contra la cátedra real** (actualización del 2026-11-03: el E2E de reserva ya espera `CONFIRMED` y `CANCELLED`, y lo comprueba si la cátedra publica; sigue sin correrse): no hay un criterio E2E para T08, porque la cátedra no publica en el topic de acciones y T06 todavía no existe, así que no se puede provocar un resultado real. Los mensajes se arman desde el anexo. Queda sin verificar el formato real de los eventos; se revisa al hacer T06 o cuando la cátedra publique (decisión 014 §4).
 
 ## Decisiones pendientes
 

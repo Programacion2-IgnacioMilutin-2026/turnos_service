@@ -2,6 +2,10 @@ package turnos.reservation.infrastructure.web.mapper;
 
 import org.springframework.stereotype.Component;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
+import turnos.reservation.domain.model.ReservationStatus;
+import turnos.reservation.infrastructure.web.dto.ReservationProcessListRequest;
+import turnos.reservation.infrastructure.web.dto.ReservationProcessPageResponse;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessResponse;
 
@@ -13,6 +17,8 @@ import java.time.temporal.ChronoUnit;
 public class ReservationProcessDtoMapper {
 
     private static final DateTimeFormatter HOUR_AND_MINUTE = DateTimeFormatter.ofPattern("HH:mm");
+    private static final int DEFAULT_PAGE = 0;
+    private static final int DEFAULT_SIZE = 10;
 
     // La validación del request ya garantizó un entero positivo dentro del rango de un Long
     public Long toProfessionalId(ReservationProcessRequest request) {
@@ -20,6 +26,29 @@ public class ReservationProcessDtoMapper {
             return null;
         }
         return request.getProfessionalId().longValueExact();
+    }
+
+    // La validación del request ya garantizó que, si tiene un valor, es uno de los estados que se pueden pedir
+    public ReservationStatus toStatus(ReservationProcessListRequest request) {
+        String status = request.getStatus();
+        return status == null || status.isEmpty() ? null : ReservationStatus.valueOf(status);
+    }
+
+    public int toPage(ReservationProcessListRequest request) {
+        return request.getPage() == null ? DEFAULT_PAGE : request.getPage();
+    }
+
+    public int toSize(ReservationProcessListRequest request) {
+        return request.getSize() == null ? DEFAULT_SIZE : request.getSize();
+    }
+
+    public ReservationProcessPageResponse toPageResponse(ReservationProcessPage result, int page, int size) {
+        return ReservationProcessPageResponse.builder()
+                .items(result.items().stream().map(this::toResponse).toList())
+                .page(page)
+                .size(size)
+                .totalItems(result.totalItems())
+                .build();
     }
 
     // El instante se informa en segundos, en UTC. Lo que todavía no ocurrió en el proceso queda en null

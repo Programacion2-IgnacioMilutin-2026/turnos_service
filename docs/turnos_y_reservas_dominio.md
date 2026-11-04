@@ -85,7 +85,7 @@ Además de las transiciones del diagrama, los eventos de la cátedra pueden cerr
 | --- | --- | --- |
 | Estado abierto | `CONFIRMED` | T08 (`AppointmentConfirmed`); T13 |
 | Estado abierto | `EXPIRED` | T08 (`AppointmentProcessExpired`); T13 |
-| `HELD` o `WAITING_FOR_PHONE` | `EXPIRED` | Cierre por vencimiento en T04, T05, T06, T09, T10, T11 y T12 |
+| `HELD` o `WAITING_FOR_PHONE` | `EXPIRED` | Cierre por vencimiento en T04, T05, T06, T09, T11 y T12 |
 | Estado abierto | `INVALID` | T08 (`AppointmentProcessInvalid`) |
 | Estado abierto o `CONFIRMED` | `CANCELLED` | T08 (`AppointmentCancelled`); T13 |
 | `HELD`, `WAITING_FOR_PHONE` o `CONFIRMED` | `CANCELLED` | T11 |
@@ -174,7 +174,7 @@ classDiagram
 | 9 | `needsReconciliation` lo limpia T13 al reconciliar el proceso; si la cátedra no responde, sigue marcado. También se apaga cuando el proceso pasa a `CONFIRMED`, `CANCELLED` o `EXPIRED`, por un evento de la cátedra o por una operación de turnos: un proceso cerrado no tiene nada que reconciliar. Excepción: `INVALID` queda marcado. Una operación posterior puede volver a marcar un `CONFIRMED`, si no se sabe si la cátedra lo canceló (T11) |
 | 10 | `requestEventId` no cambia tras un rechazo de teléfono: sigue siendo válido para el próximo intento |
 | 11 | `rejectionReason` solo lo escribe T08, y T06 lo borra al guardar un nuevo teléfono, aunque la publicación falle después. La validación local del teléfono responde `400` y no se guarda |
-| 12 | "Mis reservas" (T10) lista los procesos abiertos, los `CONFIRMED` y los `CANCELLED` que tienen `confirmedAt`. Los `EXPIRED`, los `INVALID` y los cancelados antes de confirmarse no se listan |
+| 12 | "Mis reservas" (T10) lista los procesos abiertos, los `CONFIRMED` y los `CANCELLED` que tienen `confirmedAt`. Los `EXPIRED`, los `INVALID`, los cancelados antes de confirmarse y los `HELD` o `WAITING_FOR_PHONE` vencidos no se listan. T10 no cierra ni marca nada |
 | 13 | Los datos del profesional (`professionalFirstName`, `professionalLastName`, `professionalCategoryName`) son una copia del momento de la reserva, para historial y para que T10 sea una lectura local. No se usan como catálogo vigente (enunciado §4.2) |
 | 14 | Los procesos se guardan en la base de datos de turnos, no en memoria, y los cerrados no se borran de inmediato: T09 y la idempotencia de T11 los necesitan |
 | 15 | La cátedra es la fuente de verdad de los turnos y de las reservas confirmadas, pero no conoce a los usuarios finales: la asociación entre usuario y proceso vive solo en turnos. Ante un conflicto, T13 conserva el estado de la cátedra |

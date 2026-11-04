@@ -479,11 +479,9 @@ sequenceDiagram
     break Invalid status or pagination out of range
         Service-->>App: 400 (functional code)
     end
-    Service->>DB: Mark EXPIRED the user's HELD or WAITING_FOR_PHONE processes past expiresAt plus safety margin
-    Service->>DB: Mark for reconciliation (T13) the user's PHONE_SUBMITTED processes past expiresAt plus safety margin
-    Service->>DB: Query the user's reservations and processes matching the filter, excluding EXPIRED, INVALID and CANCELLED never confirmed, open process first, then by date and startTime (nearest or most recent first), requested page plus total
+    Service->>DB: Query the user's reservations and processes matching the filter, excluding EXPIRED, INVALID, CANCELLED never confirmed and HELD or WAITING_FOR_PHONE past expiresAt plus safety margin (read only, nothing is closed or marked), open process first, then upcoming slots from nearest to farthest, then past slots from most recent to oldest, requested page plus total
     DB-->>Service: Page of results and total
-    break Local database access fails (closing expired processes or querying)
+    break Local database access fails
         Service->>Service: Log error
         Service-->>App: 500
     end

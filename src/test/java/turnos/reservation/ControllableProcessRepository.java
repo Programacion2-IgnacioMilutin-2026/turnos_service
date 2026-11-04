@@ -3,7 +3,9 @@ package turnos.reservation;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
+import turnos.reservation.domain.model.ReservationListCriteria;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 import turnos.reservation.infrastructure.persistence.adapter.JpaReservationProcessRepositoryAdapter;
 
@@ -83,6 +85,11 @@ final class ControllableProcessRepository implements ReservationProcessRepositor
         afterOwnerRead = () -> { };
         action.run();
         return found;
+    }
+
+    @Override
+    public ReservationProcessPage findListable(ReservationListCriteria criteria) {
+        return realDatabase.findListable(criteria);
     }
 
     @Override
