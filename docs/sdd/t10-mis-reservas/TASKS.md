@@ -47,16 +47,16 @@ Tandas propuestas, cada una deja la suite en verde: 01+02; 03+04; 05; 06; 07+08.
   - Validación: `./mvnw test -Dtest=DatabaseDownStatusQueryIntegrationTest`
   - Resultado: 2026-11-03. `DatabaseDownStatusQueryIntegrationTest`: 7 tests en verde, 2 nuevos: con Postgres en pausa, tanto al pedir la conexión como con una recién usada, el listado responde `500` `INTERNAL_ERROR`, la fila queda igual y, al reanudar, responde la página. El teléfono de la fila no llega al log. Pruebas en negativo: si el caso de uso convierte la falla en una lista vacía, fallan los 2; sin el límite de espera, la consulta con la conexión recién usada se corta a los 45 s. Archivos restaurados y hash comprobado. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1282 `<testcase>` (1280 + 2), 0 fallas, 0 errores, 0 salteados, 106 XML, 3 min 15 s.
 
-- [ ] **TASK-07 · Documentación del servicio**
+- [x] **TASK-07 · Documentación del servicio**
   - Alcance: `CLAUDE.md` (T10 en el slice y en la lista de `docs/sdd`, `V7`, cómo se resuelve la regla del vencido en la consulta) y `docs/decisiones/012-persistencia-del-proceso-de-reserva.md` (el índice y su motivo). No toca contratos ni casos de uso, que ya se ajustaron en la SPEC.
   - Depende de: TASK-02, TASK-04
   - Resuelve: P2 (documentar el índice)
   - Validación: releer los dos textos contra el código final.
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. `CLAUDE.md`: T10 en el slice y en la lista de `docs/sdd`, `V7`, dónde vive la regla del vencido y qué estados se listan, y `DatabaseDownStatusQueryIntegrationTest` con el listado. Decisión 012: actualización con el índice y su motivo. Comparado contra el código: `isListable`, `LISTABLE` y el test citado existen.
 
-- [ ] **TASK-08 · Suite completa y revisión de los criterios**
+- [x] **TASK-08 · Suite completa y revisión de los criterios**
   - Alcance: correr toda la suite y revisar CA-01 a CA-16 contra lo observado. Comprobar que los tests existentes solo cambiaron en lo previsto.
   - Depende de: TASK-01 a TASK-07
   - Resuelve: CA-16
   - Validación: `./mvnw clean test`, con el conteo tomado de `target/surefire-reports/TEST-*.xml` por `<testcase>`.
-  - Resultado: pendiente
+  - Resultado: 2026-11-03. `./mvnw clean test`, exit 0, 1282 `<testcase>` (al empezar T10: 1170), 0 fallas, 0 errores, 0 salteados, 106 XML, 196 s. CA-01 a CA-16 revisados contra la evidencia de TASK-01 a TASK-06: todos cubiertos por tests ejecutados. Tests existentes cambiados, comparando contra `develop`: los dobles del puerto (método nuevo), `CatedraEventAdapterTest` y `ReservationServiceTest` (constructor del service), y agregados en los demás. Copias de contrato, casos de uso, secuencia y dominio iguales a `documentacion`. No verificado: la app levantada con el `.env` real, porque hace el login contra la cátedra (D4), y Postgres caído cerrando sus conexiones; solo se probó congelado.
