@@ -156,3 +156,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests de la funcionalidad cancelar una reserva, incluido la extension del test E2E.
 ### Changed
 - Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09, T10 y T11.
+
+## 2026-11-04
+### Added
+- Documentacion de SDD para el caso de T12-Expirar procesos vencidos.
