@@ -16,7 +16,7 @@ public class OverdueProcessSweepScheduler {
     private final ReservationService reservationService;
 
     // Con espera fija, la siguiente corrida no empieza hasta que termina la anterior: es lo que impide que dos barridos
-    // se solapen. Con frecuencia fija (fixedRate) dejaría de estar garantizado
+    // se solapen. Con frecuencia fija (fixedRate) se solapan si el servicio pasa a usar hilos virtuales
     @Scheduled(fixedDelayString = "${turnos.reservation.sweep.interval}")
     public void sweep() {
         reservationService.expireOverdueProcesses();

@@ -35,19 +35,19 @@ Tandas propuestas: 01; 02+03; 04; 05+06; 07; 08.
   - Validación: `./mvnw clean test`, exit 0, con el barrido apagado en toda la suite. Comprobar con un contexto mínimo qué hace la aplicación con `1m`, `PT1M`, vacío, negativo y `0`, registrarlo aquí y ajustar el aviso de `.env.example`.
   - Resultado: 2026-11-04. `./mvnw test -Dtest=OverdueProcessSweepSchedulerTest`: exit 0, 11 `<testcase>`, 0 fallas, con un contexto mínimo. Valores comprobados del intervalo: `1m`, `PT1M` y `60000` arrancan y corren enseguida; `50ms` repite; `0`, `-1`, vacío y `abc` no dejan arrancar. Con `enabled` en `false` o vacío, el barrido no existe; sin la propiedad, existe. Corrige la suposición del PLAN: `0` no corre sin pausa, impide arrancar. Prueba en negativo sobre `OverdueProcessSweepScheduler`, con el hash restaurado (`147a7e4c8fcb8f0e`): primera corrida demorada hace fallar `theFirstSweepRunsWhenTheApplicationStartsWithoutWaitingForTheInterval`; sin la condición, `theSweepDoesNotExistIfItIsTurnedOffOrTheVariableIsEmpty`; sin encendido por defecto, `theSweepExistsIfNothingTurnsItOff`. `./mvnw clean test`: exit 0, 1479 `<testcase>` (antes 1468), 0 fallas, 0 errores, 0 omitidos; en su log, 0 barridos en el hilo programado: el barrido queda apagado en la suite.
 
-- [ ] **TASK-05 · Integración con la app completa**
+- [x] **TASK-05 · Integración con la app completa**
   - Alcance: `OverdueSweepIntegrationTest`, con el barrido encendido, Postgres real y cátedra simulada: corre solo y repetido, nunca dos a la vez, corre al arrancar, no llama a la cátedra, y el usuario puede bloquear otro turno después.
   - Depende de: TASK-04
   - Resuelve: CA-01, CA-02, CA-13, CA-14 y CA-16
   - Validación: `./mvnw test -Dtest=OverdueSweepIntegrationTest`. Prueba en negativo: pasar a frecuencia fija para ver si CA-02 lo detecta, y demorar el primer barrido para ver fallar CA-16.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `./mvnw test -Dtest='OverdueSweepIntegrationTest,OverdueSweepAtStartupIntegrationTest'`: exit 0, 12 + 1 `<testcase>`, 0 fallas, con la aplicación completa, Postgres real y cátedra simulada. CA-16 usa un bean que guarda el proceso antes de que empiecen las tareas, con intervalo de 1 hora. Además de los previstos, se comprueban sobre Postgres real CA-03, CA-04, CA-05, CA-06, CA-07, CA-08, CA-09, CA-11 y CA-15. Las dos clases descartan su contexto al terminar: si quedara en el caché, el barrido seguiría corriendo durante la suite. Se amplió `ControllableProcessRepository` (búsquedas contadas y demoradas, acción después de buscar). Prueba en negativo, con los hashes restaurados: la primera corrida demorada hace fallar `aProcessThatWasOverdueBeforeStartingIsClosedWithoutWaitingForTheInterval`; sin relectura, `aReservationConfirmedAfterTheSearchIsNotOverwritten` y `theSweepWaitsForTheOperationThatHoldsTheLockAndRespectsWhatItLeft`. **Frecuencia fija sola: el test pasa, no la detecta**, porque el planificador actual no solapa una misma tarea. Con frecuencia fija e hilos virtuales, falla `twoSweepsNeverRunAtTheSameTimeEvenIfOneTakesLongerThanTheInterval`; con espera fija e hilos virtuales, pasa. Se precisó el comentario del disparador con esto. `./mvnw clean test`: exit 0, 1492 `<testcase>` (antes 1479), 0 fallas, 0 errores, 0 omitidos; 35 barridos en el hilo programado, solo de estas clases.
 
-- [ ] **TASK-06 · Falla al guardar un proceso, sobre la base real**
+- [x] **TASK-06 · Falla al guardar un proceso, sobre la base real**
   - Alcance: test de integración con `ControllableProcessRepository`: tres vencidos, falla el segundo, el log no lleva el teléfono, y lo cierra el ciclo siguiente.
   - Depende de: TASK-04
   - Resuelve: CA-10
   - Validación: `./mvnw test -Dtest=OverdueSweepIntegrationTest` o su clase propia, leyendo los estados de la base y el log capturado. Prueba en negativo: registrar el mensaje del error en lugar del tipo.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. Dentro de `OverdueSweepIntegrationTest` (`aFailureSavingOneProcessDoesNotStopTheOthersAndTheNextSweepClosesIt`): sobre Postgres real, con `ControllableProcessRepository` fallando solo en el segundo proceso y con el teléfono en el mensaje del error: el primero y el tercero quedan `EXPIRED`, el log nombra al segundo con el tipo del error y sin el teléfono, y al dejar de fallar el barrido siguiente lo cierra. Prueba en negativo con el hash restaurado: registrar el mensaje del error hace fallar el test.
 
 - [ ] **TASK-07 · Base caída**
   - Alcance: test de integración con Postgres en pausa y `@Timeout`, en clase propia: el barrido falla y registra, y al reanudar cierra los vencidos sin intervención.
