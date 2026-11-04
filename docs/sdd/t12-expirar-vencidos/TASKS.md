@@ -28,12 +28,12 @@ Tandas propuestas: 01; 02+03; 04; 05+06; 07; 08.
   - Validación: `./mvnw test -Dtest=ExpireOverdueProcessesUseCaseImplTest`, con hilos y copias. Prueba en negativo: quitar el candado o la relectura y ver fallar el test.
   - Resultado: 2026-11-04. Solo tests, sin defectos encontrados, en `ExpireOverdueProcessesUseCaseImplTest`: resultado aplicado entre la búsqueda y la escritura (confirmado, cancelado y rechazo con nuevo plazo) y candado tomado por otra operación (espera, no escribe mientras tanto, y respeta lo que quedó). Se sumó `afterNextOverdueSearch` a `CopyingReservationProcessRepository`. Prueba en negativo con el mismo hash restaurado: sin candado fallan `theSweepWaitsForTheOperationThatHoldsTheLockAndRespectsWhatItLeft` y `aSweepClosesTheProcessOnceTheOperationThatHoldsTheLockLeavesItOverdue`; sin relectura fallan los tres de resultado aplicado, entre otros. CA-08 y CA-09 quedan comprobados sobre el repositorio en memoria, que trabaja con copias como la base; no contra Postgres.
 
-- [ ] **TASK-04 · Disparador y configuración**
+- [x] **TASK-04 · Disparador y configuración**
   - Alcance: `reservation/infrastructure/scheduling/OverdueProcessSweepScheduler` (`@Scheduled` con espera fija, `@ConditionalOnProperty`), `turnos.reservation.sweep.interval` y `.enabled` en `application.yaml`, `.env.example`, y el apagado en Surefire.
   - Depende de: TASK-02
   - Resuelve: la configuración de RF-01 (D2, D4, P1, P2)
   - Validación: `./mvnw clean test`, exit 0, con el barrido apagado en toda la suite. Comprobar con un contexto mínimo qué hace la aplicación con `1m`, `PT1M`, vacío, negativo y `0`, registrarlo aquí y ajustar el aviso de `.env.example`.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `./mvnw test -Dtest=OverdueProcessSweepSchedulerTest`: exit 0, 11 `<testcase>`, 0 fallas, con un contexto mínimo. Valores comprobados del intervalo: `1m`, `PT1M` y `60000` arrancan y corren enseguida; `50ms` repite; `0`, `-1`, vacío y `abc` no dejan arrancar. Con `enabled` en `false` o vacío, el barrido no existe; sin la propiedad, existe. Corrige la suposición del PLAN: `0` no corre sin pausa, impide arrancar. Prueba en negativo sobre `OverdueProcessSweepScheduler`, con el hash restaurado (`147a7e4c8fcb8f0e`): primera corrida demorada hace fallar `theFirstSweepRunsWhenTheApplicationStartsWithoutWaitingForTheInterval`; sin la condición, `theSweepDoesNotExistIfItIsTurnedOffOrTheVariableIsEmpty`; sin encendido por defecto, `theSweepExistsIfNothingTurnsItOff`. `./mvnw clean test`: exit 0, 1479 `<testcase>` (antes 1468), 0 fallas, 0 errores, 0 omitidos; en su log, 0 barridos en el hilo programado: el barrido queda apagado en la suite.
 
 - [ ] **TASK-05 · Integración con la app completa**
   - Alcance: `OverdueSweepIntegrationTest`, con el barrido encendido, Postgres real y cátedra simulada: corre solo y repetido, nunca dos a la vez, corre al arrancar, no llama a la cátedra, y el usuario puede bloquear otro turno después.

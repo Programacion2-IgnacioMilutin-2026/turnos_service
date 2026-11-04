@@ -76,6 +76,11 @@ turnos:
     zone-id: ${TURNOS_ATTENTION_ZONE:America/Argentina/Mendoza}
     # Cuánto se espera después del vencimiento de un hold antes de dar el proceso por vencido
     safety-margin: ${TURNOS_RESERVATION_SAFETY_MARGIN:30s}
+    sweep:
+      # El barrido de procesos vencidos. Los tests lo apagan: si no, cerraría los procesos que preparan
+      enabled: ${TURNOS_RESERVATION_SWEEP_ENABLED:true}
+      # Cuánto se espera entre el fin de un barrido y el comienzo del siguiente
+      interval: ${TURNOS_RESERVATION_SWEEP_INTERVAL:1m}
   cors:
     # Orígenes de navegador permitidos, separados por comas. Vacío por defecto: ningún navegador puede usar la API
     allowed-origins: ${TURNOS_CORS_ALLOWED_ORIGINS:}
