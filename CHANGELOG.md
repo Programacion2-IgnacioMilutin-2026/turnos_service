@@ -161,3 +161,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Documentacion de SDD para el caso de T12-Expirar procesos vencidos.
 - Query para en ver los procesos que vencieron.
+- Caso de uso en slice 'Reservation' para expirar los precesops de reserva vencidos.

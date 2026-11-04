@@ -14,19 +14,19 @@ Tandas propuestas: 01; 02+03; 04; 05+06; 07; 08.
   - Validación: `./mvnw test -Dtest=JpaReservationProcessRepositoryAdapterTest` sobre Postgres real: trae cada estado que corresponde, deja afuera los cerrados y los `PHONE_SUBMITTED` marcados, coincide con `hasExpired` en el borde exacto y traduce la falla. Prueba en negativo de la comparación del borde y de la condición de la marca.
   - Resultado: 2026-11-04. `./mvnw test -Dtest=JpaReservationProcessRepositoryAdapterTest` sobre Postgres en contenedor: exit 0, 65 `<testcase>`, 18 nuevos, 0 fallas. Prueba en negativo sobre `JpaReservationProcessRepository`, con el hash restaurado (`8050b22ea0de0257`): `<` por `<=` hace fallar `anOpenProcessIsFoundAsOverdueExactlyWhenTheModelSaysSo`; ignorar la marca, `aMarkedProcessIsFoundAsOverdueOnlyIfTheModelStillHasSomethingToDo`; invertir el orden, `overdueProcessesOfEveryUserComeOldestFirstWithEveryField`. `./mvnw clean test`: exit 0, 1442 `<testcase>` (antes 1424), 0 fallas, 0 errores, 0 omitidos.
 
-- [ ] **TASK-02 · Caso de uso del barrido**
+- [x] **TASK-02 · Caso de uso del barrido**
   - Alcance: `ExpireOverdueProcessesUseCase`, `ExpireOverdueProcessesUseCaseImpl` y `ReservationService.expireOverdueProcesses()`: búsqueda, candado por proceso, relectura, `resolveOverdue`, `update`, falla por proceso, falla de la búsqueda y log del resultado. Sin disparador.
   - Depende de: TASK-01
   - Resuelve: CA-03, CA-04, CA-05, CA-06, CA-07, CA-11 y CA-15, y la parte unitaria de CA-10 y CA-12
   - Validación: `./mvnw test -Dtest='ExpireOverdueProcessesUseCaseImplTest,ReservationServiceTest'`, con `CopyingReservationProcessRepository` y `MutableClock`, capturando el log. Prueba en negativo: guardar sin que `resolveOverdue` haya cambiado nada, y no atrapar la falla de un proceso.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `./mvnw test -Dtest='ExpireOverdueProcessesUseCaseImplTest,ReservationServiceTest,CatedraEventAdapterTest'`: exit 0; `ExpireOverdueProcessesUseCaseImplTest` 25 `<testcase>` (TASK-02 y TASK-03), `ReservationServiceTest` 5, 0 fallas. Cubre con repositorio en memoria: CA-03 a CA-07, CA-11, CA-15, y la parte unitaria de CA-10 y CA-12. Sin base real ni disparador: CA-10 y CA-12 siguen en TASK-06 y TASK-07. Prueba en negativo sobre `ExpireOverdueProcessesUseCaseImpl`, con el hash restaurado (`642a605b421bc752`): guardar sin que cambie hace fallar, entre otros, `aReservationConfirmedAfterTheSearchIsNotOverwritten`; no atrapar la falla de un proceso, `aFailureSavingOneProcessDoesNotStopTheOthersAndTheNextSweepClosesIt`; no atrapar la de la búsqueda, `aFailureSearchingEndsTheSweepWithoutPropagatingTheError`; registrar el mensaje del error, el mismo test de la falla al guardar, por el teléfono en el log. `./mvnw clean test`: exit 0, 1468 `<testcase>` (antes 1442), 0 fallas, 0 errores, 0 omitidos.
 
-- [ ] **TASK-03 · El barrido convive con las demás operaciones**
+- [x] **TASK-03 · El barrido convive con las demás operaciones**
   - Alcance: solo tests, salvo que muestren un defecto: resultado aplicado entre la búsqueda y la escritura, y candado tomado por otra operación durante el barrido.
   - Depende de: TASK-02
   - Resuelve: CA-08 y CA-09
   - Validación: `./mvnw test -Dtest=ExpireOverdueProcessesUseCaseImplTest`, con hilos y copias. Prueba en negativo: quitar el candado o la relectura y ver fallar el test.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. Solo tests, sin defectos encontrados, en `ExpireOverdueProcessesUseCaseImplTest`: resultado aplicado entre la búsqueda y la escritura (confirmado, cancelado y rechazo con nuevo plazo) y candado tomado por otra operación (espera, no escribe mientras tanto, y respeta lo que quedó). Se sumó `afterNextOverdueSearch` a `CopyingReservationProcessRepository`. Prueba en negativo con el mismo hash restaurado: sin candado fallan `theSweepWaitsForTheOperationThatHoldsTheLockAndRespectsWhatItLeft` y `aSweepClosesTheProcessOnceTheOperationThatHoldsTheLockLeavesItOverdue`; sin relectura fallan los tres de resultado aplicado, entre otros. CA-08 y CA-09 quedan comprobados sobre el repositorio en memoria, que trabaja con copias como la base; no contra Postgres.
 
 - [ ] **TASK-04 · Disparador y configuración**
   - Alcance: `reservation/infrastructure/scheduling/OverdueProcessSweepScheduler` (`@Scheduled` con espera fija, `@ConditionalOnProperty`), `turnos.reservation.sweep.interval` y `.enabled` en `application.yaml`, `.env.example`, y el apagado en Surefire.
