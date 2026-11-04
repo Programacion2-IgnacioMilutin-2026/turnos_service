@@ -40,10 +40,11 @@ import static org.awaitility.Awaitility.await;
 
 // Contra la cátedra real, con la cuenta técnica del .env local: solo con ./mvnw test -Pe2e. Sin credenciales se saltea.
 // Crea un hold real en un turno libre, lo confirma y, si el .env define el consumer group de los E2E, espera el pedido
-// de teléfono que la cátedra publica por Kafka, informa un teléfono y espera la reserva confirmada para cancelarla: una
-// reserva confirmada no vence sola. Al terminar siempre intenta cancelar directamente en la cátedra, para no dejar nada
-// tomado, también si este servicio no llegó a enterarse de una confirmación.
-// Si la cátedra no lo permite, lo avisa sin fallar: un proceso sin confirmar vence solo
+// de teléfono que la cátedra publica por Kafka, informa un teléfono y espera la reserva confirmada para cancelarla con
+// el servicio: una reserva confirmada no vence sola. Al terminar siempre intenta cancelar directamente en la cátedra,
+// para no dejar nada tomado, también si este servicio no llegó a enterarse de una confirmación.
+// Si la cátedra no lo permite, lo avisa sin fallar: un proceso sin confirmar vence solo.
+// El otro recorrido bloquea un turno, lo abandona y bloquea otro: no depende de Kafka, y sus dos holds vencen solos
 @Tag("e2e")
 @EnabledIf(value = "e2e.E2ECredentials#available", disabledReason = "No catedra credentials in the local .env: E2E tests skipped")
 @SpringBootTest(classes = TurnosServiceApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -63,8 +64,8 @@ class ReservationProcessE2ETest {
              {"dayOfWeek":"MONDAY","startTime":"12:00:00","endTime":"15:00:00","slotDurationMinutes":30,"enabled":true}]}
             """;
     private static final String REGISTER_BODY = """
-            {"login":"e2e.reservas","password":"secreta123","firstName":"Prueba","lastName":"E2E",
-             "email":"e2e.reservas@example.com","langKey":"es"}
+            {"login":"%s","password":"secreta123","firstName":"Prueba","lastName":"E2E",
+             "email":"%s@example.com","langKey":"es"}
             """;
 
     @DynamicPropertySource
@@ -94,26 +95,15 @@ class ReservationProcessE2ETest {
     @Test
     void aRegisteredUserBlocksAFreeSlotAndConfirmsItWithTheRealCatedra(CapturedOutput output) {
         await().atMost(Duration.ofSeconds(30)).until(() -> technicalSessionRepository.get().isEnabled());
-        restTestClient.post().uri("/api/register").contentType(MediaType.APPLICATION_JSON).body(REGISTER_BODY)
-                .exchange().expectStatus().isCreated();
-        String login = restTestClient.post().uri("/api/authenticate").contentType(MediaType.APPLICATION_JSON)
-                .body("{\"username\":\"e2e.reservas\",\"password\":\"secreta123\"}")
-                .exchange().expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
-        String userToken = JsonPath.read(login, "$.id_token");
-        LocalDate monday = LocalDate.now(ZoneId.of("America/Argentina/Mendoza")).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        String userToken = registerAndLogIn("e2e.reservas");
+        LocalDate monday = nextMonday();
 
         // El turno se elige entre los libres: un hold de una corrida anterior aparece como ocupado
-        String freeSlots = restTestClient.get().uri("/api/free-slots?professionalId=201&date={date}", monday)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).exchange()
-                .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
-        List<String> startTimes = JsonPath.read(freeSlots, "$.slots[*].startTime");
+        List<String> startTimes = freeSlots(userToken, monday);
         assertThat(startTimes).as("free slots of professional 201 on " + monday).isNotEmpty();
         String slot = startTimes.getFirst();
 
-        String body = restTestClient.post().uri("/api/reservation-processes")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).contentType(MediaType.APPLICATION_JSON)
-                .body("{\"professionalId\":201,\"date\":\"" + monday + "\",\"startTime\":\"" + slot + "\"}")
-                .exchange().expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
+        String body = block(userToken, monday, slot).expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
         reservationProcessId = JsonPath.read(body, "$.reservationProcessId");
 
         assertThat(JsonPath.<String>read(body, "$.status")).isEqualTo("HELD");
@@ -163,15 +153,90 @@ class ReservationProcessE2ETest {
             System.out.println("E2E reservation " + JsonPath.<Object>read(result, "$.reservationId") + " of "
                     + reservationProcessId + " confirmed");
 
-            assertThat(cancelInTheCatedra()).isEqualTo(200);
-            await().alias("the cancellation of " + reservationProcessId + " is saved")
-                    .atMost(RESULT_WAIT).pollInterval(RESULT_POLL).until(() -> "CANCELLED".equals(status(query(userToken))));
-            String cancelled = query(userToken);
+            long eventsBeforeCancelling = processedEvents();
+            String cancelled = cancelWithTheService(userToken, reservationProcessId).expectStatus().isOk()
+                    .expectBody(String.class).returnResult().getResponseBody();
+            assertThat(status(cancelled)).isEqualTo("CANCELLED");
             assertThat(JsonPath.<Object>read(cancelled, "$.reservationId")).isNotNull();
             assertThat(JsonPath.<String>read(cancelled, "$.cancelledAt")).isNotNull();
-            System.out.println("E2E reservation of " + reservationProcessId + " cancelled and saved");
+            System.out.println("E2E reservation of " + reservationProcessId + " cancelled with the service");
+
+            // La cátedra también avisa la cancelación por Kafka: el proceso ya estaba cancelado, y el evento solo se registra
+            await().alias("the cancellation event of " + reservationProcessId + " is processed")
+                    .atMost(RESULT_WAIT).pollInterval(RESULT_POLL).until(() -> processedEvents() > eventsBeforeCancelling);
         }
         assertThat(output.getAll()).doesNotContain(userToken).doesNotContain(technicalSessionRepository.get().token());
+    }
+
+    // Sus dos holds vencen solos: la cátedra no permite cancelar un proceso sin confirmar, así que no se intenta
+    @Test
+    void aUserAbandonsAHeldProcessAndBlocksAnotherFreeSlot() {
+        await().atMost(Duration.ofSeconds(30)).until(() -> technicalSessionRepository.get().isEnabled());
+        String userToken = registerAndLogIn("e2e.abandono");
+        LocalDate monday = nextMonday();
+        List<String> startTimes = freeSlots(userToken, monday);
+        assertThat(startTimes).as("free slots of professional 201 on " + monday).hasSizeGreaterThanOrEqualTo(2);
+        String abandonedSlot = startTimes.getFirst();
+        String otherSlot = startTimes.get(1);
+
+        String held = block(userToken, monday, abandonedSlot).expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
+        String abandoned = JsonPath.read(held, "$.reservationProcessId");
+        System.out.println("E2E hold " + abandoned + " on " + monday + " at " + abandonedSlot);
+        block(userToken, monday, otherSlot).expectStatus().isEqualTo(409);
+
+        String cancelled = cancelWithTheService(userToken, abandoned).expectStatus().isOk()
+                .expectBody(String.class).returnResult().getResponseBody();
+        assertThat(status(cancelled)).isEqualTo("CANCELLED");
+        System.out.println("E2E: " + abandoned + " abandoned without telling the Catedra");
+
+        // Lo que la decisión de abandonar supone: la cátedra acepta otro hold con el primero todavía activo
+        String second = block(userToken, monday, otherSlot).expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
+        assertThat(status(second)).isEqualTo("HELD");
+        System.out.println("E2E second hold " + JsonPath.read(second, "$.reservationProcessId") + " at " + otherSlot
+                + " accepted while the first one is still active");
+
+        // Y el turno abandonado sigue tomado en la cátedra hasta que venza
+        String otherUserToken = registerAndLogIn("e2e.otro");
+        String rejected = block(otherUserToken, monday, abandonedSlot).expectStatus().isEqualTo(409)
+                .expectBody(String.class).returnResult().getResponseBody();
+        assertThat(JsonPath.<String>read(rejected, "$.code")).isEqualTo("SLOT_NOT_AVAILABLE");
+        System.out.println("E2E: the abandoned slot " + abandonedSlot + " is still taken until its hold expires");
+    }
+
+    private String registerAndLogIn(String username) {
+        restTestClient.post().uri("/api/register").contentType(MediaType.APPLICATION_JSON).body(REGISTER_BODY.formatted(username, username))
+                .exchange().expectStatus().isCreated();
+        String login = restTestClient.post().uri("/api/authenticate").contentType(MediaType.APPLICATION_JSON)
+                .body("{\"username\":\"" + username + "\",\"password\":\"secreta123\"}")
+                .exchange().expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+        return JsonPath.read(login, "$.id_token");
+    }
+
+    private static LocalDate nextMonday() {
+        return LocalDate.now(ZoneId.of("America/Argentina/Mendoza")).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+    }
+
+    private List<String> freeSlots(String userToken, LocalDate date) {
+        String body = restTestClient.get().uri("/api/free-slots?professionalId=201&date={date}", date)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).exchange()
+                .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+        return JsonPath.read(body, "$.slots[*].startTime");
+    }
+
+    private RestTestClient.ResponseSpec block(String userToken, LocalDate date, String startTime) {
+        return restTestClient.post().uri("/api/reservation-processes")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).contentType(MediaType.APPLICATION_JSON)
+                .body("{\"professionalId\":201,\"date\":\"" + date + "\",\"startTime\":\"" + startTime + "\"}")
+                .exchange();
+    }
+
+    private RestTestClient.ResponseSpec cancelWithTheService(String userToken, String process) {
+        return restTestClient.post().uri("/api/reservation-processes/{id}/cancel", process)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).exchange();
+    }
+
+    private long processedEvents() {
+        return jdbcTemplate.queryForObject("SELECT COUNT(*) FROM processed_events", Long.class);
     }
 
     private String query(String userToken) {
@@ -205,7 +270,8 @@ class ReservationProcessE2ETest {
         }
     }
 
-    // Una llamada directa, porque el servicio todavía no cancela. Nunca muestra la URL ni el token técnico
+    // Una llamada directa, como limpieza: también sirve si este servicio no se enteró de una confirmación. Nunca muestra
+    // la URL ni el token técnico
     private int cancelInTheCatedra() {
         ResponseEntity<String> response = RestClient.create().post()
                 .uri(environment.getProperty("turnos.catedra.base-url") + "/api/appointments/{id}/cancel", reservationProcessId)

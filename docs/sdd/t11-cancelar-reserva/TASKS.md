@@ -40,23 +40,23 @@ Tandas propuestas, cada una deja la suite en verde: 01+02; 03; 04; 05; 06; 07+08
   - Validación: `./mvnw test -Dtest=ReservationCancellationIntegrationTest`
   - Resultado: 2026-11-04. `ReservationCancellationIntegrationTest`: 31 tests en verde, con Postgres real y cátedra y catálogo simulados: abandono de `HELD`, `WAITING_FOR_PHONE` y vencido sin requests a la cátedra; después de abandonar, T04 responde `201` y T10 lista solo el nuevo; marcados y otros estados con `409`, sin cambios; ya cancelado; inexistente y ajeno; `CONFIRMED` con JWT técnico y motivo en el pedido; sin body, `{}`, vacío y con espacios, sin motivo ni cuerpo hacia la cátedra; carácter nulo; 501 caracteres; cada error con su código y la marca en la fila; reintento que cancela; no poder guardar después de cancelar, y la repetición que lo arregla; abandono que no se guarda; JSON y log sin datos privados. Pruebas en negativo: sin quitar el carácter nulo, 1 falla; marca sin guardar, 4; sin marcar después de fallar al guardar, 1. Archivos restaurados y hash comprobado. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1424 `<testcase>` (1393 + 31), 0 fallas, 0 errores, 0 salteados, 111 XML.
 
-- [ ] **TASK-06 · E2E**
+- [x] **TASK-06 · E2E**
   - Alcance: `ReservationProcessE2ETest` suma un test que bloquea, abandona con T11 y bloquea otro turno, sin depender de Kafka. El recorrido largo cancela con T11 en lugar de la llamada directa, y la llamada directa queda solo como limpieza al terminar. **Claude no lo corre:** lo corre el usuario, con la lista de requests confirmada antes.
   - Depende de: TASK-05
   - Resuelve: CA-16 y CA-17 (código). CA-17 queda bloqueado hasta que la cátedra publique
   - Validación: `./mvnw test-compile`, y sin el perfil `e2e` no se ejecuta. CA-16 se verifica con la corrida del usuario, leyendo los reportes sin mostrar credenciales.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `./mvnw test-compile`: exit 0. Sin el perfil `e2e`: exit 0, sin reporte de la clase ni arranque de la aplicación. **CA-16 verificado:** corrida del usuario, 03:01, `./mvnw test -Pe2e -Dtest='ReservationProcessE2ETest#aUserAbandonsAHeldProcessAndBlocksAnotherFreeSlot'`: 1 test, 0 fallas, 13,9 s. Hold real `process-bb787d02-…` a las 12:00 del lunes 2026-11-09; abandonado sin llamar a la cátedra; **segundo hold `process-12ad29a7-…` a las 12:30 aceptado con el primero activo**; y otro usuario recibió `SLOT_NOT_AVAILABLE` en el turno de las 12:00. Reporte leído sin tokens. **CA-17 no verificado:** cancelar `CONFIRMED` contra la cátedra real sigue bloqueado hasta que publique por Kafka; el recorrido largo quedó listo.
 
-- [ ] **TASK-07 · Documentación del servicio**
+- [x] **TASK-07 · Documentación del servicio**
   - Alcance: `CLAUDE.md` (T11 en el slice y en la lista de `docs/sdd`, la transición nueva, cómo se decidió reintentar la cancelación, el E2E, y la decisión 015 en la lista) y la decisión 015, comparada contra el código final. No toca contratos ni casos de uso, que ya se ajustaron en la SPEC.
   - Depende de: TASK-03, TASK-06
   - Resuelve: documentación de D1
   - Validación: releer los textos contra el código final.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `CLAUDE.md`: T11 en los slices y en la lista de `docs/sdd`, `abandon`, reintento de la cancelación, lo comprobado contra la cátedra, `AppointmentCancellationResult`, los dos recorridos del E2E, y la decisión 015. Decisión 015: lo comprobado por el E2E. Comparada contra el código: `canBeAbandoned`, `abandon`, `CancelReservationProcessUseCaseImpl`, `AppointmentCanceller`, `CancelAppointmentUseCase` y `CatedraAppointmentClient` existen.
 
-- [ ] **TASK-08 · Suite completa y revisión de los criterios**
+- [x] **TASK-08 · Suite completa y revisión de los criterios**
   - Alcance: correr toda la suite y revisar CA-01 a CA-18 contra lo observado. Comprobar que los tests existentes solo cambiaron en lo previsto.
   - Depende de: TASK-01 a TASK-07
   - Resuelve: CA-18
   - Validación: `./mvnw clean test`, con el conteo tomado de `target/surefire-reports/TEST-*.xml` por `<testcase>`.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `./mvnw clean test`, exit 0, 1424 `<testcase>` (al empezar T11: 1282), 0 fallas, 0 errores, 0 salteados, 111 XML, 211 s. CA-01 a CA-16 y CA-18 revisados contra la evidencia: cubiertos por tests ejecutados, y CA-16 por la corrida real del usuario. **CA-17 no verificado:** bloqueado hasta que la cátedra publique. Tests existentes cambiados, comparando contra `develop`: `ReservationProcessTest` y `ReservationProcessControllerTest` y `ReservationProcessDtoMapperTest` (agregados), `CatedraEventAdapterTest` y `ReservationServiceTest` (constructor del service), y `ReservationProcessE2ETest` (D4). Copias de contrato, casos de uso, secuencia y dominio iguales a `documentacion`. No verificado: cancelar `CONFIRMED` contra la cátedra real, y el formato real de su `200`.

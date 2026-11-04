@@ -46,9 +46,9 @@ Quedaría una reserva confirmada que el usuario no ve y que nadie cancela, con e
 - **Esperar a que venza:** es lo que permite la cátedra sin estados propios, pero deja al usuario trabado hasta 10 minutos por una limitación que no es de la cátedra.
 - **Llamar igual a la cátedra:** hoy siempre falla, y cada intento daría un error al usuario y dejaría el proceso marcado.
 
-## Qué falta comprobar
+## Qué se comprobó y qué falta
 
-- Contra la cátedra real, que acepte un segundo hold de otro turno con el primero activo. Lo comprueba el E2E de T11, que corre el usuario.
+- **Comprobado contra la cátedra real (2026-11-04, E2E corrido por el usuario):** después de abandonar un hold, aceptó otro hold de otro turno con el primero activo, y rechazó ese primer turno para otro usuario hasta que venza.
 - Si el profesor responde que la cátedra acepta cancelar un proceso en curso, esta decisión se revisa.
 
 ## Dónde está en el código
