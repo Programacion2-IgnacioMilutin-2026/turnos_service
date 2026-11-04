@@ -7,12 +7,12 @@ Al empezar: `./mvnw clean test` en `expirar-procesos-vencidos` (`afd6b48`), exit
 
 Tandas propuestas: 01; 02+03; 04; 05+06; 07; 08.
 
-- [ ] **TASK-01 · Búsqueda de vencidos**
+- [x] **TASK-01 · Búsqueda de vencidos**
   - Alcance: `findOverdue(Instant expiredBefore)` en `ReservationProcessRepository`, su consulta en `JpaReservationProcessRepository` y su adaptador, con la falla traducida a `ReservationNotSavedException`. Se suma a los dobles que implementan el puerto. No toca el caso de uso.
   - Depende de: ninguna
   - Resuelve: la búsqueda de CA-03 a CA-07 y CA-15; P4 y P5 del PLAN
   - Validación: `./mvnw test -Dtest=JpaReservationProcessRepositoryAdapterTest` sobre Postgres real: trae cada estado que corresponde, deja afuera los cerrados y los `PHONE_SUBMITTED` marcados, coincide con `hasExpired` en el borde exacto y traduce la falla. Prueba en negativo de la comparación del borde y de la condición de la marca.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `./mvnw test -Dtest=JpaReservationProcessRepositoryAdapterTest` sobre Postgres en contenedor: exit 0, 65 `<testcase>`, 18 nuevos, 0 fallas. Prueba en negativo sobre `JpaReservationProcessRepository`, con el hash restaurado (`8050b22ea0de0257`): `<` por `<=` hace fallar `anOpenProcessIsFoundAsOverdueExactlyWhenTheModelSaysSo`; ignorar la marca, `aMarkedProcessIsFoundAsOverdueOnlyIfTheModelStillHasSomethingToDo`; invertir el orden, `overdueProcessesOfEveryUserComeOldestFirstWithEveryField`. `./mvnw clean test`: exit 0, 1442 `<testcase>` (antes 1424), 0 fallas, 0 errores, 0 omitidos.
 
 - [ ] **TASK-02 · Caso de uso del barrido**
   - Alcance: `ExpireOverdueProcessesUseCase`, `ExpireOverdueProcessesUseCaseImpl` y `ReservationService.expireOverdueProcesses()`: búsqueda, candado por proceso, relectura, `resolveOverdue`, `update`, falla por proceso, falla de la búsqueda y log del resultado. Sin disparador.

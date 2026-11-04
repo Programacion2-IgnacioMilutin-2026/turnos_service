@@ -160,3 +160,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## 2026-11-04
 ### Added
 - Documentacion de SDD para el caso de T12-Expirar procesos vencidos.
+- Query para en ver los procesos que vencieron.

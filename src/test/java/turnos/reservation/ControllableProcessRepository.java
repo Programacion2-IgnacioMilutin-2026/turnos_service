@@ -9,6 +9,7 @@ import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 import turnos.reservation.infrastructure.persistence.adapter.JpaReservationProcessRepositoryAdapter;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -90,6 +91,11 @@ final class ControllableProcessRepository implements ReservationProcessRepositor
     @Override
     public ReservationProcessPage findListable(ReservationListCriteria criteria) {
         return realDatabase.findListable(criteria);
+    }
+
+    @Override
+    public List<ReservationProcess> findOverdue(Instant expiredBefore) {
+        return realDatabase.findOverdue(expiredBefore);
     }
 
     @Override

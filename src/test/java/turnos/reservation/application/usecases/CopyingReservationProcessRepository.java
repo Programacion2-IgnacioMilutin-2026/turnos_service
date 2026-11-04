@@ -6,7 +6,9 @@ import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -99,6 +101,16 @@ final class CopyingReservationProcessRepository implements ReservationProcessRep
     @Override
     public ReservationProcessPage findListable(ReservationListCriteria criteria) {
         throw new UnsupportedOperationException("Listing is tested against the database");
+    }
+
+    // Cuál trae y en qué orden se prueba contra Postgres; acá alcanza con entregar la misma regla, y copias como la base
+    @Override
+    public synchronized List<ReservationProcess> findOverdue(Instant expiredBefore) {
+        return processes.values().stream()
+                .filter(p -> p.isOpen() && p.getExpiresAt().isBefore(expiredBefore)
+                        && !(p.getStatus() == ReservationStatus.PHONE_SUBMITTED && p.isNeedsReconciliation()))
+                .sorted(Comparator.comparing(ReservationProcess::getExpiresAt).thenComparing(ReservationProcess::getReservationProcessId))
+                .map(CopyingReservationProcessRepository::copy).toList();
     }
 
     @Override
