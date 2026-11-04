@@ -517,14 +517,15 @@ sequenceDiagram
     break Already CANCELLED locally
         Service-->>App: Current status (idempotent, Central API not called)
     end
-    break Status is PHONE_SUBMITTED, EXPIRED or INVALID (not cancellable)
+    break Status is PHONE_SUBMITTED, EXPIRED, INVALID, or HELD or WAITING_FOR_PHONE marked for reconciliation (not cancellable)
         Service-->>App: 409 (functional code)
     end
-    break Open process (HELD or WAITING_FOR_PHONE) and expiresAt plus safety margin already reached
-        Service->>DB: Mark process EXPIRED
-        Service-->>App: 409 (HOLD_EXPIRED, Central API not called)
+    break HELD or WAITING_FOR_PHONE not marked, even if overdue
+        Service->>DB: Update to CANCELLED, only locally, with the current date and the reason
+        Service-->>App: Cancellation confirmed (Central API not called, its hold expires by itself), or 500 if it cannot be saved
     end
 
+    Note over Service,Central: From here on the status is CONFIRMED
     Service->>Central: Cancel reservation (reservationProcessId, reason if present), technical JWT
     Central-->>Service: reservationProcessId, CANCELLED, cancelledAt and reservationId if applicable, or error
     opt 401 (technical JWT expired or rejected)
