@@ -52,6 +52,8 @@ La suite normal sigue sin leer el `.env` ni usar credenciales reales, y el test 
 
 Excepción (2026-10-27, T04): la cátedra no permite cancelar un hold, así que el E2E de T04 intenta deshacerlo y, si no puede, lo informa y deja que venza solo (D9 de la SPEC de T04).
 
+Actualización (2026-11-03, indicación del usuario): si el teléfono llega a publicarse, el E2E de reserva espera `CONFIRMED` y recién ahí cancela, porque una reserva confirmada no vence sola. Límite aceptado: si la cátedra confirma después de los 60 s de espera, la reserva queda y hay que cancelarla a mano; el test imprime el id del proceso.
+
 Actualización (2026-10-29, T07, D8 de su SPEC): **la suite E2E verifica turnos usando los servicios reales; no verifica el comportamiento de esos servicios** (ni de la cátedra ni de catálogo). Ninguna prueba contra sistemas reales puede afectar lo de otros alumnos ni romper el servicio de turnos real ni la cátedra; puede dejar algo escrito en lo propio si no tiene efecto. Cómo se aplica a Kafka (consumer group propio de tests, lectura sin consumer group): decisión 014.
 
 Actualización (2026-10-30, PLAN de T07, P8): **Kafka en las dos suites.**

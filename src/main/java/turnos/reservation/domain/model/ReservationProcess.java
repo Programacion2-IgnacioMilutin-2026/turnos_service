@@ -101,6 +101,24 @@ public class ReservationProcess {
         return false;
     }
 
+    // Lo que el vencimiento todavía le exige a este proceso: cerrarlo si espera al usuario, o marcarlo si tiene el
+    // teléfono enviado. Uno cerrado o ya marcado no necesita nada más
+    public boolean needsOverdueResolution(Instant now, Duration margin) {
+        return isOpen() && hasExpired(now, margin)
+                && !(status == ReservationStatus.PHONE_SUBMITTED && needsReconciliation);
+    }
+
+    // Devuelve si el proceso cambió: si no, no hay nada que guardar
+    public boolean resolveOverdue(Instant now, Duration margin) {
+        if (!needsOverdueResolution(now, margin)) {
+            return false;
+        }
+        if (!expireIfOverdue(now, margin)) {
+            markForReconciliation();
+        }
+        return true;
+    }
+
     // La cátedra confirmó la reserva. Es la fuente de verdad de lo reservado, así que los datos del turno que informe
     // reemplazan a los guardados; los que no informe quedan como estaban
     public void confirmReservation(Long confirmedReservationId, Instant occurredAt, Long confirmedProfessionalId,
@@ -186,6 +204,19 @@ public class ReservationProcess {
         close(ReservationStatus.CANCELLED);
         cancelledAt = occurredAt;
         cancellationReason = storable(reason);
+    }
+
+    // Se cierra solo en turnos: la cátedra no permite cancelarlo, y su hold vence solo. Uno marcado no: no se sabe qué
+    // tiene la cátedra, y un teléfono que se creyó no publicado podría confirmar una reserva que ya nadie vería
+    public boolean canBeAbandoned() {
+        return (status == ReservationStatus.HELD || status == ReservationStatus.WAITING_FOR_PHONE) && !needsReconciliation;
+    }
+
+    public void abandon(Instant occurredAt, String reason) {
+        if (!canBeAbandoned()) {
+            throw new IllegalStateException("Only a process waiting for the user and not marked can be abandoned, this one is " + status);
+        }
+        cancel(occurredAt, reason);
     }
 
     private void requireOpen(String action) {

@@ -15,7 +15,9 @@ import turnos.reservation.application.support.UserOperationLock;
 import turnos.reservation.application.usecases.ProcessReservationResultUseCaseImpl;
 import turnos.reservation.domain.model.ProcessedEvent;
 import turnos.reservation.domain.model.ReservationEventOutcome;
+import turnos.reservation.domain.model.ReservationListCriteria;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationResult;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.ProcessedEventRepository;
@@ -169,6 +171,11 @@ class ProcessReservationResultAtomicityTest {
         @Override
         public Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId) {
             return delegate.findByIdAndUserId(reservationProcessId, userId);
+        }
+
+        @Override
+        public ReservationProcessPage findListable(ReservationListCriteria criteria) {
+            return delegate.findListable(criteria);
         }
 
         @Override

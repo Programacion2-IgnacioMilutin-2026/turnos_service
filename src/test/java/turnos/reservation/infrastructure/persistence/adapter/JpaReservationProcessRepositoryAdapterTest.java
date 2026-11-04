@@ -5,6 +5,7 @@ import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
@@ -13,15 +14,20 @@ import org.springframework.context.annotation.Import;
 import turnos.TestcontainersConfiguration;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.application.exception.ReservationOpenProcessConflictException;
+import turnos.reservation.domain.model.ReservationListCriteria;
 import turnos.reservation.domain.model.ReservationPhoneNumber;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 import turnos.reservation.infrastructure.persistence.mapper.ReservationProcessMapper;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -29,6 +35,11 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 @Import({TestcontainersConfiguration.class, JpaReservationProcessRepositoryAdapter.class, ReservationProcessMapper.class})
 class JpaReservationProcessRepositoryAdapterTest {
+
+    private static final Instant NOW = Instant.parse("2026-11-03T13:00:00Z");
+    private static final Duration MARGIN = Duration.ofSeconds(30);
+    private static final LocalDate DAY = LocalDate.of(2026, 11, 3);
+    private static final LocalTime TIME = LocalTime.of(10, 0);
 
     @Autowired
     private ReservationProcessRepository repository;
@@ -293,6 +304,221 @@ class JpaReservationProcessRepositoryAdapterTest {
                         """)
                 .setParameter("login", login).setParameter("email", login + "@example.com").getSingleResult();
         return id.longValue();
+    }
+
+    @Test
+    void theOpenProcessGoesFirstThenTheUpcomingSlotsThenThePastOnes() {
+        Long userId = newUser("maria.gomez");
+        listed("past-oldest", userId, ReservationStatus.CANCELLED, DAY.minusDays(30), LocalTime.of(9, 0));
+        listed("upcoming-far", userId, ReservationStatus.CONFIRMED, DAY.plusDays(30), LocalTime.of(9, 0));
+        listed("today-started", userId, ReservationStatus.CONFIRMED, DAY, TIME.minusMinutes(1));
+        listed("past-recent-late", userId, ReservationStatus.CONFIRMED, DAY.minusDays(1), LocalTime.of(18, 0));
+        listed("upcoming-near-late", userId, ReservationStatus.CONFIRMED, DAY.plusDays(2), LocalTime.of(15, 0));
+        listed("today-now", userId, ReservationStatus.CONFIRMED, DAY, TIME);
+        listed("past-recent-early", userId, ReservationStatus.CONFIRMED, DAY.minusDays(1), LocalTime.of(8, 0));
+        listed("upcoming-near-early", userId, ReservationStatus.CANCELLED, DAY.plusDays(2), LocalTime.of(8, 0));
+        // Abierto y con un turno viejo: igual va primero
+        listed("open", userId, ReservationStatus.PHONE_SUBMITTED, DAY.minusDays(60), LocalTime.of(9, 0));
+
+        assertThat(ids(repository.findListable(criteria(userId, null, 0, 100)))).containsExactly("open", "today-now",
+                "upcoming-near-early", "upcoming-near-late", "upcoming-far", "today-started", "past-recent-late",
+                "past-recent-early", "past-oldest");
+    }
+
+    @Test
+    void theSameDateAndTimeAreOrderedByIdInBothGroups() {
+        Long userId = newUser("maria.gomez");
+        for (String id : List.of("z", "a", "m")) {
+            listed("upcoming-" + id, userId, ReservationStatus.CONFIRMED, DAY.plusDays(1), TIME);
+            listed("past-" + id, userId, ReservationStatus.CANCELLED, DAY.minusDays(1), TIME);
+        }
+
+        assertThat(ids(repository.findListable(criteria(userId, null, 0, 100)))).containsExactly("upcoming-a", "upcoming-m",
+                "upcoming-z", "past-a", "past-m", "past-z");
+    }
+
+    @Test
+    void walkingThePagesNeverRepeatsOrMissesAProcess() {
+        Long userId = newUser("maria.gomez");
+        List<String> expected = new ArrayList<>();
+        for (int i = 0; i < 7; i++) {
+            String id = "tied-" + i;
+            listed(id, userId, ReservationStatus.CONFIRMED, DAY.plusDays(1), TIME);
+            expected.add(id);
+        }
+
+        List<String> walked = new ArrayList<>();
+        for (int page = 0; page < 4; page++) {
+            ReservationProcessPage result = repository.findListable(criteria(userId, null, page, 3));
+            assertThat(result.totalItems()).isEqualTo(7);
+            walked.addAll(ids(result));
+        }
+
+        assertThat(walked).isEqualTo(expected);
+    }
+
+    @Test
+    void aPageBeyondTheLastIsEmptyWithTheRealTotal() {
+        Long userId = newUser("maria.gomez");
+        listed("process-1", userId, ReservationStatus.CONFIRMED, DAY, TIME);
+
+        ReservationProcessPage result = repository.findListable(criteria(userId, null, 1, 10));
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.totalItems()).isEqualTo(1);
+    }
+
+    @Test
+    void anEnormousPageNumberIsJustAnEmptyPage() {
+        Long userId = newUser("maria.gomez");
+        listed("process-1", userId, ReservationStatus.CONFIRMED, DAY, TIME);
+
+        ReservationProcessPage result = repository.findListable(criteria(userId, null, Integer.MAX_VALUE, 100));
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.totalItems()).isEqualTo(1);
+    }
+
+    @Test
+    void aUserWithoutReservationsGetsAnEmptyPage() {
+        ReservationProcessPage result = repository.findListable(criteria(newUser("maria.gomez"), null, 0, 10));
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.totalItems()).isZero();
+    }
+
+    @Test
+    void onlyTheProcessesOfThatUserAreListedAndCounted() {
+        Long maria = newUser("maria.gomez");
+        Long juan = newUser("juan.perez");
+        listed("process-maria", maria, ReservationStatus.CONFIRMED, DAY, TIME);
+        listed("process-juan", juan, ReservationStatus.CONFIRMED, DAY, TIME);
+
+        ReservationProcessPage result = repository.findListable(criteria(maria, null, 0, 10));
+
+        assertThat(ids(result)).containsExactly("process-maria");
+        assertThat(result.totalItems()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE", "PHONE_SUBMITTED", "CONFIRMED", "CANCELLED"})
+    void theFilterKeepsOnlyThatStatus(ReservationStatus status) {
+        Long userId = newUser("maria.gomez");
+        listed("process-open", userId, status.isOpen() ? status : ReservationStatus.HELD, DAY, TIME);
+        listed("process-confirmed", userId, ReservationStatus.CONFIRMED, DAY, TIME);
+        listed("process-cancelled", userId, ReservationStatus.CANCELLED, DAY, TIME);
+
+        ReservationProcessPage result = repository.findListable(criteria(userId, status, 0, 10));
+
+        assertThat(result.items()).extracting(ReservationProcess::getStatus).containsOnly(status);
+        assertThat(result.totalItems()).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"EXPIRED", "INVALID"})
+    void anAttemptThatCameToNothingIsNotListed(ReservationStatus status) {
+        Long userId = newUser("maria.gomez");
+        listed("process-1", userId, status, DAY, TIME);
+
+        ReservationProcessPage result = repository.findListable(criteria(userId, null, 0, 10));
+
+        assertThat(result.items()).isEmpty();
+        assertThat(result.totalItems()).isZero();
+    }
+
+    @Test
+    void aProcessCancelledBeforeConfirmationIsNotListedNotEvenFilteringByCancelled() {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess neverConfirmed = process("never-confirmed", userId, ReservationStatus.CANCELLED, DAY, TIME);
+        neverConfirmed.setConfirmedAt(null);
+        repository.create(neverConfirmed);
+        listed("confirmed-first", userId, ReservationStatus.CANCELLED, DAY, TIME);
+
+        assertThat(ids(repository.findListable(criteria(userId, null, 0, 10)))).containsExactly("confirmed-first");
+        ReservationProcessPage filtered = repository.findListable(criteria(userId, ReservationStatus.CANCELLED, 0, 10));
+        assertThat(ids(filtered)).containsExactly("confirmed-first");
+        assertThat(filtered.totalItems()).isEqualTo(1);
+    }
+
+    // La regla del vencido está en el modelo y en la consulta: las dos tienen que decir lo mismo, también en el límite
+    @ParameterizedTest
+    @CsvSource({"HELD, -1", "HELD, 0", "HELD, 1", "WAITING_FOR_PHONE, -1", "WAITING_FOR_PHONE, 0", "WAITING_FOR_PHONE, 1"})
+    void aProcessWaitingForTheUserIsListedExactlyUntilTheModelSaysItExpired(ReservationStatus status, long secondsFromTheLimit) {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess process = process("process-1", userId, status, DAY, TIME);
+        process.setExpiresAt(NOW.minus(MARGIN).plusSeconds(secondsFromTheLimit));
+        repository.create(process);
+        boolean expired = process.hasExpired(NOW, MARGIN);
+
+        assertThat(expired).isEqualTo(secondsFromTheLimit < 0);
+        assertThat(repository.findListable(criteria(userId, null, 0, 10)).items().isEmpty()).isEqualTo(expired);
+        assertThat(repository.findListable(criteria(userId, status, 0, 10)).totalItems()).isEqualTo(expired ? 0 : 1);
+    }
+
+    @Test
+    void aProcessWithThePhoneSubmittedIsListedEvenIfItExpired() {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess process = process("process-1", userId, ReservationStatus.PHONE_SUBMITTED, DAY, TIME);
+        process.setExpiresAt(NOW.minusSeconds(3600));
+        repository.create(process);
+
+        assertThat(ids(repository.findListable(criteria(userId, null, 0, 10)))).containsExactly("process-1");
+    }
+
+    @Test
+    void anOldExpirationDoesNotHideAProcessThatEnded() {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess process = process("process-1", userId, ReservationStatus.CONFIRMED, DAY, TIME);
+        process.setExpiresAt(NOW.minusSeconds(3600));
+        repository.create(process);
+
+        assertThat(ids(repository.findListable(criteria(userId, null, 0, 10)))).containsExactly("process-1");
+    }
+
+    @Test
+    void listingChangesNothingAndBringsEveryField() {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess original = process("process-1", userId, ReservationStatus.CONFIRMED, DAY, TIME);
+        repository.create(original);
+        entityManager.flush();
+        entityManager.clear();
+
+        ReservationProcess found = repository.findListable(criteria(userId, null, 0, 10)).items().getFirst();
+
+        assertThat(found).usingRecursiveComparison().isEqualTo(original);
+    }
+
+    @Test
+    void theDatabaseHasAnIndexToFindTheProcessesOfAUser() {
+        List<?> indexes = entityManager.getEntityManager().createNativeQuery("""
+                SELECT indexdef FROM pg_indexes
+                WHERE tablename = 'reservation_processes' AND indexname = 'ix_reservation_processes_user'
+                """).getResultList();
+
+        assertThat(indexes).singleElement().asString().contains("(user_id)").doesNotContain("WHERE");
+    }
+
+    private void listed(String reservationProcessId, Long userId, ReservationStatus status, LocalDate date, LocalTime startTime) {
+        repository.create(process(reservationProcessId, userId, status, date, startTime));
+    }
+
+    private static ReservationProcess process(String reservationProcessId, Long userId, ReservationStatus status,
+                                              LocalDate date, LocalTime startTime) {
+        ReservationProcess process = held(reservationProcessId, userId);
+        process.setStatus(status);
+        process.setDate(date);
+        process.setStartTime(startTime);
+        process.setExpiresAt(NOW.plusSeconds(600));
+        process.setConfirmedAt(Instant.parse("2026-10-27T04:36:01Z"));
+        return process;
+    }
+
+    private static ReservationListCriteria criteria(Long userId, ReservationStatus status, int page, int size) {
+        return new ReservationListCriteria(userId, status, NOW.minus(MARGIN), DAY, TIME, page, size);
+    }
+
+    private static List<String> ids(ReservationProcessPage page) {
+        return page.items().stream().map(ReservationProcess::getReservationProcessId).toList();
     }
 
     private static ReservationProcess held(String reservationProcessId, Long userId) {

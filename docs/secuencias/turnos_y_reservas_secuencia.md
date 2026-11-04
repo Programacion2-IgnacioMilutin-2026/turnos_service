@@ -450,13 +450,22 @@ sequenceDiagram
         break Process does not exist or belongs to another user
             Service-->>App: 404 (same answer for both cases)
         end
-        opt Process is HELD or WAITING_FOR_PHONE and expiresAt plus safety margin already reached
-            Service->>DB: Mark process EXPIRED
+        opt Process is open, expiresAt plus safety margin already reached, and it still needs closing or marking
+            Note over Service,DB: Only here the query takes the user lock, so it can wait for T05, T06 or T08 of this user
+            Service->>DB: Find the process again, it may have changed while waiting
+            DB-->>Service: Process
+            opt Process is still HELD or WAITING_FOR_PHONE and overdue
+                Service->>DB: Mark process EXPIRED
+            end
+            opt Process is still PHONE_SUBMITTED, overdue and not marked
+                Service->>DB: Mark process for reconciliation (T13), it stays PHONE_SUBMITTED
+            end
+            break Local database access fails
+                Service->>Service: Log error
+                Service-->>App: 500 (the next query tries again)
+            end
         end
-        opt Process is PHONE_SUBMITTED and expiresAt plus safety margin already reached
-            Service->>DB: Mark process for reconciliation (T13), it stays PHONE_SUBMITTED
-        end
-        Service-->>App: Status (status, professionalId, date, startTime, expiresAt if still open, reservationId if CONFIRMED, rejection reason if the last event was a rejection)
+        Service-->>App: 200 (reservation process with the contract fields, including expiresAt if still open, reservationId if CONFIRMED, rejectionReason if the last event was a rejection)
         Note over Service,DB: T08 (section 4) can update the process between two queries
     end
 
@@ -470,15 +479,13 @@ sequenceDiagram
     break Invalid status or pagination out of range
         Service-->>App: 400 (functional code)
     end
-    Service->>DB: Mark EXPIRED the user's HELD or WAITING_FOR_PHONE processes past expiresAt plus safety margin
-    Service->>DB: Mark for reconciliation (T13) the user's PHONE_SUBMITTED processes past expiresAt plus safety margin
-    Service->>DB: Query the user's reservations and processes matching the filter, excluding EXPIRED, INVALID and CANCELLED never confirmed, open process first, then by date and startTime (nearest or most recent first), requested page plus total
+    Service->>DB: Query the user's reservations and processes matching the filter, excluding EXPIRED, INVALID, CANCELLED never confirmed and HELD or WAITING_FOR_PHONE past expiresAt plus safety margin (read only, nothing is closed or marked), open process first, then upcoming slots from nearest to farthest, then past slots from most recent to oldest, requested page plus total
     DB-->>Service: Page of results and total
-    break Local database access fails (closing expired processes or querying)
+    break Local database access fails
         Service->>Service: Log error
         Service-->>App: 500
     end
-    Service-->>App: 200 (page with total, each item with reservationProcessId, status, professionalId, professional name and category, date, startTime, expiresAt and rejection reason if open, cancellation reason if cancelled, reservationId if it exists)
+    Service-->>App: 200 (page with total, each item with reservationProcessId, status, professionalId, professional name and category, date, startTime, expiresAt and rejectionReason if open, cancellationReason if cancelled, reservationId if it exists)
     Note over Service,App: No matches, or a page beyond the last, gives an empty page with the real total (0 if there are none)
 ```
 
@@ -510,14 +517,15 @@ sequenceDiagram
     break Already CANCELLED locally
         Service-->>App: Current status (idempotent, Central API not called)
     end
-    break Status is PHONE_SUBMITTED, EXPIRED or INVALID (not cancellable)
+    break Status is PHONE_SUBMITTED, EXPIRED, INVALID, or HELD or WAITING_FOR_PHONE marked for reconciliation (not cancellable)
         Service-->>App: 409 (functional code)
     end
-    break Open process (HELD or WAITING_FOR_PHONE) and expiresAt plus safety margin already reached
-        Service->>DB: Mark process EXPIRED
-        Service-->>App: 409 (HOLD_EXPIRED, Central API not called)
+    break HELD or WAITING_FOR_PHONE not marked, even if overdue
+        Service->>DB: Update to CANCELLED, only locally, with the current date and the reason
+        Service-->>App: Cancellation confirmed (Central API not called, its hold expires by itself), or 500 if it cannot be saved
     end
 
+    Note over Service,Central: From here on the status is CONFIRMED
     Service->>Central: Cancel reservation (reservationProcessId, reason if present), technical JWT
     Central-->>Service: reservationProcessId, CANCELLED, cancelledAt and reservationId if applicable, or error
     opt 401 (technical JWT expired or rejected)

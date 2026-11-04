@@ -9,6 +9,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.ErrorResponseException;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -24,6 +26,7 @@ import turnos.reservation.application.exception.ReservationInvalidPhoneNumberExc
 import turnos.reservation.application.exception.ReservationInvalidProcessStateException;
 import turnos.reservation.application.exception.ReservationInvalidSlotException;
 import turnos.reservation.application.exception.ReservationLocalStateOutOfSyncException;
+import turnos.reservation.application.exception.ReservationNotCancellableException;
 import turnos.reservation.application.exception.ReservationOpenProcessExistsException;
 import turnos.reservation.application.exception.ReservationPatientMismatchException;
 import turnos.reservation.application.exception.ReservationPhoneRequestNotReadyException;
@@ -36,7 +39,11 @@ import turnos.reservation.application.exception.ReservationSlotNotAvailableExcep
 import turnos.reservation.application.exception.ReservationUserNotFoundException;
 import turnos.reservation.application.service.ReservationService;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.infrastructure.web.dto.PhoneSubmissionRequest;
+import turnos.reservation.infrastructure.web.dto.ReservationCancellationRequest;
+import turnos.reservation.infrastructure.web.dto.ReservationProcessListRequest;
+import turnos.reservation.infrastructure.web.dto.ReservationProcessPageResponse;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessResponse;
 import turnos.reservation.infrastructure.web.mapper.ReservationProcessDtoMapper;
@@ -175,6 +182,66 @@ public class ReservationProcessController {
         } catch (ReservationLocalStateOutOfSyncException e) {
             throw error(HttpStatus.INTERNAL_SERVER_ERROR, "LOCAL_STATE_OUT_OF_SYNC",
                     "The phone could not be published and the state of the reservation process could not be saved");
+        } catch (ReservationException e) {
+            throw error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
+        }
+    }
+
+    // Se busca entre los procesos del usuario, así que uno ajeno responde igual que uno inexistente. Una falla al leer
+    // llega al manejador global, que responde el mismo error interno. Una falla al guardar se atrapa acá porque el
+    // manejador registra la excepción completa, y su causa podría incluir la fila, que puede llevar el teléfono
+    @GetMapping("/reservation-processes/{reservationProcessId}")
+    public ResponseEntity<ReservationProcessResponse> getReservationProcessById(@PathVariable String reservationProcessId,
+                                                                                @AuthenticationPrincipal Jwt jwt) {
+        try {
+            ReservationProcess found = reservationService.getReservationProcessById(Long.valueOf(jwt.getSubject()),
+                    reservationProcessId);
+            return ResponseEntity.ok(reservationProcessDtoMapper.toResponse(found));
+        } catch (ReservationProcessNotFoundException e) {
+            throw error(HttpStatus.NOT_FOUND, "RESERVATION_PROCESS_NOT_FOUND", "Reservation process not found");
+        } catch (ReservationException e) {
+            throw error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
+        }
+    }
+
+    // Las reservas del dueño del token. No traduce errores: solo lee, y una falla al leer llega al manejador global
+    @GetMapping("/reservation-processes")
+    public ResponseEntity<ReservationProcessPageResponse> findReservationProcessesByUser(
+            @Valid @ModelAttribute ReservationProcessListRequest request, @AuthenticationPrincipal Jwt jwt) {
+        int page = reservationProcessDtoMapper.toPage(request);
+        int size = reservationProcessDtoMapper.toSize(request);
+        ReservationProcessPage result = reservationService.findReservationProcessesByUser(Long.valueOf(jwt.getSubject()),
+                reservationProcessDtoMapper.toStatus(request), page, size);
+        return ResponseEntity.ok(reservationProcessDtoMapper.toPageResponse(result, page, size));
+    }
+
+    // El cuerpo es opcional: sin él, la cancelación no lleva motivo. Una falla al guardar se atrapa acá porque el manejador
+    // global registra la excepción completa, y su causa podría incluir la fila, que puede llevar el teléfono
+    @PostMapping("/reservation-processes/{reservationProcessId}/cancel")
+    public ResponseEntity<ReservationProcessResponse> cancelReservationProcess(
+            @PathVariable String reservationProcessId,
+            @Valid @RequestBody(required = false) ReservationCancellationRequest request,
+            @AuthenticationPrincipal Jwt jwt) {
+        try {
+            ReservationProcess cancelled = reservationService.cancelReservationProcess(Long.valueOf(jwt.getSubject()),
+                    reservationProcessId, reservationProcessDtoMapper.toReason(request));
+            return ResponseEntity.ok(reservationProcessDtoMapper.toResponse(cancelled));
+        } catch (ReservationProcessNotFoundException e) {
+            throw error(HttpStatus.NOT_FOUND, "RESERVATION_PROCESS_NOT_FOUND", "Reservation process not found");
+        } catch (ReservationInvalidProcessStateException e) {
+            ErrorResponseException exception = error(HttpStatus.CONFLICT, "INVALID_PROCESS_STATE",
+                    "The reservation process is not in the required state");
+            exception.getBody().setProperty("currentStatus", e.getCurrentStatus().name());
+            throw exception;
+        } catch (ReservationNotCancellableException e) {
+            throw error(HttpStatus.CONFLICT, "RESERVATION_NOT_CANCELLABLE", "The reservation cannot be cancelled");
+        } catch (ReservationServiceDegradedException e) {
+            throw error(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_DEGRADED", "Service is degraded");
+        } catch (ReservationCentralUnavailableException e) {
+            throw error(HttpStatus.SERVICE_UNAVAILABLE, "CENTRAL_UNAVAILABLE", "Central system is unavailable");
+        } catch (ReservationLocalStateOutOfSyncException e) {
+            throw error(HttpStatus.INTERNAL_SERVER_ERROR, "LOCAL_STATE_OUT_OF_SYNC",
+                    "The reservation was cancelled but its state could not be saved");
         } catch (ReservationException e) {
             throw error(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Internal server error");
         }

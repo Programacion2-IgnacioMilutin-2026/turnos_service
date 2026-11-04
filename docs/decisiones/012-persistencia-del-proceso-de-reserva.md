@@ -55,3 +55,5 @@ Alternativas descartadas:
 ## Qué no cambia
 
 Las tablas de usuarios no cambian. El slice `reservation` no lee la tabla de usuarios: la clave foránea es una regla de la base, y la pregunta "¿existe este usuario?" pasa por el puerto de entrada de `user` (decisión 009). La convención de que el controller obtiene la identidad del token (decisión 008) no cambia. Sigue vigente una limitación del token sin estado, independiente de esta decisión: si se reinicia la base sin cambiar el par de claves, un token emitido antes vale para el nuevo usuario que reciba ese id hasta que vence.
+
+Actualización (2026-11-03, T10, P2 de su PLAN): **la tabla suma un índice común por `user_id`** (`ix_reservation_processes_user`, migración `V7`), para listar las reservas de un usuario sin recorrer toda la tabla. El índice único parcial de esta decisión no sirve para eso, porque solo cubre a los procesos abiertos. Medido en un Postgres temporal, con 200.000 filas y un usuario con 100 reservas, una corrida: de 9,8 ms a 0,16 ms. Costo: una escritura algo más cara. Los índices son un detalle interno de la base y no van en el contrato: la app no ve ninguna diferencia.

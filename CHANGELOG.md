@@ -138,3 +138,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Actualizado el nombre de algunas clases para que estan mas acorde a lo que hacen, ya que se les añaden funcionalidades en T08.
 - Ahora tambien vuelve a intentar cuando falla al leer la base, antes solo cuando escribia.
 - Documentacion actualizada debido a decisiones tomadas.
+
+## 2026-11-03
+### Added
+- Documentacion de SDD para el caso de uso T09-Consultar estado de un proceso de reserva.
+- Metodos para manejar vencimientos para un proceso de reserva.
+- Caso de uso en slice 'Reservation' para ver el estado de un proceso y decidir que hacer.
+- Endpoint para traer un proceso de reserva por su id.
+- Tests de los archvios agregados en el caso de uso T09.
+- Tiempo que espera del servicio a al base de datos. Colocado en 30 segundos.
+- Documentacion de SDD para el caso de uso T10-ConsultarMisReservas.}
+- Query para obtener el listado de reservas, con paginado y filtro de estados.
+- Caso de uso, service y endpoint para obtner las reservas de un usuario
+- Documentacion de SDD para el caso de uso T11-CancelarReserva.
+- Operacion para cancelar una reserva.
+- Caso de uso, gateway y endpoint en slice 'Reservation' para cancelar una reserva.
+- Tests de la funcionalidad cancelar una reserva, incluido la extension del test E2E.
+### Changed
+- Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09, T10 y T11.

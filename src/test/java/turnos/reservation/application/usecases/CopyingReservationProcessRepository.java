@@ -1,6 +1,8 @@
 package turnos.reservation.application.usecases;
 
+import turnos.reservation.domain.model.ReservationListCriteria;
 import turnos.reservation.domain.model.ReservationProcess;
+import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 
@@ -12,13 +14,15 @@ import java.util.Optional;
 import java.util.function.Predicate;
 
 // Como la base: guarda y devuelve copias, así cada operación trabaja sobre su propia lectura. Registra cada estado
-// escrito por proceso, y puede fallar al actualizar o al marcar
+// escrito por proceso, puede fallar al actualizar o al marcar, y deja simular lo que pasa justo después de una lectura
 final class CopyingReservationProcessRepository implements ReservationProcessRepository {
 
     private final Map<String, ReservationProcess> processes = new LinkedHashMap<>();
     private final Map<String, List<ReservationStatus>> histories = new LinkedHashMap<>();
     private volatile Predicate<ReservationProcess> failUpdate = process -> false;
+    private volatile RuntimeException updateError = new IllegalStateException("database down");
     private volatile boolean failMarks;
+    private volatile Runnable afterOwnerRead = () -> { };
 
     synchronized void add(ReservationProcess process) {
         processes.put(process.getReservationProcessId(), copy(process));
@@ -34,6 +38,16 @@ final class CopyingReservationProcessRepository implements ReservationProcessRep
 
     void failUpdatesWhen(Predicate<ReservationProcess> condition) {
         failUpdate = condition;
+    }
+
+    void failUpdatesWith(RuntimeException error) {
+        updateError = error;
+        failUpdate = process -> true;
+    }
+
+    // Lo que otra operación hace después de la próxima lectura por dueño, antes de que el que leyó siga adelante
+    void afterNextOwnerRead(Runnable action) {
+        afterOwnerRead = action;
     }
 
     void failMarks() {
@@ -53,7 +67,7 @@ final class CopyingReservationProcessRepository implements ReservationProcessRep
             return Optional.empty();
         }
         if (failUpdate.test(process)) {
-            throw new IllegalStateException("database down");
+            throw updateError;
         }
         processes.put(reservationProcessId, copy(process));
         histories.computeIfAbsent(reservationProcessId, id -> new ArrayList<>()).add(process.getStatus());
@@ -73,8 +87,18 @@ final class CopyingReservationProcessRepository implements ReservationProcessRep
 
     @Override
     public synchronized Optional<ReservationProcess> findByIdAndUserId(String reservationProcessId, Long userId) {
-        return Optional.ofNullable(processes.get(reservationProcessId))
+        Optional<ReservationProcess> found = Optional.ofNullable(processes.get(reservationProcessId))
                 .filter(p -> p.getUserId().equals(userId)).map(CopyingReservationProcessRepository::copy);
+        Runnable action = afterOwnerRead;
+        afterOwnerRead = () -> { };
+        action.run();
+        return found;
+    }
+
+    // Filtrar y ordenar lo hace la base: se prueba contra Postgres, no acá
+    @Override
+    public ReservationProcessPage findListable(ReservationListCriteria criteria) {
+        throw new UnsupportedOperationException("Listing is tested against the database");
     }
 
     @Override
