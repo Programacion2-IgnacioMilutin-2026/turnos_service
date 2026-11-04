@@ -103,7 +103,7 @@ propuestas. Señala impacto sobre modelos, contratos o componentes compartidos. 
 | `catedra`, infraestructura | `infrastructure/client/CatedraAppointmentClientAdapter.java` y sus DTO | Crear | Un intento, y clasifica cada respuesta | RF-07 a RF-12 |
 | `reservation`, dominio | `domain/ports/out/AppointmentCanceller.java` | Crear | Puerto hacia la cátedra | RF-07 |
 | `reservation`, infraestructura | `infrastructure/gateway/CatedraAppointmentAdapter.java` | Crear | Traduce el resultado a excepciones | RF-09 a RF-12 |
-| `reservation`, aplicación | `application/exception/ReservationNotCancellableException.java`, `ReservationAppointmentNotFoundException.java` | Crear | Los dos casos que marcan y responden distinto | RF-11 |
+| `reservation`, aplicación | `application/exception/ReservationNotCancellableException.java`, `ReservationAppointmentNotFoundException.java`, `ReservationAppointmentOwnerMismatchException.java` | Crear | Los casos que se tratan distinto. El tercero se sumó al implementar: esa respuesta no marca, y una falla no prevista sí | RF-11 |
 | `reservation`, dominio | `domain/ports/in/CancelReservationProcessUseCase.java` | Crear | Puerto de entrada | RF-01 |
 | `reservation`, aplicación | `application/usecases/CancelReservationProcessUseCaseImpl.java`, `application/service/ReservationService.java` | Crear y modificar | El flujo de la SPEC con el candado | RF-03 a RF-14 |
 | `reservation`, web | `infrastructure/web/dto/ReservationCancellationRequest.java`, `web/mapper/ReservationProcessDtoMapper.java`, `web/controller/ReservationProcessController.java` | Crear y modificar | Motivo opcional y validado, y el `POST` con sus errores | RF-01, RF-02, RF-15 |

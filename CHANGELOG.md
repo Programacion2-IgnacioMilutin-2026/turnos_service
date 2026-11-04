@@ -152,5 +152,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Caso de uso, service y endpoint para obtner las reservas de un usuario
 - Documentacion de SDD para el caso de uso T11-CancelarReserva.
 - Operacion para cancelar una reserva.
+- Caso de uso, gateway y endpoint en slice 'Reservation' para cancelar una reserva.
 ### Changed
 - Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09, T10 y T11.
