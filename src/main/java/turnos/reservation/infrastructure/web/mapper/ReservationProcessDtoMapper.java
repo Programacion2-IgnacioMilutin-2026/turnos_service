@@ -4,6 +4,7 @@ import org.springframework.stereotype.Component;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
+import turnos.reservation.infrastructure.web.dto.ReservationCancellationRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessListRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessPageResponse;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessRequest;
@@ -26,6 +27,16 @@ public class ReservationProcessDtoMapper {
             return null;
         }
         return request.getProfessionalId().longValueExact();
+    }
+
+    // El cuerpo es opcional, y un motivo sin texto es como no tener motivo. El carácter nulo se quita acá porque la base
+    // lo rechaza, y así lo que se le envía a la cátedra y lo que se guarda es lo mismo
+    public String toReason(ReservationCancellationRequest request) {
+        if (request == null || request.getReason() == null) {
+            return null;
+        }
+        String reason = request.getReason().replace("\0", "");
+        return reason.isBlank() ? null : reason;
     }
 
     // La validación del request ya garantizó que, si tiene un valor, es uno de los estados que se pueden pedir

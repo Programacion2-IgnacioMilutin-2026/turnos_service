@@ -3,9 +3,12 @@ package turnos.reservation.infrastructure.web.mapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
+import turnos.reservation.infrastructure.web.dto.ReservationCancellationRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessListRequest;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessPageResponse;
 import turnos.reservation.infrastructure.web.dto.ReservationProcessRequest;
@@ -186,6 +189,28 @@ class ReservationProcessDtoMapperTest {
         assertThat(response.getPage()).isEqualTo(2);
         assertThat(response.getSize()).isEqualTo(25);
         assertThat(response.getTotalItems()).isEqualTo(7);
+    }
+
+    @Test
+    void aReasonIsKeptAsItCame() {
+        assertThat(mapper.toReason(new ReservationCancellationRequest("  Cambio de planes "))).isEqualTo("  Cambio de planes ");
+    }
+
+    @ParameterizedTest
+    @NullSource
+    @ValueSource(strings = {"", "   ", "\t\n", "\0", " \0 "})
+    void aReasonWithoutTextIsNoReason(String reason) {
+        assertThat(mapper.toReason(new ReservationCancellationRequest(reason))).isNull();
+    }
+
+    @Test
+    void withoutABodyThereIsNoReason() {
+        assertThat(mapper.toReason(null)).isNull();
+    }
+
+    @Test
+    void theNullCharacterIsRemovedBecauseTheDatabaseRejectsIt() {
+        assertThat(mapper.toReason(new ReservationCancellationRequest("Cam\0bio"))).isEqualTo("Cambio");
     }
 
     private static ReservationProcess.ReservationProcessBuilder baseProcess(ReservationStatus status) {
