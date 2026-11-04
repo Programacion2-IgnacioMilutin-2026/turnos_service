@@ -5,19 +5,19 @@
 
 Tandas propuestas, cada una deja la suite en verde: 01+02; 03; 04; 05; 06; 07+08.
 
-- [ ] **TASK-01 · El abandono en el modelo**
+- [x] **TASK-01 · El abandono en el modelo**
   - Alcance: `canBeAbandoned` y `abandon` en `ReservationProcess`, y sus tests. `cancel` no cambia.
   - Depende de: ninguna
   - Resuelve: CA-06 y CA-07 (la regla)
   - Validación: `./mvnw test -Dtest=ReservationProcessTest`, con cada estado, con y sin marca, y el cierre que borra el motivo de rechazo y la marca. Prueba en negativo: permitir abandonar un marcado.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `ReservationProcessTest`: 124 tests en verde, 10 nuevos: abandono en `HELD` y `WAITING_FOR_PHONE` con la fecha y el motivo, borrando el motivo de rechazo, sin comparar el vencimiento; marcados y otros estados rechazados, sin cambios. Prueba en negativo: permitir abandonar un marcado hace fallar 2 casos de `aProcessMarkedForReconciliationIsNotAbandoned`. Archivo restaurado y hash comprobado.
 
-- [ ] **TASK-02 · La cancelación en `catedra`**
+- [x] **TASK-02 · La cancelación en `catedra`**
   - Alcance: `AppointmentCancellationResult`, `CancelAppointmentUseCase` y su `Impl`, `CatedraAppointmentClient`, `CatedraAppointmentClientAdapter` y sus DTO. Sin motivo, el pedido va sin body (P4). Las respuestas se arman desde el anexo §12 y §13, porque no hay grabaciones. No toca `reservation`.
   - Depende de: ninguna
   - Resuelve: CA-03 (el pedido sin motivo), CA-08 (el pedido), CA-09, CA-10, CA-11 y CA-12 (clasificación)
   - Validación: `./mvnw test -Dtest='CatedraAppointmentClientAdapterTest,CancelAppointmentUseCaseImplTest'`, con `FakeHttpServer`: `200`, `401`, `403` de cada código, `404`, `409`, `500`, `503`, corte, timeout y un `200` que no se puede leer; JWT y motivo en el pedido, y el token fuera del log.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `CatedraAppointmentClientAdapterTest` (24) y `CancelAppointmentUseCaseImplTest` (8) en verde. Cliente: pedido con JWT y motivo, sin body si no hay motivo, `200` con y sin `reservationId`, `200` que no se puede usar, cada rechazo por su código, `401`, `500`, `503`, otros códigos, timeout, sin servidor, conexión cortada y token fuera del log. Caso de uso: reintentos hasta el máximo, renovación ante `401` una sola vez, y sesión degradada. Pruebas en negativo: no validar `cancelledAt`, mandar body sin motivo, no reconocer el `409` y no reintentar el `500` hacen fallar 1 test cada una. Archivo restaurado y hash comprobado. Las respuestas salen del anexo: **no se ejecutó contra la cátedra real**. Suite completa de la tanda: `./mvnw clean test`, exit 0, 1324 `<testcase>` (1282 + 42), 0 fallas, 0 errores, 0 salteados, 108 XML, 196 s.
 
 - [ ] **TASK-03 · Caso de uso y gateway en `reservation`**
   - Alcance: `AppointmentCanceller`, `CatedraAppointmentAdapter`, las dos excepciones nuevas, `CancelReservationProcessUseCase` y su `Impl`, y `cancelReservationProcess` en `ReservationService`. Crea sus tests y actualiza los que arman el service a mano.

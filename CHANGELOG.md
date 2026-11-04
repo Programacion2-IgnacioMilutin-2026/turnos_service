@@ -150,5 +150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentacion de SDD para el caso de uso T10-ConsultarMisReservas.}
 - Query para obtener el listado de reservas, con paginado y filtro de estados.
 - Caso de uso, service y endpoint para obtner las reservas de un usuario
+- Documentacion de SDD para el caso de uso T11-CancelarReserva.
+- Operacion para cancelar una reserva.
 ### Changed
-- Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09 y T10.
+- Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09, T10 y T11.
