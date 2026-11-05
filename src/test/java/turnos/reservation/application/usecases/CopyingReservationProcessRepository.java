@@ -6,7 +6,9 @@ import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +25,7 @@ final class CopyingReservationProcessRepository implements ReservationProcessRep
     private volatile RuntimeException updateError = new IllegalStateException("database down");
     private volatile boolean failMarks;
     private volatile Runnable afterOwnerRead = () -> { };
+    private volatile Runnable afterOverdueSearch = () -> { };
 
     synchronized void add(ReservationProcess process) {
         processes.put(process.getReservationProcessId(), copy(process));
@@ -48,6 +51,11 @@ final class CopyingReservationProcessRepository implements ReservationProcessRep
     // Lo que otra operación hace después de la próxima lectura por dueño, antes de que el que leyó siga adelante
     void afterNextOwnerRead(Runnable action) {
         afterOwnerRead = action;
+    }
+
+    // Lo que otra operación hace después de la próxima búsqueda de vencidos, antes de que el barrido llegue a escribir
+    void afterNextOverdueSearch(Runnable action) {
+        afterOverdueSearch = action;
     }
 
     void failMarks() {
@@ -99,6 +107,20 @@ final class CopyingReservationProcessRepository implements ReservationProcessRep
     @Override
     public ReservationProcessPage findListable(ReservationListCriteria criteria) {
         throw new UnsupportedOperationException("Listing is tested against the database");
+    }
+
+    // Cuál trae y en qué orden se prueba contra Postgres; acá alcanza con entregar la misma regla, y copias como la base
+    @Override
+    public synchronized List<ReservationProcess> findOverdue(Instant expiredBefore) {
+        List<ReservationProcess> found = processes.values().stream()
+                .filter(p -> p.isOpen() && p.getExpiresAt().isBefore(expiredBefore)
+                        && !(p.getStatus() == ReservationStatus.PHONE_SUBMITTED && p.isNeedsReconciliation()))
+                .sorted(Comparator.comparing(ReservationProcess::getExpiresAt).thenComparing(ReservationProcess::getReservationProcessId))
+                .map(CopyingReservationProcessRepository::copy).toList();
+        Runnable action = afterOverdueSearch;
+        afterOverdueSearch = () -> { };
+        action.run();
+        return found;
     }
 
     @Override

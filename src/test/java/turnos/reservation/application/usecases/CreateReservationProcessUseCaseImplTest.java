@@ -370,6 +370,11 @@ class CreateReservationProcessUseCaseImplTest {
         }
 
         @Override
+        public List<ReservationProcess> findOverdue(Instant expiredBefore) {
+            throw new UnsupportedOperationException("Blocking a slot does not sweep");
+        }
+
+        @Override
         public void markForReconciliation(String reservationProcessId) {
             processes.stream().filter(p -> p.getReservationProcessId().equals(reservationProcessId))
                     .forEach(ReservationProcess::markForReconciliation);

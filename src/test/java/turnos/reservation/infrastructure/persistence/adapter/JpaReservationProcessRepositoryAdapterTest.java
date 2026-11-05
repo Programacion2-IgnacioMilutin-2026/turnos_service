@@ -11,6 +11,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessResourceFailureException;
 import turnos.TestcontainersConfiguration;
 import turnos.reservation.application.exception.ReservationNotSavedException;
 import turnos.reservation.application.exception.ReservationOpenProcessConflictException;
@@ -21,6 +22,7 @@ import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 import turnos.reservation.infrastructure.persistence.mapper.ReservationProcessMapper;
+import turnos.reservation.infrastructure.persistence.repository.JpaReservationProcessRepository;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -31,6 +33,9 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @DataJpaTest(properties = "spring.jpa.properties.hibernate.generate_statistics=true")
 @Import({TestcontainersConfiguration.class, JpaReservationProcessRepositoryAdapter.class, ReservationProcessMapper.class})
@@ -453,6 +458,73 @@ class JpaReservationProcessRepositoryAdapterTest {
         assertThat(expired).isEqualTo(secondsFromTheLimit < 0);
         assertThat(repository.findListable(criteria(userId, null, 0, 10)).items().isEmpty()).isEqualTo(expired);
         assertThat(repository.findListable(criteria(userId, status, 0, 10)).totalItems()).isEqualTo(expired ? 0 : 1);
+    }
+
+    // La regla del vencido está en el modelo y en esta búsqueda: las dos tienen que decir lo mismo, también en el límite
+    @ParameterizedTest
+    @CsvSource({"HELD, -1", "HELD, 0", "HELD, 1", "WAITING_FOR_PHONE, -1", "WAITING_FOR_PHONE, 0", "WAITING_FOR_PHONE, 1",
+            "PHONE_SUBMITTED, -1", "PHONE_SUBMITTED, 0", "PHONE_SUBMITTED, 1"})
+    void anOpenProcessIsFoundAsOverdueExactlyWhenTheModelSaysSo(ReservationStatus status, long secondsFromTheLimit) {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess process = process("process-1", userId, status, DAY, TIME);
+        process.setExpiresAt(NOW.minus(MARGIN).plusSeconds(secondsFromTheLimit));
+        repository.create(process);
+        boolean overdue = process.needsOverdueResolution(NOW, MARGIN);
+
+        assertThat(overdue).isEqualTo(secondsFromTheLimit < 0);
+        assertThat(repository.findOverdue(NOW.minus(MARGIN)).isEmpty()).isEqualTo(!overdue);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"HELD, true", "WAITING_FOR_PHONE, true", "PHONE_SUBMITTED, false"})
+    void aMarkedProcessIsFoundAsOverdueOnlyIfTheModelStillHasSomethingToDo(ReservationStatus status, boolean found) {
+        Long userId = newUser("maria.gomez");
+        ReservationProcess process = process("process-1", userId, status, DAY, TIME);
+        process.setExpiresAt(NOW.minusSeconds(3600));
+        process.setNeedsReconciliation(true);
+        repository.create(process);
+
+        assertThat(process.needsOverdueResolution(NOW, MARGIN)).isEqualTo(found);
+        assertThat(repository.findOverdue(NOW.minus(MARGIN)).isEmpty()).isEqualTo(!found);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"CONFIRMED", "CANCELLED", "EXPIRED", "INVALID"})
+    void aClosedProcessIsNotFoundAsOverdueNoMatterHowOldItIs(ReservationStatus status) {
+        ReservationProcess process = process("process-1", newUser("maria.gomez"), status, DAY, TIME);
+        process.setExpiresAt(NOW.minusSeconds(3600));
+        repository.create(process);
+
+        assertThat(repository.findOverdue(NOW.minus(MARGIN))).isEmpty();
+    }
+
+    @Test
+    void overdueProcessesOfEveryUserComeOldestFirstWithEveryField() {
+        ReservationProcess newest = process("process-a", newUser("maria.gomez"), ReservationStatus.HELD, DAY, TIME);
+        newest.setExpiresAt(NOW.minusSeconds(100));
+        ReservationProcess oldest = process("process-b", newUser("juan.perez"), ReservationStatus.PHONE_SUBMITTED, DAY, TIME);
+        oldest.setExpiresAt(NOW.minusSeconds(300));
+        ReservationProcess tiedWithNewest = process("process-c", newUser("ana.diaz"), ReservationStatus.WAITING_FOR_PHONE, DAY, TIME);
+        tiedWithNewest.setExpiresAt(NOW.minusSeconds(100));
+        repository.create(newest);
+        repository.create(oldest);
+        repository.create(tiedWithNewest);
+        entityManager.flush();
+        entityManager.clear();
+
+        List<ReservationProcess> found = repository.findOverdue(NOW.minus(MARGIN));
+
+        assertThat(found).extracting(ReservationProcess::getReservationProcessId).containsExactly("process-b", "process-a", "process-c");
+        assertThat(found.getFirst()).usingRecursiveComparison().isEqualTo(oldest);
+    }
+
+    @Test
+    void aFailureSearchingForOverdueProcessesIsReportedAsNotSaved() {
+        JpaReservationProcessRepository failing = mock(JpaReservationProcessRepository.class);
+        when(failing.findOverdue(any(), any(), any())).thenThrow(new DataAccessResourceFailureException("database down"));
+        ReservationProcessRepository adapter = new JpaReservationProcessRepositoryAdapter(failing, new ReservationProcessMapper());
+
+        assertThatThrownBy(() -> adapter.findOverdue(NOW)).isInstanceOf(ReservationNotSavedException.class);
     }
 
     @Test

@@ -179,6 +179,11 @@ class ProcessReservationResultAtomicityTest {
         }
 
         @Override
+        public List<ReservationProcess> findOverdue(Instant expiredBefore) {
+            return delegate.findOverdue(expiredBefore);
+        }
+
+        @Override
         public void markForReconciliation(String reservationProcessId) {
             delegate.markForReconciliation(reservationProcessId);
         }

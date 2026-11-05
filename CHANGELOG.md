@@ -156,3 +156,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests de la funcionalidad cancelar una reserva, incluido la extension del test E2E.
 ### Changed
 - Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09, T10 y T11.
+
+## 2026-11-04
+### Added
+- Documentacion de SDD para el caso de T12-Expirar procesos vencidos.
+- Query para en ver los procesos que vencieron.
+- Caso de uso en slice 'Reservation' para expirar los precesps de reserva vencidos.
+- Schedulling en infraestructure de slice 'Reservation' encargado del barrido.
+- Variables de entorno sobre duracion y activacion de la barrida periodica.
+- Tests para el barrido.
