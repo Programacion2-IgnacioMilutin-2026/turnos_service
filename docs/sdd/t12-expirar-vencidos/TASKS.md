@@ -49,16 +49,34 @@ Tandas propuestas: 01; 02+03; 04; 05+06; 07; 08.
   - Validación: `./mvnw test -Dtest=OverdueSweepIntegrationTest` o su clase propia, leyendo los estados de la base y el log capturado. Prueba en negativo: registrar el mensaje del error en lugar del tipo.
   - Resultado: 2026-11-04. Dentro de `OverdueSweepIntegrationTest` (`aFailureSavingOneProcessDoesNotStopTheOthersAndTheNextSweepClosesIt`): sobre Postgres real, con `ControllableProcessRepository` fallando solo en el segundo proceso y con el teléfono en el mensaje del error: el primero y el tercero quedan `EXPIRED`, el log nombra al segundo con el tipo del error y sin el teléfono, y al dejar de fallar el barrido siguiente lo cierra. Prueba en negativo con el hash restaurado: registrar el mensaje del error hace fallar el test.
 
-- [ ] **TASK-07 · Base caída**
+- [x] **TASK-07 · Base caída**
   - Alcance: test de integración con Postgres en pausa y `@Timeout`, en clase propia: el barrido falla y registra, y al reanudar cierra los vencidos sin intervención.
   - Depende de: TASK-04
   - Resuelve: CA-12
   - Validación: `./mvnw test -Dtest=<clase nueva>`, con los resguardos de pausa que describe `CLAUDE.md`. Prueba en negativo: no atrapar la falla de la búsqueda.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `./mvnw test -Dtest=DatabaseDownOverdueSweepIntegrationTest`: exit 0, 3 `<testcase>`, 0 fallas, con Postgres en pausa de verdad y `@Timeout`. Cubre la caída en los tres puntos: en la búsqueda, en la relectura y al guardar. El log registra `ReservationNotSavedException` en las dos lecturas y `JpaSystemException` al guardar, sin el teléfono; al reanudar, el barrido siguiente resuelve el proceso sin intervención. Ningún contenedor quedó en pausa. Prueba en negativo con el hash restaurado (`642a605b421bc752`): sin atrapar la falla de un proceso fallan los tests de lectura y de guardado; sin el `try-catch` de la búsqueda falla `aSearchThatFailsIsLoggedAndTheSweepClosesTheProcessWhenTheDatabaseComesBack`. Propagar el error conservando la línea del log no lo detecta este test, porque el barrido sigue corriendo; lo detecta el unitario `aFailureSearchingEndsTheSweepWithoutPropagatingTheError` (TASK-02). Con el error propagado Spring igual sigue programando el barrido (lo registra como error inesperado): atraparlo da el mensaje propio, no la continuidad. `./mvnw clean test`: exit 0, 1495 `<testcase>` (antes 1492), 0 fallas, 0 errores, 0 omitidos.
 
-- [ ] **TASK-08 · Documentación y cierre**
+- [x] **TASK-08 · Documentación y cierre**
   - Alcance: `CLAUDE.md` (slice `reservation`, excepción de `infrastructure/scheduling`, variables, apagado en los tests, carpeta SDD, y quitar lo que dependía de T12), y revisión de los 16 criterios. Sin cambios en casos de uso, contratos, secuencias ni dominio. Fuera: T13.
   - Depende de: TASK-01 a TASK-07
   - Resuelve: todos los criterios (revisión final)
   - Validación: `./mvnw clean verify`, exit 0, con conteo de `<testcase>` y cobertura de JaCoCo. Comprobar con la skill §12 que no haya imports indebidos. Tabla CA por CA con su evidencia.
-  - Resultado: pendiente
+  - Resultado: 2026-11-04. `./mvnw clean verify`: exit 0, 1495 `<testcase>` (al empezar T12: 1424), 0 fallas, 0 errores, 0 omitidos. JaCoCo del servicio: 98,2 % de líneas y 93,2 % de ramas; `ExpireOverdueProcessesUseCaseImpl` y `OverdueProcessSweepScheduler` sin líneas ni ramas sin cubrir. Skill §12: las comprobaciones 1 a 4 no imprimen nada, y lo nuevo no importa otros slices. Sin referencias a documentos en el código nuevo. `CLAUDE.md` actualizado; también una línea en la decisión 013, que no estaba prevista. Sin cambios en casos de uso, contratos, secuencias ni dominio. Revisión de criterios, todos con ejecución real:
+
+    | Criterio | Test | Sobre |
+    | --- | --- | --- |
+    | CA-01 | `theSweepRunsOnItsOwnAndKeepsRunning`, `theSweepRepeatsAtTheInterval` | App completa y Postgres |
+    | CA-02 | `twoSweepsNeverRunAtTheSameTimeEvenIfOneTakesLongerThanTheInterval` | App completa y Postgres |
+    | CA-03, CA-15 | `anOverdueProcessWaitingForTheUserIsClosed`, `aMarkedProcessWaitingForTheUserIsClosedAndTheMarkIsTurnedOff` | Memoria y Postgres |
+    | CA-04, CA-07 | `aProcessInsideTheMarginAndAClosedOneAreNotTouched`, `anOpenProcessIsFoundAsOverdueExactlyWhenTheModelSaysSo`, `aClosedProcessIsNotFoundAsOverdueNoMatterHowOldItIs` | Postgres |
+    | CA-05, CA-06 | `aProcessWithThePhoneSubmittedIsMarkedOnceAndKeepsItsData` | App completa y Postgres |
+    | CA-08 | `aReservationConfirmedAfterTheSearchIsNotOverwritten` | Memoria y Postgres |
+    | CA-09 | `theSweepWaitsForTheOperationThatHoldsTheLockAndRespectsWhatItLeft` | Memoria y Postgres |
+    | CA-10 | `aFailureSavingOneProcessDoesNotStopTheOthersAndTheNextSweepClosesIt` | Memoria y Postgres |
+    | CA-11 | `aSweepWithoutOverdueProcessesLogsZero`, `aSweepLogsWhatItActuallyDid`, `theSweepLogsItsResult` | Memoria y Postgres |
+    | CA-12 | Las tres pruebas de `DatabaseDownOverdueSweepIntegrationTest` | Postgres en pausa |
+    | CA-13 | `theSweepDoesNotCallTheCatedra` | App completa, cátedra simulada |
+    | CA-14 | `aUserWhoseProcessWasClosedByTheSweepSeesItExpiredAndCanBlockAnotherSlot` | App completa y Postgres |
+    | CA-16 | `aProcessThatWasOverdueBeforeStartingIsClosedWithoutWaitingForTheInterval` | App completa y Postgres |
+
+    Sin ejecutar, por decisión (D3): prueba contra la cátedra real. Sin arrancar la aplicación con el `.env` del usuario: los tests usan la app completa, y T12 no usa nada de ese archivo. Sin comprobar: que la cátedra respete `expiresAt` al procesar el teléfono (D1), porque no publica los pedidos. RF-02: el ciclo no se omite con una línea en el log como en T12 2.1, sino que no empieza (P3).
