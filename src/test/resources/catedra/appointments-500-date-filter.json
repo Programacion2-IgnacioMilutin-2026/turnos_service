@@ -1,0 +1,1 @@
+{"detail":"Failure during data access","instance":"/api/appointments","status":500,"title":"Internal Server Error","type":"https://www.jhipster.tech/problem/problem-with-message","message":"error.http.500","path":"/api/appointments"}
