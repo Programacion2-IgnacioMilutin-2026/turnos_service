@@ -2,7 +2,7 @@
 
 - **Fecha:** 2026-11-06
 - **Funcionalidad:** T13 — Reconciliar y recuperar procesos pendientes (`docs/sdd/t13-reconciliar-procesos/`, decisiones D1 a D10 de la SPEC y P1 a P4 del PLAN, todas elegidas por el usuario)
-- **Estado:** aceptada; implementación en curso
+- **Estado:** aceptada e implementada (2026-11-06)
 
 ## Situación
 
@@ -93,4 +93,10 @@ No se puede producir un `CONFIRMED` ni un `CANCELLED` en la cátedra real sin en
 
 ## Dónde está en el código
 
-Se completa al terminar la implementación (TASK-10 de T13).
+- **La tabla:** `ReservationProcess.canBeReconciled`, `reconcileWith` y `reconcileWithoutRecord`, que devuelven un `ReconciliationOutcome`; el registro de la cátedra es `ReservationRecord`. Todo en `reservation/domain/model`.
+- **El ciclo:** `ReconcilePendingProcessesUseCaseImpl`, en `reservation/application/usecases`: la revisión de abiertos pendiente, el corte del ciclo, el candado con relectura y comparación, el warning de D10 y el log.
+- **La búsqueda local:** `findToReconcile` en `ReservationProcessRepository` y `JpaReservationProcessRepository`.
+- **El disparador:** `ReconciliationScheduler`, en `reservation/infrastructure/scheduling`; `spring.task.scheduling.pool.size` y `turnos.reservation.reconciliation.*` en `application.yaml`.
+- **Hacia la cátedra:** `AppointmentFinder` (puerto de `reservation`), implementado por `CatedraAppointmentAdapter` en `reservation/infrastructure/gateway`, que llama a `FindAppointmentUseCaseImpl` de `catedra`: recorre las páginas, elige y valida el registro. El listado HTTP está en `CatedraAppointmentClientAdapter.listAppointments`.
+- **La espera del login inicial:** `CatedraOperationRunner.runAfterInitialLogin` y `turnos.catedra.operations.initial-login-wait`.
+- **Las pruebas:** `ReservationProcessTest` (la tabla), `FindAppointmentUseCaseImplTest`, `CatedraAppointmentClientAdapterTest` (con las grabaciones reales), `ReconcilePendingProcessesUseCaseImplTest` (el ciclo y la convivencia con el usuario y Kafka), `ReconciliationSchedulerTest` (los dos hilos) y los tres `Reconciliation*IntegrationTest`, sobre Postgres real.

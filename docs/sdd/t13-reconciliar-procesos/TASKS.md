@@ -70,9 +70,25 @@ Tandas propuestas: 01; 02+03; 04+05; 06+07; 08; 09; 10.
   - Validación: `./mvnw test -Dtest='Reconciliation*IntegrationTest'`. Prueba en negativo: usar `run` en vez de `runAfterInitialLogin` hace fallar el arranque, y un solo hilo de tareas hace fallar CA-02.
   - Resultado: 2026-11-06. `./mvnw test -Dtest='Reconciliation*IntegrationTest'`: exit 0, con Postgres en contenedor y la cátedra simulada. `ReconciliationIntegrationTest` 8 `<testcase>` (17,8 s; reconciliación y barrido encendidos cada 200 ms): marcado reconciliado solo, con el pedido por paciente y página sin fechas y el JWT técnico (CA-01, CA-05, CA-10); las grabaciones reales llevan un `HELD` a `WAITING_FOR_PHONE` con `reservationId` 1664 y un `INVALID` a `EXPIRED` (CA-18, CA-10, CA-13); `CONFIRMED` cancelado en la cátedra con fecha y motivo (CA-13); sin registro, `HELD` vigente sin marca y `WAITING_FOR_PHONE` a `EXPIRED` (CA-14); `PHONE_SUBMITTED` con `PHONE_PENDING` consultado en cada ciclo (CA-12); el `500` real deja el proceso para un ciclo posterior (CA-08, CA-18); falla al guardar con `ControllableProcessRepository` corregida en un ciclo posterior (CA-16); con la cátedra lenta nunca hay dos listados a la vez y el barrido cierra un vencido mientras tanto (CA-02). `ReconciliationAtStartupIntegrationTest` 1 (4,4 s): un `HELD` sin marca guardado antes de arrancar se corrige en la ejecución de arranque, después del login demorado 2 s, con un solo listado y sin corte del ciclo (CA-01). `ReconciliationTurnedOffIntegrationTest` 1 (2,9 s): apagada, un marcado no genera ningún listado (CA-01). `FakeHttpServer` suma respuestas armadas por función y `FakeCatedraServer` los ayudantes del listado. Prueba en negativo: usar `run` en `FindAppointmentUseCaseImpl` (hash restaurado `43f19ae0fd747489`) hace fallar `anOpenProcessLeftBeforeStartingIsCorrectedOnceTheInitialLoginFinishes`; `pool.size: 1` (hash restaurado `75224855519e0b80`), `aSlowCatedraNeverRunsTwoReconciliationsAndDoesNotDelayTheOverdueSweep`. `./mvnw clean test`: exit 0, 1675 `<testcase>` (antes 1665), 0 fallas, 0 errores, 0 omitidos.
 
-- [ ] **TASK-10 · Documentación y cierre**
+- [x] **TASK-10 · Documentación y cierre**
   - Alcance: `CLAUDE.md` (tarea, segundo hilo, variables, tests), `.env.example`, actualización de la decisión 013 por D6, revisión de la decisión 016 contra lo implementado, y los criterios revisados uno por uno.
   - Depende de: TASK-09
   - Resuelve: todos los CA, revisados
   - Validación: `./mvnw clean verify`, exit 0, con la cantidad de tests y la cobertura de JaCoCo; copias de los documentos comparadas.
-  - Resultado: pendiente
+  - Resultado: 2026-11-06. `CLAUDE.md`: T13 en la tabla de slices, métodos nuevos del modelo, dos hilos de tareas y `runAfterInitialLogin`, variables nuevas, hallazgos del listado real y profesional 201 deshabilitado, limitación de D1 de T06 actualizada, tests y dobles nuevos, carpeta SDD y decisiones 001 a 016. Decisión 013: actualización por D6. Decisión 016: estado implementada y sección "Dónde está en el código". `.env.example` ya tenía las tres variables (TASK-04 y TASK-08). Copias comparadas con `cmp`: `contratos_comunes.md`, X01, contrato, casos de uso, dominio y secuencia de turnos idénticos a `documentacion`; `contratos_comunes.md` y X01 también en `catalog_service`. `./mvnw clean verify`: exit 0, 1675 `<testcase>`, 0 fallas, 0 errores, 0 omitidos; JaCoCo 98,3 % de líneas y 93,4 % de ramas (al cerrar T12: 98,2 % y 93,2 %).
+  - Criterios revisados uno por uno:
+    - CA-01: TASK-04 (espera del login), TASK-08 (corre al arrancar, se repite, apagada no existe) y TASK-09 (arranque con login demorado, ciclo periódico, apagada sin listados).
+    - CA-02: TASK-08 (hilos) y TASK-09 (nunca dos listados a la vez; el barrido cierra mientras la cátedra tarda).
+    - CA-03: TASK-05 (consulta sobre Postgres) y TASK-06 (arranque con abiertos, después solo marcados, cerrados sin marca nunca).
+    - CA-04: TASK-06 (revisión de abiertos repetida hasta un ciclo completo).
+    - CA-05: TASK-02 (pedido sin fechas), TASK-03 (segunda página) y TASK-09 (consulta y JWT en la app completa).
+    - CA-06: TASK-03 (otro paciente es sin registro), TASK-02 (el DTO no lee nombre ni teléfono; el log no los tiene) y TASK-06 (log sin teléfono).
+    - CA-07: TASK-02 (`401`), TASK-03 (renovación y una repetición) y los tests existentes del runner (segundo `401` es no disponible, que corta el ciclo en TASK-06).
+    - CA-08: TASK-02, TASK-03, TASK-06 y TASK-09 (el `500` real).
+    - CA-09: TASK-03 (incompleto o desconocido), TASK-05 (traducción) y TASK-06 (saltea solo ese proceso).
+    - CA-10 a CA-14: TASK-01 (cada combinación), TASK-06 (qué se guarda y el warning de D10) y TASK-09 (un caso por grupo sobre Postgres, con las grabaciones).
+    - CA-15: TASK-06.
+    - CA-16: TASK-06 y TASK-09 (sobre Postgres con `ControllableProcessRepository`).
+    - CA-17: TASK-07, sobre el repositorio en memoria con copias; no contra Postgres.
+    - CA-18: TASK-02 (las tres grabaciones en el cliente) y TASK-09 (en la app completa).
+  - Sin cubrir por tests, señalado por JaCoCo: en `CatedraOperationRunner`, las ramas de un hilo interrumpido mientras espera el login; en `ReconcilePendingProcessesUseCaseImpl`, 4 ramas de combinaciones de condiciones ya cubiertas por separado.
