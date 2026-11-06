@@ -13,6 +13,7 @@ import turnos.reservation.domain.ports.in.FindReservationProcessesByUserUseCase;
 import turnos.reservation.domain.ports.in.GetReservationProcessByIdUseCase;
 import turnos.reservation.domain.ports.in.ProcessPhoneRequestUseCase;
 import turnos.reservation.domain.ports.in.ProcessReservationResultUseCase;
+import turnos.reservation.domain.ports.in.ReconcilePendingProcessesUseCase;
 import turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
 
 import java.util.List;
@@ -30,10 +31,11 @@ class ReservationServiceTest {
     private final FindReservationProcessesByUserUseCase findReservationProcessesByUser = mock(FindReservationProcessesByUserUseCase.class);
     private final CancelReservationProcessUseCase cancelReservationProcess = mock(CancelReservationProcessUseCase.class);
     private final ExpireOverdueProcessesUseCase expireOverdueProcesses = mock(ExpireOverdueProcessesUseCase.class);
+    private final ReconcilePendingProcessesUseCase reconcilePendingProcesses = mock(ReconcilePendingProcessesUseCase.class);
     private final ReservationService service = new ReservationService(mock(CreateReservationProcessUseCase.class),
             mock(ConfirmReservationProcessUseCase.class), mock(ProcessPhoneRequestUseCase.class),
             mock(ProcessReservationResultUseCase.class), mock(SubmitPhoneUseCase.class), getReservationProcessById,
-            findReservationProcessesByUser, cancelReservationProcess, expireOverdueProcesses);
+            findReservationProcessesByUser, cancelReservationProcess, expireOverdueProcesses, reconcilePendingProcesses);
 
     @Test
     void aProcessFoundIsReturned() {
@@ -64,6 +66,13 @@ class ReservationServiceTest {
         service.expireOverdueProcesses();
 
         verify(expireOverdueProcesses).expireOverdueProcesses();
+    }
+
+    @Test
+    void aReconciliationIsDelegatedToItsUseCase() {
+        service.reconcilePendingProcesses();
+
+        verify(reconcilePendingProcesses).reconcilePendingProcesses();
     }
 
     @Test

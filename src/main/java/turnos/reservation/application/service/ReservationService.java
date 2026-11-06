@@ -17,6 +17,7 @@ import turnos.reservation.domain.ports.in.FindReservationProcessesByUserUseCase;
 import turnos.reservation.domain.ports.in.GetReservationProcessByIdUseCase;
 import turnos.reservation.domain.ports.in.ProcessPhoneRequestUseCase;
 import turnos.reservation.domain.ports.in.ProcessReservationResultUseCase;
+import turnos.reservation.domain.ports.in.ReconcilePendingProcessesUseCase;
 import turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
 
 import java.time.LocalDate;
@@ -35,6 +36,7 @@ public class ReservationService {
     private final FindReservationProcessesByUserUseCase findReservationProcessesByUserUseCase;
     private final CancelReservationProcessUseCase cancelReservationProcessUseCase;
     private final ExpireOverdueProcessesUseCase expireOverdueProcessesUseCase;
+    private final ReconcilePendingProcessesUseCase reconcilePendingProcessesUseCase;
 
     public ReservationProcess createReservationProcess(Long userId, Long professionalId, LocalDate date,
                                                        LocalTime startTime, String userToken) {
@@ -64,6 +66,10 @@ public class ReservationService {
 
     public void expireOverdueProcesses() {
         expireOverdueProcessesUseCase.expireOverdueProcesses();
+    }
+
+    public void reconcilePendingProcesses() {
+        reconcilePendingProcessesUseCase.reconcilePendingProcesses();
     }
 
     public ReservationEventOutcome processPhoneRequest(ReservationPhoneRequest request) {
