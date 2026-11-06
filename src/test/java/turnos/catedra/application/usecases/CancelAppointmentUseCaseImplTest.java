@@ -6,6 +6,7 @@ import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import turnos.MutableClock;
 import turnos.catedra.application.support.CatedraOperationRunner;
+import turnos.catedra.domain.model.Appointment;
 import turnos.catedra.domain.model.AppointmentCancellationResult;
 import turnos.catedra.domain.model.CatedraOperationPolicy;
 import turnos.catedra.domain.model.CatedraResponse;
@@ -150,6 +151,12 @@ class CancelAppointmentUseCaseImplTest {
                                                                                 String technicalToken) {
             calls.add(reservationProcessId + " " + reason + " " + technicalToken);
             return script.get(Math.min(calls.size(), script.size()) - 1);
+        }
+
+        @Override
+        public CatedraResponse<List<Appointment>> listAppointments(String externalPatientId, int page, int size,
+                                                                   String technicalToken) {
+            throw new UnsupportedOperationException("The cancellation does not list appointments");
         }
     }
 }
