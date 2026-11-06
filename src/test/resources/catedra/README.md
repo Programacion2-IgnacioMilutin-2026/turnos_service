@@ -32,7 +32,7 @@ Los datos de profesionales y fechas son los ficticios de la cátedra.
 
 Tiempo de respuesta observado: unos 0,5 s por consulta.
 
-**Profesional de referencia para la suite E2E y la prueba manual:** `201`, habilitado, de una categoría habilitada, con horarios los lunes de 12:00 a 15:00 y los miércoles de 17:00 a 20:00, cada 30 minutos. **Desde el 2026-11-05 la cátedra lo tiene deshabilitado:** un hold responde `400` `PROFESSIONAL_DISABLED`. Para la prueba de T13 se eligió, desde el snapshot, el primer profesional habilitado con un turno libre (203).
+**Profesional de los E2E y de las pruebas manuales:** no es fijo. Hasta el 2026-11-05 fue el `201` (lunes de 12:00 a 15:00 y miércoles de 17:00 a 20:00, cada 30 minutos); ese día la cátedra lo deshabilitó y un hold responde `400` `PROFESSIONAL_DISABLED`. Desde entonces se elige en cada corrida, desde `GET /api/synchronization/snapshot`, uno habilitado de una categoría habilitada (`E2EProfessional`, TASK-11 de T13); la prueba de T13 usó el 203. El 2026-11-06 el snapshot volvió a dar habilitado al 201, ahora de la categoría Cardiologia, y el E2E lo eligió.
 
 No se pudo grabar: un `403` `STUDENT_INTEGRATION_NOT_FOUND`, un `503` ni un timeout (no se pueden provocar; el único `500` es el del listado con fechas), ni un `409` `SLOT_ALREADY_RESERVED` (necesita una reserva confirmada, T05 y Kafka). Al confirmar tampoco: `403` `HOLD_OWNER_MISMATCH` (los dos backends comparten la cuenta técnica) ni `404` `HOLD_EXPIRED` (un hold vencido respondió `HOLD_NOT_FOUND`). Esos casos se arman a mano en los tests.
 

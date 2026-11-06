@@ -178,3 +178,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests para lo archivos añadidos en la implementacion de T13.
 ### Changed
 - Documentacion debido a decisiones tomadas en T13.
+- El test E2E recibe el snapshop para ejecutarse, en vez de ejecutarse con valores preestablecidos.

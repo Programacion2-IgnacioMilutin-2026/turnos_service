@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.context.annotation.Import;
+import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -22,18 +23,16 @@ import turnos.TestcontainersConfiguration;
 import turnos.TurnosServiceApplication;
 import turnos.catedra.domain.ports.out.TechnicalSessionRepository;
 
-import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 // Contra la cátedra real, con la cuenta técnica del .env local: solo con ./mvnw test -Pe2e.
-// Sin credenciales se saltea. El catálogo es simulado mientras no exista el real; la base es de Testcontainers
+// Sin credenciales se saltea. El catálogo es simulado mientras no exista el real, con un profesional habilitado de la
+// cátedra; la base es de Testcontainers
 @Tag("e2e")
 @EnabledIf(value = "e2e.E2ECredentials#available", disabledReason = "No catedra credentials in the local .env: E2E tests skipped")
 @SpringBootTest(classes = TurnosServiceApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -42,13 +41,8 @@ import static org.awaitility.Awaitility.await;
 @ExtendWith(OutputCaptureExtension.class)
 class FreeSlotsE2ETest {
 
+    // Responde con el profesional que se elige del snapshot de la cátedra (E2EProfessional)
     private static final FakeHttpServer CATALOG = FakeHttpServer.start();
-    // El profesional de referencia de la cátedra: lunes de 12:00 a 15:00 cada 30 minutos
-    private static final String PROFESSIONAL = """
-            {"id":201,"firstName":"Ana","lastName":"Gomez","enabled":true,"category":{"id":1,"name":"Clinica medica","enabled":true},
-             "weeklySchedules":[
-             {"dayOfWeek":"MONDAY","startTime":"12:00:00","endTime":"15:00:00","slotDurationMinutes":30,"enabled":true}]}
-            """;
     private static final String REGISTER_BODY = """
             {"login":"e2e.turnos","password":"secreta123","firstName":"Prueba","lastName":"E2E",
              "email":"e2e.turnos@example.com","langKey":"es"}
@@ -56,7 +50,6 @@ class FreeSlotsE2ETest {
 
     @DynamicPropertySource
     static void simulatedCatalog(DynamicPropertyRegistry registry) {
-        CATALOG.respondToAnyPath(FakeHttpServer.Response.of(200, PROFESSIONAL));
         registry.add("TURNOS_CATALOG_BASE_URL", CATALOG::baseUrl);
     }
 
@@ -69,6 +62,8 @@ class FreeSlotsE2ETest {
     private RestTestClient restTestClient;
     @Autowired
     private TechnicalSessionRepository technicalSessionRepository;
+    @Autowired
+    private Environment environment;
 
     @Test
     void aRegisteredUserGetsFreeSlotsWithTheRealOccupancies(CapturedOutput output) {
@@ -79,16 +74,23 @@ class FreeSlotsE2ETest {
                 .body("{\"username\":\"e2e.turnos\",\"password\":\"secreta123\"}")
                 .exchange().expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
         String userToken = JsonPath.read(login, "$.id_token");
-        LocalDate monday = LocalDate.now(ZoneId.of("America/Argentina/Mendoza")).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+        List<E2EProfessional> professionals = E2EProfessional.enabledInTheCatedra(
+                environment.getProperty("turnos.catedra.base-url"), technicalSessionRepository.get().token());
+        E2EProfessional.Choice choice = E2EProfessional.choose(professionals, CATALOG, 0,
+                (professionalId, date) -> JsonPath.read(freeSlots(userToken, professionalId, date), "$.slots[*].startTime"));
 
-        String body = restTestClient.get().uri("/api/free-slots?professionalId=201&date={date}", monday)
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).exchange()
-                .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
+        String body = freeSlots(userToken, choice.professional().id(), choice.date());
 
         List<String> startTimes = JsonPath.read(body, "$.slots[*].startTime");
-        assertThat(startTimes).isSubsetOf("12:00", "12:30", "13:00", "13:30", "14:00", "14:30");
+        assertThat(startTimes).isSubsetOf(choice.professional().slotsOn(choice.date()));
         assertThat(JsonPath.<Boolean>read(body, "$.stale")).isFalse();
-        System.out.println("E2E free slots for professional 201 on " + monday + ": " + startTimes);
+        System.out.println("E2E free slots for professional " + choice.professional().id() + " on " + choice.date() + ": " + startTimes);
         assertThat(output.getAll()).doesNotContain(userToken);
+    }
+
+    private String freeSlots(String userToken, long professionalId, LocalDate date) {
+        return restTestClient.get().uri("/api/free-slots?professionalId={id}&date={date}", professionalId, date)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).exchange()
+                .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
     }
 }

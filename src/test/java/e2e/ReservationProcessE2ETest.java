@@ -27,12 +27,9 @@ import turnos.TestcontainersConfiguration;
 import turnos.TurnosServiceApplication;
 import turnos.catedra.domain.ports.out.TechnicalSessionRepository;
 
-import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.temporal.TemporalAdjusters;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -56,13 +53,8 @@ class ReservationProcessE2ETest {
     private static final String TEST_PHONE = "+5492610000000";
     private static final Duration RESULT_WAIT = Duration.ofSeconds(60);
     private static final Duration RESULT_POLL = Duration.ofSeconds(2);
+    // Responde con el profesional que se elige del snapshot de la cátedra (E2EProfessional)
     private static final FakeHttpServer CATALOG = FakeHttpServer.start();
-    // El profesional de referencia de la cátedra: lunes de 12:00 a 15:00 cada 30 minutos
-    private static final String PROFESSIONAL = """
-            {"id":201,"firstName":"Ana","lastName":"Gomez","enabled":true,"category":{"id":1,"name":"Clinica medica","enabled":true},
-             "weeklySchedules":[
-             {"dayOfWeek":"MONDAY","startTime":"12:00:00","endTime":"15:00:00","slotDurationMinutes":30,"enabled":true}]}
-            """;
     private static final String REGISTER_BODY = """
             {"login":"%s","password":"secreta123","firstName":"Prueba","lastName":"E2E",
              "email":"%s@example.com","langKey":"es"}
@@ -70,7 +62,6 @@ class ReservationProcessE2ETest {
 
     @DynamicPropertySource
     static void simulatedCatalog(DynamicPropertyRegistry registry) {
-        CATALOG.respondToAnyPath(FakeHttpServer.Response.of(200, PROFESSIONAL));
         registry.add("TURNOS_CATALOG_BASE_URL", CATALOG::baseUrl);
         E2EKafka.configure(registry);
     }
@@ -91,27 +82,27 @@ class ReservationProcessE2ETest {
 
     private String reservationProcessId;
     private Instant expiresAt;
+    private E2EProfessional professional;
 
     @Test
     void aRegisteredUserBlocksAFreeSlotAndConfirmsItWithTheRealCatedra(CapturedOutput output) {
         await().atMost(Duration.ofSeconds(30)).until(() -> technicalSessionRepository.get().isEnabled());
         String userToken = registerAndLogIn("e2e.reservas");
-        LocalDate monday = nextMonday();
 
         // El turno se elige entre los libres: un hold de una corrida anterior aparece como ocupado
-        List<String> startTimes = freeSlots(userToken, monday);
-        assertThat(startTimes).as("free slots of professional 201 on " + monday).isNotEmpty();
-        String slot = startTimes.getFirst();
+        E2EProfessional.Choice choice = choose(userToken, 1);
+        LocalDate date = choice.date();
+        String slot = choice.freeSlots().getFirst();
 
-        String body = block(userToken, monday, slot).expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
+        String body = block(userToken, date, slot).expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
         reservationProcessId = JsonPath.read(body, "$.reservationProcessId");
 
         assertThat(JsonPath.<String>read(body, "$.status")).isEqualTo("HELD");
         assertThat(JsonPath.<String>read(body, "$.startTime")).isEqualTo(slot);
-        assertThat(JsonPath.<String>read(body, "$.professionalCategoryName")).isEqualTo("Clinica medica");
+        assertThat(JsonPath.<String>read(body, "$.professionalCategoryName")).isEqualTo(professional.categoryName());
         expiresAt = Instant.parse(JsonPath.read(body, "$.expiresAt"));
         assertThat(expiresAt).isAfter(Instant.now());
-        System.out.println("E2E hold " + reservationProcessId + " for professional 201 on " + monday + " at " + slot
+        System.out.println("E2E hold " + reservationProcessId + " for professional " + professional.id() + " on " + date + " at " + slot
                 + ", expires at " + expiresAt);
 
         // Confirmar no extiende el vencimiento: la cátedra devuelve el mismo del hold
@@ -173,16 +164,16 @@ class ReservationProcessE2ETest {
     void aUserAbandonsAHeldProcessAndBlocksAnotherFreeSlot() {
         await().atMost(Duration.ofSeconds(30)).until(() -> technicalSessionRepository.get().isEnabled());
         String userToken = registerAndLogIn("e2e.abandono");
-        LocalDate monday = nextMonday();
-        List<String> startTimes = freeSlots(userToken, monday);
-        assertThat(startTimes).as("free slots of professional 201 on " + monday).hasSizeGreaterThanOrEqualTo(2);
+        E2EProfessional.Choice choice = choose(userToken, 2);
+        LocalDate date = choice.date();
+        List<String> startTimes = choice.freeSlots();
         String abandonedSlot = startTimes.getFirst();
         String otherSlot = startTimes.get(1);
 
-        String held = block(userToken, monday, abandonedSlot).expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
+        String held = block(userToken, date, abandonedSlot).expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
         String abandoned = JsonPath.read(held, "$.reservationProcessId");
-        System.out.println("E2E hold " + abandoned + " on " + monday + " at " + abandonedSlot);
-        block(userToken, monday, otherSlot).expectStatus().isEqualTo(409);
+        System.out.println("E2E hold " + abandoned + " on " + date + " at " + abandonedSlot);
+        block(userToken, date, otherSlot).expectStatus().isEqualTo(409);
 
         String cancelled = cancelWithTheService(userToken, abandoned).expectStatus().isOk()
                 .expectBody(String.class).returnResult().getResponseBody();
@@ -190,14 +181,14 @@ class ReservationProcessE2ETest {
         System.out.println("E2E: " + abandoned + " abandoned without telling the Catedra");
 
         // Lo que la decisión de abandonar supone: la cátedra acepta otro hold con el primero todavía activo
-        String second = block(userToken, monday, otherSlot).expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
+        String second = block(userToken, date, otherSlot).expectStatus().isCreated().expectBody(String.class).returnResult().getResponseBody();
         assertThat(status(second)).isEqualTo("HELD");
         System.out.println("E2E second hold " + JsonPath.read(second, "$.reservationProcessId") + " at " + otherSlot
                 + " accepted while the first one is still active");
 
         // Y el turno abandonado sigue tomado en la cátedra hasta que venza
         String otherUserToken = registerAndLogIn("e2e.otro");
-        String rejected = block(otherUserToken, monday, abandonedSlot).expectStatus().isEqualTo(409)
+        String rejected = block(otherUserToken, date, abandonedSlot).expectStatus().isEqualTo(409)
                 .expectBody(String.class).returnResult().getResponseBody();
         assertThat(JsonPath.<String>read(rejected, "$.code")).isEqualTo("SLOT_NOT_AVAILABLE");
         System.out.println("E2E: the abandoned slot " + abandonedSlot + " is still taken until its hold expires");
@@ -212,12 +203,18 @@ class ReservationProcessE2ETest {
         return JsonPath.read(login, "$.id_token");
     }
 
-    private static LocalDate nextMonday() {
-        return LocalDate.now(ZoneId.of("America/Argentina/Mendoza")).with(TemporalAdjusters.next(DayOfWeek.MONDAY));
+    // Un profesional habilitado de la cátedra y el primer día con los turnos libres que el recorrido necesita
+    private E2EProfessional.Choice choose(String userToken, int freeSlotsNeeded) {
+        List<E2EProfessional> professionals = E2EProfessional.enabledInTheCatedra(
+                environment.getProperty("turnos.catedra.base-url"), technicalSessionRepository.get().token());
+        E2EProfessional.Choice choice = E2EProfessional.choose(professionals, CATALOG, freeSlotsNeeded,
+                (professionalId, date) -> freeSlots(userToken, professionalId, date));
+        professional = choice.professional();
+        return choice;
     }
 
-    private List<String> freeSlots(String userToken, LocalDate date) {
-        String body = restTestClient.get().uri("/api/free-slots?professionalId=201&date={date}", date)
+    private List<String> freeSlots(String userToken, long professionalId, LocalDate date) {
+        String body = restTestClient.get().uri("/api/free-slots?professionalId={id}&date={date}", professionalId, date)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).exchange()
                 .expectStatus().isOk().expectBody(String.class).returnResult().getResponseBody();
         return JsonPath.read(body, "$.slots[*].startTime");
@@ -226,7 +223,7 @@ class ReservationProcessE2ETest {
     private RestTestClient.ResponseSpec block(String userToken, LocalDate date, String startTime) {
         return restTestClient.post().uri("/api/reservation-processes")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + userToken).contentType(MediaType.APPLICATION_JSON)
-                .body("{\"professionalId\":201,\"date\":\"" + date + "\",\"startTime\":\"" + startTime + "\"}")
+                .body("{\"professionalId\":" + professional.id() + ",\"date\":\"" + date + "\",\"startTime\":\"" + startTime + "\"}")
                 .exchange();
     }
 
