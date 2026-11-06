@@ -128,6 +128,18 @@ public class JpaReservationProcessRepositoryAdapter implements ReservationProces
         }
     }
 
+    // Como la búsqueda de vencidos: la falla no es de un proceso en particular
+    @Override
+    public List<ReservationProcess> findToReconcile(boolean includeOpen) {
+        try {
+            return jpaReservationProcessRepository.findToReconcile(includeOpen, OPEN_STATUSES).stream()
+                    .map(reservationProcessMapper::toDomainModel)
+                    .toList();
+        } catch (DataAccessException | TransactionException e) {
+            throw new ReservationNotSavedException(e);
+        }
+    }
+
     // Un UPDATE de una sola columna: si guardar el proceso completo acaba de fallar, esto no repite esa escritura
     @Override
     @Transactional

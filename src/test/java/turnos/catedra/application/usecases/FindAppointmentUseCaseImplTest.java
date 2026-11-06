@@ -45,7 +45,7 @@ class FindAppointmentUseCaseImplTest {
             new RenewTechnicalSessionUseCaseImpl(loginClient, repository,
                     new TechnicalLoginPolicy(1, Duration.ofMillis(1), 2, Duration.ofMillis(1), Duration.ofSeconds(60)),
                     new MutableClock(START), integration -> {}),
-            new CatedraOperationPolicy(3, Duration.ofMillis(1), 2)));
+            new CatedraOperationPolicy(3, Duration.ofMillis(1), 2, Duration.ofSeconds(1))));
 
     @Test
     void theFirstPageIsRequestedForThePatientWithTheCurrentToken() {
@@ -185,6 +185,24 @@ class FindAppointmentUseCaseImplTest {
         client.pages(page -> new CatedraResponse.Uncertain<>("cut"));
         assertThat(useCase.findAppointment(PATIENT, PROCESS)).isEqualTo(new AppointmentLookupResult.Unavailable("cut"));
         assertThat(client.calls()).hasSize(1);
+    }
+
+    @Test
+    void theSearchWaitsForTheInitialLoginWhileTheServiceStarts() {
+        repository.save(TechnicalSession.connecting());
+        client.pages(page -> answered(List.of(PENDING)));
+        Thread.ofVirtual().start(() -> {
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            repository.save(enabled("jwt-initial"));
+        });
+
+        assertThat(useCase.findAppointment(PATIENT, PROCESS)).isEqualTo(new AppointmentLookupResult.Found(PENDING));
+        assertThat(client.calls()).containsExactly("1042 page 0 size 20 jwt-initial");
     }
 
     @Test

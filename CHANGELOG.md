@@ -171,5 +171,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentacion de SDD para el caso de uso T13-ReconciliarProcesos.
 - Modelos en slice 'Reservation' para reconciliar procesos.
 - Archivos en slice 'Catedra' para obtener el estado real de una reserva en el servicio de catedra (utlizado por T13).
+- Metodo para comenzar el proceso de reconciliacion luego del login tecnico, con una cantidad de tiempo configurable.
+- Puertos y busquedas en slice 'Reservation' para buscr en la base y y comunicarse con la catedra pra ver que procesos reconciliar.
 ### Changed
 - Documentacion debido a decisiones tomadas en T13.

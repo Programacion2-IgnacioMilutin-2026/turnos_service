@@ -111,6 +111,14 @@ final class CopyingReservationProcessRepository implements ReservationProcessRep
 
     // Cuál trae y en qué orden se prueba contra Postgres; acá alcanza con entregar la misma regla, y copias como la base
     @Override
+    public synchronized List<ReservationProcess> findToReconcile(boolean includeOpen) {
+        return processes.values().stream()
+                .filter(p -> p.isNeedsReconciliation() || (includeOpen && p.isOpen()))
+                .sorted(Comparator.comparing(ReservationProcess::getExpiresAt).thenComparing(ReservationProcess::getReservationProcessId))
+                .map(CopyingReservationProcessRepository::copy).toList();
+    }
+
+    @Override
     public synchronized List<ReservationProcess> findOverdue(Instant expiredBefore) {
         List<ReservationProcess> found = processes.values().stream()
                 .filter(p -> p.isOpen() && p.getExpiresAt().isBefore(expiredBefore)

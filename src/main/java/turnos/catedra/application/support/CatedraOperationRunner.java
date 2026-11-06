@@ -22,6 +22,9 @@ import java.util.function.Function;
 @RequiredArgsConstructor
 public class CatedraOperationRunner {
 
+    // Cada cuánto se mira si el login inicial terminó
+    private static final Duration LOGIN_CHECK_INTERVAL = Duration.ofMillis(100);
+
     private final TechnicalSessionRepository technicalSessionRepository;
     private final RenewTechnicalSessionUseCase renewTechnicalSessionUseCase;
     private final CatedraOperationPolicy catedraOperationPolicy;
@@ -56,6 +59,37 @@ public class CatedraOperationRunner {
             log.error("Catedra {} configuration error: {}", operation, error.reason());
         }
         return response;
+    }
+
+    // Para una tarea que corre mientras el servicio arranca: si el login inicial está en curso, lo espera hasta el tope
+    // en vez de responder enseguida que no hay sesión, y después sigue como run. Las operaciones de los usuarios usan
+    // run: no deben quedar esperando al login
+    public <T> CatedraResponse<T> runAfterInitialLogin(String operation, Function<String, CatedraResponse<T>> call) {
+        awaitInitialLogin(operation);
+        return run(operation, call);
+    }
+
+    private void awaitInitialLogin(String operation) {
+        if (!isConnecting()) {
+            return;
+        }
+        Duration maxWait = catedraOperationPolicy.initialLoginWait();
+        long deadline = System.nanoTime() + maxWait.toNanos();
+        log.info("Catedra {} waits for the initial technical login", operation);
+        while (isConnecting()) {
+            long remaining = deadline - System.nanoTime();
+            if (remaining <= 0) {
+                log.warn("Catedra {} stopped waiting: the initial technical login did not finish within {}", operation, maxWait);
+                return;
+            }
+            if (!waitBefore(Duration.ofNanos(Math.min(remaining, LOGIN_CHECK_INTERVAL.toNanos())))) {
+                return;
+            }
+        }
+    }
+
+    private boolean isConnecting() {
+        return technicalSessionRepository.get().state() == IntegrationState.CONNECTING;
     }
 
     // Solo se repite lo que seguro no se procesó; cualquier otra respuesta se devuelve al primer intento

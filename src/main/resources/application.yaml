@@ -38,6 +38,8 @@ turnos:
       max-attempts: ${TURNOS_CATEDRA_OPERATIONS_MAX_ATTEMPTS:3}
       initial-delay: ${TURNOS_CATEDRA_OPERATIONS_INITIAL_DELAY:500ms}
       multiplier: ${TURNOS_CATEDRA_OPERATIONS_DELAY_MULTIPLIER:2}
+      # Lo que espera la reconciliación al login técnico inicial cuando corre al arrancar
+      initial-login-wait: ${TURNOS_CATEDRA_OPERATIONS_INITIAL_LOGIN_WAIT:2m}
     kafka:
       # Los servidores, los topics y el consumer group los informa el login técnico; el servicio empieza a consumir
       # cuando la integración queda habilitada. Desactivado, no consume (lo usan los tests que no son de Kafka)

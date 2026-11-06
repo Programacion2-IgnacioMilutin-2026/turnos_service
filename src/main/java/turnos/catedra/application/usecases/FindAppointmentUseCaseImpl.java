@@ -31,7 +31,7 @@ public class FindAppointmentUseCaseImpl implements FindAppointmentUseCase {
     public AppointmentLookupResult findAppointment(String externalPatientId, String reservationProcessId) {
         for (int page = 0; page < MAX_PAGES; page++) {
             int requestedPage = page;
-            CatedraResponse<List<Appointment>> response = catedraOperationRunner.run(
+            CatedraResponse<List<Appointment>> response = catedraOperationRunner.runAfterInitialLogin(
                     "listing of appointments for " + reservationProcessId,
                     token -> catedraAppointmentClient.listAppointments(externalPatientId, requestedPage, PAGE_SIZE, token));
             if (!(response instanceof CatedraResponse.Answered<List<Appointment>> answered)) {

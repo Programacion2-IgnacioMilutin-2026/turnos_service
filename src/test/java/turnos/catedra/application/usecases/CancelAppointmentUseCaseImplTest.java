@@ -37,7 +37,7 @@ class CancelAppointmentUseCaseImplTest {
             new RenewTechnicalSessionUseCaseImpl(loginClient, repository,
                     new TechnicalLoginPolicy(1, Duration.ofMillis(1), 2, Duration.ofMillis(1), Duration.ofSeconds(60)),
                     new MutableClock(START), integration -> {}),
-            new CatedraOperationPolicy(3, Duration.ofMillis(1), 2)));
+            new CatedraOperationPolicy(3, Duration.ofMillis(1), 2, Duration.ofSeconds(1))));
 
     @Test
     void theProcessAndTheReasonReachTheClientWithTheCurrentToken() {

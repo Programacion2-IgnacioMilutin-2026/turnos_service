@@ -71,6 +71,16 @@ public interface JpaReservationProcessRepository extends JpaRepository<Reservati
                                                @Param("waitingForUser") Collection<ReservationStatus> waitingForUser,
                                                @Param("phoneSubmitted") ReservationStatus phoneSubmitted);
 
+    // Los mismos que ReservationProcess.canBeReconciled, salvo un cerrado marcado que no sea confirmado ni inválido, que no
+    // debería existir: si apareciera, el modelo lo rechaza. El orden hace que cada ciclo recorra los procesos igual
+    @Query("""
+            SELECT p FROM ReservationProcessEntity p
+             WHERE p.needsReconciliation = true OR (:includeOpen = true AND p.status IN :open)
+             ORDER BY p.expiresAt ASC, p.reservationProcessId ASC
+            """)
+    List<ReservationProcessEntity> findToReconcile(@Param("includeOpen") boolean includeOpen,
+                                                   @Param("open") Collection<ReservationStatus> open);
+
     @Modifying
     @Query("UPDATE ReservationProcessEntity p SET p.needsReconciliation = true WHERE p.reservationProcessId = :id")
     int markForReconciliation(@Param("id") String reservationProcessId);

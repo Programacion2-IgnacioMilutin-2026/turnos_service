@@ -27,6 +27,10 @@ public interface ReservationProcessRepository {
     // antes de escribir, así que quien los usa vuelve a leerlos
     List<ReservationProcess> findOverdue(Instant expiredBefore);
 
+    // De todos los usuarios: los marcados para reconciliar, abiertos o cerrados, y con includeOpen también los abiertos sin
+    // marca. Son candidatos, como los vencidos: quien los usa vuelve a leerlos antes de escribir
+    List<ReservationProcess> findToReconcile(boolean includeOpen);
+
     // Enciende la marca sin tocar el resto del proceso
     void markForReconciliation(String reservationProcessId);
 
