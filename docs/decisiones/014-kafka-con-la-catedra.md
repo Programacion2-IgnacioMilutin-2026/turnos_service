@@ -154,7 +154,7 @@ No son configurables: leer desde el mensaje más antiguo (3.4) y confirmar el of
 - **Campos obligatorios (D8):** solo los que el efecto necesita, con el mismo criterio que el pedido de teléfono: un descarte no tiene vuelta atrás, y nunca se vio un mensaje real.
 - **Un mensaje no puede frenar el consumo por su tamaño (D4, RF-17):** un valor más largo que su columna haría fallar el guardado, y eso se trata como una caída de la base: se reintentaría sin fin y frenaría a todos (3.3). Por eso `reason` se recorta a 500 caracteres con un warning, y un `eventId`, `reservationProcessId` o `holdId` de más de 255 caracteres hace inválido el mensaje, también en el pedido de teléfono. Lo mismo con el carácter nulo, que Postgres no acepta en un texto: invalida un identificador y se quita de `reason`, con un warning.
 - **Cómo se lee un mensaje (PLAN de T08, P3):** un solo DTO con las fechas, instantes y números como texto, y el lector convierte solo los campos que usa ese tipo de evento. Un formato distinto en un campo que no se usa no descarta el mensaje, y si hay que descartarlo, el log conserva el `eventId`. Descartadas: tipos en el DTO, que pierde el mensaje entero, y un DTO por evento.
-- **Sin prueba contra el Kafka real (SPEC de T08):** la cátedra no publica en el topic de acciones y T06 todavía no existe. Se revisa al hacer T06.
+- **Sin prueba contra el Kafka real (SPEC de T08):** la cátedra no publica en el topic de acciones y T06 todavía no existe. Se revisa al hacer T06. **Actualizado (2026-11-06):** verificado con la cátedra publicando; ver la sección 4.
 
 ### 3.15 Cuando una publicación no termina (SPEC de T06, D1 a D3)
 
@@ -173,7 +173,7 @@ T06 guarda `PHONE_SUBMITTED` antes de publicar (D2 y D5 de T08), así que puede 
 
 ### 3.17 Sin prueba del productor contra el Kafka real (SPEC de T06, D8)
 
-Mientras la cátedra no publique el pedido, T06 no tiene `requestEventId` y no llega a publicar en el recorrido real. Lo publicado se comprueba en un Kafka en contenedor contra el anexo §15.5, y el E2E suma el paso de informar el teléfono, bloqueado como el de T07. Descartado: un programa de una sola vez que publique en el topic real con un `requestEventId` inventado, porque no se sabe qué hace la cátedra con ese mensaje y sería probar a la cátedra (decisión 010). Se puede sumar después como una tarea.
+Mientras la cátedra no publique el pedido, T06 no tiene `requestEventId` y no llega a publicar en el recorrido real. Lo publicado se comprueba en un Kafka en contenedor contra el anexo §15.5, y el E2E suma el paso de informar el teléfono, bloqueado como el de T07. Descartado: un programa de una sola vez que publique en el topic real con un `requestEventId` inventado, porque no se sabe qué hace la cátedra con ese mensaje y sería probar a la cátedra (decisión 010). Se puede sumar después como una tarea. **Actualizado (2026-11-06):** ya no hace falta; el E2E publicó el teléfono en el topic real, la cátedra lo consumió y confirmó la reserva (sección 4).
 
 ### 3.18 Cómo se publica (PLAN de T06, P2 y P3)
 
@@ -201,15 +201,21 @@ Mientras la cátedra no publique el pedido, T06 no tiene `requestEventId` y no l
 - El topic de acciones tiene **1 partición** y conserva los mensajes **7 días** (`retention.ms=604800000`, `cleanup.policy=delete`).
 - El consumer group del servicio no tiene posiciones guardadas: nunca se consumió con él.
 - **El servicio consume del Kafka real** (E2E de T07, 2026-10-31): con el consumer group de tests, se conectó, recibió la asignación del topic de acciones y se posicionó desde el principio. El consumer group del servicio siguió sin posiciones después de la corrida. El pedido de teléfono no llegó porque la cátedra no publica, así que el E2E falla en ese paso (CA-14 de T07, bloqueado).
-- **La cátedra no publica en el topic de acciones:** estaba vacío desde siempre (posiciones 0 → 0), aunque se confirmaron holds el 2026-10-28, el 2026-10-29 y el 2026-10-30 (después de la confirmación de las 02:00 y después de su vencimiento de las 02:10, siguió vacío). Contradice el anexo §10 y §15.4. Le pasa también a otros alumnos: un compañero ya se lo consultó al profesor. Hipótesis sin comprobar: hay un topic `kafkaProducer-out-0`, que es el nombre por defecto de una salida de Spring Cloud Stream sin destino configurado. Última corrida del E2E: 2026-11-03, sin pedido en 30 s después de confirmar. Esa corrida no mira el topic, así que no distingue si la cátedra no publica o publica más tarde.
+- **Hasta el 2026-11-03, la cátedra no publicaba en el topic de acciones:** estaba vacío desde siempre (posiciones 0 → 0), aunque se confirmaron holds el 2026-10-28, el 2026-10-29 y el 2026-10-30 (después de la confirmación de las 02:00 y después de su vencimiento de las 02:10, siguió vacío). Contradice el anexo §10 y §15.4. Le pasa también a otros alumnos: un compañero ya se lo consultó al profesor. Hipótesis sin comprobar: hay un topic `kafkaProducer-out-0`, que es el nombre por defecto de una salida de Spring Cloud Stream sin destino configurado. Última corrida del E2E: 2026-11-03, sin pedido en 30 s después de confirmar. Esa corrida no mira el topic, así que no distingue si la cátedra no publica o publica más tarde.
+
+**Verificado (2026-11-06, E2E de reserva y lectura del topic sin consumer group, corridos por el usuario):**
+
+- **La cátedra publica desde el 2026-11-04.** Ese día, a las 11:15Z, publicó juntos los 20 mensajes atrasados de las pruebas del 28 al 31 de octubre (pedidos de teléfono y vencimientos `HOLD_EXPIRED`), con su `occurredAt` original: un evento puede llegar una semana tarde. El servicio los trata como huérfanos o tardíos, sin cambios.
+- **Recorrido completo con el servicio:** pedido de teléfono recibido y guardado, teléfono publicado en el topic de teléfono, la cátedra lo consumió y confirmó la reserva (`AppointmentConfirmed`), cancelación con T11 y su `AppointmentCancelled` procesado. Cierra T07 TASK-12, T06 TASK-11 y CA-17 de T11, y lo que 3.17 dejaba sin probar.
+- **Formato real igual al anexo §15** en los cuatro tipos vistos (`AdditionalInformationRequested`, `AppointmentConfirmed`, `AppointmentCancelled`, `AppointmentProcessExpired`), con los mismos campos que los mensajes armados. Diferencias: los instantes llegan con nanosegundos, y una cancelación sin motivo trae `reason` en `null`. La clave del mensaje es el `reservationProcessId` y no hay headers. Grabados en `src/test/resources/catedra/kafka/*-real.json` y probados en `AppointmentActionReaderTest`.
+- El topic de acciones tenía 23 mensajes (posiciones 0 → 23) y el consumer group del servicio seguía sin existir: ni el E2E ni las lecturas lo usaron.
 
 **Verificado solo con Kafka en contenedor (2026-11-02, T06):** con el contenedor congelado, los tres intentos y el `503` entran en el tope de 10 s; un intento vencido puede llegar cuando Kafka vuelve, así que el caso de 3.15 ocurre de verdad. No se probó contra el Kafka de la cátedra (3.17).
 
 **Por verificar:**
 
 - Cuánto conserva Kafka las posiciones de un consumer group inactivo.
-- Que el topic de teléfono exista (solo se conoce su nombre, por el login), que acepte lo que publica turnos y que la cátedra lo consuma (3.17).
-- El formato real de los mensajes frente al anexo §15, cuando la cátedra publique. Mientras tanto, los tests usan mensajes armados desde el contrato y el anexo.
+- El formato real de `AdditionalInformationRejected` y `AppointmentProcessInvalid`: la cátedra todavía no los publicó. Los tests usan los mensajes armados desde el anexo.
 - Si `catalog_service` usará el mismo consumer group sugerido sobre su topic: dos servicios en un mismo grupo provocan reacomodos entre ellos aunque cada uno lea su topic. Se revisa al hacer catálogo.
 
 ## 5. Por definir en los PLAN
@@ -231,3 +237,4 @@ Nada pendiente: lo de T06 quedó en 3.15 a 3.18.
 - 2026-11-02: T06 implementada: comprobado con Kafka en contenedor (sección 4). El E2E sumó el paso de publicar, pero no se corrió: la cátedra sigue sin publicar el pedido.
 - 2026-11-03: el E2E de reserva pasa a esperar el resultado: `CONFIRMED`, cancelación directa en la cátedra y `CANCELLED` local, porque una reserva confirmada no vence sola (indicación del usuario). Si la cátedra publica, también prueba el formato real de esos eventos. Sin correr: lo corre el usuario.
 - 2026-11-03: E2E de reserva corrido por el usuario: la cátedra no entregó el pedido de teléfono en 30 s. T07 TASK-12 y T06 TASK-11 siguen bloqueadas.
+- 2026-11-06: la cátedra publica desde el 2026-11-04 (sección 4). E2E de reserva completo con el Kafka real, y lectura del topic sin consumer group: formato igual al anexo, con nanosegundos y `reason` en `null`; cuatro mensajes reales grabados. T07 TASK-02 y TASK-12, T06 TASK-11 y CA-17 de T11 verificados.

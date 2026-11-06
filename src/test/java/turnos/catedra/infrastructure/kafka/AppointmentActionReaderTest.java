@@ -274,6 +274,44 @@ class AppointmentActionReaderTest {
                 discarded -> assertThat(discarded.reason()).isEqualTo(identifier + " has the null character"));
     }
 
+    // Mensajes reales publicados por la cátedra (2026-11-04 y 2026-11-06): instantes con nanosegundos y, en una
+    // cancelación sin motivo, reason en null
+
+    @Test
+    void aRealPhoneRequestBecomesTheRequestWithItsExactExpiration() {
+        AppointmentAction action = reader.read(message("additional-information-requested-real.json"));
+
+        assertThat(action).isInstanceOfSatisfying(AppointmentAction.PhoneRequest.class, phoneRequest ->
+                assertThat(phoneRequest.request()).usingRecursiveComparison().isEqualTo(AdditionalInformationRequest.builder()
+                        .eventId("request-event-dc431eb4-19ad-49fb-bcd8-efb6493e89ee")
+                        .reservationProcessId("process-dc876cba-7654-42e0-bb93-ceaaacba6a25")
+                        .holdId("hold-b6240361-bb98-49b4-8a75-3acd8d832779")
+                        .expiresAt(Instant.parse("2026-11-06T06:15:34.496777646Z")).build()));
+    }
+
+    @Test
+    void aRealConfirmationBecomesTheResultWithItsAppointment() {
+        assertThat(reader.read(message("appointment-confirmed-real.json"))).isEqualTo(new AppointmentAction.Result(
+                new AppointmentResult.Confirmed("confirmation-event-52d9034c-a32a-448f-ba31-98fa6f083207",
+                        "process-dc876cba-7654-42e0-bb93-ceaaacba6a25", "hold-b6240361-bb98-49b4-8a75-3acd8d832779", 1665L,
+                        Instant.parse("2026-11-06T06:05:41.713858758Z"), 201L, LocalDate.of(2026, 11, 9), LocalTime.of(13, 30))));
+    }
+
+    @Test
+    void aRealCancellationWithoutReasonBecomesTheResultWithoutReason() {
+        assertThat(reader.read(message("appointment-cancelled-real.json"))).isEqualTo(new AppointmentAction.Result(
+                new AppointmentResult.Cancelled("cancellation-event-575fa905-d1be-43e5-8d79-4130b0ffee7c",
+                        "process-dc876cba-7654-42e0-bb93-ceaaacba6a25", "hold-b6240361-bb98-49b4-8a75-3acd8d832779",
+                        Instant.parse("2026-11-06T06:05:44.233380937Z"), null)));
+    }
+
+    @Test
+    void aRealExpirationBecomesTheResult() {
+        assertThat(reader.read(message("appointment-process-expired-real.json"))).isEqualTo(new AppointmentAction.Result(
+                new AppointmentResult.Expired("process-event-129d8e5a-01e2-48d9-9327-d03baa83ed69",
+                        "process-bfcb30eb-6e39-402f-bd92-95e73bfec54d", "hold-6798700e-87fe-4f94-8b2e-0a57054ff10d")));
+    }
+
     private static Stream<Arguments> messagesAndIdentifiers() {
         return Stream.of(CONFIRMED, REJECTED, EXPIRED, INVALID, CANCELLED, "additional-information-requested.json")
                 .flatMap(file -> Stream.of("eventId", "reservationProcessId", "holdId")

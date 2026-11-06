@@ -36,9 +36,18 @@ Tiempo de respuesta observado: unos 0,5 s por consulta.
 
 No se pudo grabar: un `403` `STUDENT_INTEGRATION_NOT_FOUND`, un `503` ni un timeout (no se pueden provocar; el único `500` es el del listado con fechas), ni un `409` `SLOT_ALREADY_RESERVED` (necesita una reserva confirmada, T05 y Kafka). Al confirmar tampoco: `403` `HOLD_OWNER_MISMATCH` (los dos backends comparten la cuenta técnica) ni `404` `HOLD_EXPIRED` (un hold vencido respondió `HOLD_NOT_FOUND`). Esos casos se arman a mano en los tests.
 
-## Mensajes de Kafka (`kafka/`): armados, no grabados
+## Mensajes de Kafka (`kafka/`): reales y armados
 
-**Estos archivos no son respuestas reales.** Hasta el 2026-10-31 la cátedra no publicó ningún mensaje en el topic de acciones de la integración: estaba vacío después de confirmar holds y después de su vencimiento (ver TASK-02 de `docs/sdd/t07-solicitud-informacion/TASKS.md` y la decisión 014). Por eso se armaron copiando los ejemplos del anexo de la cátedra (§15.4 y §15.6 a §15.10, los mismos del contrato de turnos §4.3.2 y §4.3.4), con el `groupId` reemplazado por el valor de prueba de `login-200.json`. Cuando la cátedra publique, se reemplazan por los grabados, limpios como el resto.
+**Los archivos `*-real.json` son mensajes reales** del topic de acciones, leídos sin consumer group el 2026-11-06 (T07 TASK-02): el `groupId` se reemplazó por `proyecto-de-prueba`; no traen datos personales. La cátedra publica desde el 2026-11-04: ese día publicó juntos los mensajes atrasados de octubre, con su `occurredAt` original. Formato igual al anexo §15, con dos diferencias: los instantes llegan con nanosegundos, y una cancelación sin motivo trae `reason` en `null`. La clave de cada mensaje es su `reservationProcessId`, y no hay headers.
+
+| Archivo real | Evento | Origen |
+| --- | --- | --- |
+| `kafka/additional-information-requested-real.json` | `AdditionalInformationRequested` | Pedido de teléfono del E2E del 2026-11-06 (profesional 201, lunes 2026-11-09 a las 13:30) |
+| `kafka/appointment-confirmed-real.json` | `AppointmentConfirmed` | La misma reserva, 1665, confirmada después de publicar el teléfono |
+| `kafka/appointment-cancelled-real.json` | `AppointmentCancelled` | La misma reserva, cancelada con T11 sin motivo (`reason` en `null`) |
+| `kafka/appointment-process-expired-real.json` | `AppointmentProcessExpired` | El proceso de `confirm-202-accepted.json`, vencido el 2026-10-28 y publicado el 2026-11-04 |
+
+**Los demás archivos de `kafka/` son armados**, copiando los ejemplos del anexo (§15.4 y §15.6 a §15.10): se armaron cuando la cátedra todavía no publicaba (ver TASK-02 de `docs/sdd/t07-solicitud-informacion/TASKS.md` y la decisión 014). Siguen en uso porque cubren los tipos que la cátedra no publicó (`AdditionalInformationRejected` y `AppointmentProcessInvalid`) y porque los tests los modifican campo por campo.
 
 | Archivo | Evento | Lo usa |
 | --- | --- | --- |
