@@ -174,6 +174,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Metodo para comenzar el proceso de reconciliacion luego del login tecnico, con una cantidad de tiempo configurable.
 - Puertos y busquedas en slice 'Reservation' para buscr en la base y y comunicarse con la catedra pra ver que procesos reconciliar.
 - Implementacion del ciclo de reconciliar un proceso en el slice 'Reservation'.
+- Schedulling en infraestructure de slice 'Reservation' encargado de la reconciliacion.
 - Tests para lo archivos añadidos en la implementacion de T13.
 ### Changed
 - Documentacion debido a decisiones tomadas en T13.
