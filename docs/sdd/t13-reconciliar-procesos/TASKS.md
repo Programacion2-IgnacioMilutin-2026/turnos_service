@@ -7,12 +7,12 @@ Al empezar: rama `reconciliar-procesos` desde `891147a`, que cerró T12 con `./m
 
 Tandas propuestas: 01; 02+03; 04+05; 06+07; 08; 09; 10.
 
-- [ ] **TASK-01 · La tabla de reconciliación en el modelo**
+- [x] **TASK-01 · La tabla de reconciliación en el modelo**
   - Alcance: `ReservationRecord` y `ReservationRecordStatus` (copia propia del registro, como `record`), `ReconciliationOutcome`, y `reconcileWith(ReservationRecord)` y `reconcileWithoutRecord(now, margin)` en `ReservationProcess`. Solo `domain/model` y sus tests. No toca casos de uso ni la cátedra.
   - Depende de: ninguna
   - Resuelve: la parte del modelo de CA-10, CA-11, CA-12, CA-13 y CA-14 (P2)
   - Validación: `./mvnw test -Dtest=ReservationProcessTest`, una combinación de estado local y respuesta de la cátedra por test: estado, marca, datos guardados y resultado devuelto. Prueba en negativo: reabrir un cerrado, apagar la marca de un `PHONE_SUBMITTED` con `PHONE_PENDING` y perder el `expiresAt` de un `HELD` que pasa a `WAITING_FOR_PHONE`.
-  - Resultado: pendiente
+  - Resultado: 2026-11-06. `./mvnw test -Dtest='ReservationProcessTest,ReservationRecordTest'`: exit 0; `ReservationProcessTest` 165 `<testcase>` (41 nuevos), `ReservationRecordTest` 2, 0 fallas. `confirmReservation` y `cancel` delegan en `applyConfirmation` y `applyCancellation`, que la reconciliación reusa para sacar un `INVALID` a otro estado final. Al implementar apareció que RF-07b no decía qué hace un `CONFIRMED` marcado con `FAILED`; se siguió el contrato §4.2.6 (`EXPIRED`) y se corrigió RF-07b con OK del usuario. Prueba en negativo sobre `ReservationProcess`, con el hash restaurado (`b73694597683a841`): reabrir un cerrado con `PHONE_PENDING` hace fallar `aMarkedClosedProcessIsNeverReopenedByAReservationWithoutPhone`; apagar la marca del `PHONE_SUBMITTED` con `PHONE_PENDING`, `aSubmittedPhoneThatTheCatedraHasNotResolvedStaysMarkedToBeCheckedAgain`; perder el `expiresAt` del `HELD` que pasa a `WAITING_FOR_PHONE`, `aHeldProcessWhoseConfirmationReachedTheCatedraWaitsForThePhoneWithTheSameExpiration`. `./mvnw clean test`: exit 0, 1538 `<testcase>` (antes 1495), 0 fallas, 0 errores, 0 omitidos.
 
 - [ ] **TASK-02 · Cliente HTTP del listado**
   - Alcance: `listAppointments(externalPatientId, page, size, token)` en `CatedraAppointmentClient` y `CatedraAppointmentClientAdapter`; `Appointment` y `AppointmentStatus` (con `UNKNOWN`) en `catedra/domain/model`; `dto/AppointmentResponse` y `mapper/AppointmentMapper`, sin nombre ni teléfono del paciente. Clasificación: `200`, `401`, `403` `STUDENT_INTEGRATION_NOT_FOUND`, `500`, `503`, sin conexión, timeout, cuerpo ilegible y otros estados. No toca el caso de uso.
