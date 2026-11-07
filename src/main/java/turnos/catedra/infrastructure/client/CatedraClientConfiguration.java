@@ -19,6 +19,7 @@ public class CatedraClientConfiguration {
     @Bean
     CatedraOperationPolicy catedraOperationPolicy(CatedraProperties catedraProperties) {
         CatedraProperties.Operations operations = catedraProperties.operations();
-        return new CatedraOperationPolicy(operations.maxAttempts(), operations.initialDelay(), operations.multiplier());
+        return new CatedraOperationPolicy(operations.maxAttempts(), operations.initialDelay(), operations.multiplier(),
+                operations.initialLoginWait());
     }
 }

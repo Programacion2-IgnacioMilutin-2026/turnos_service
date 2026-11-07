@@ -19,6 +19,11 @@ spring:
       # El esquema lo crean las migraciones de Flyway; Hibernate solo verifica que coincida
       ddl-auto: validate
     open-in-view: false
+  task:
+    scheduling:
+      pool:
+        # Uno por tarea larga: la reconciliación puede esperar a la cátedra, y el barrido de vencidos no debe esperarla
+        size: 2
 
 turnos:
   jwt:
@@ -38,6 +43,8 @@ turnos:
       max-attempts: ${TURNOS_CATEDRA_OPERATIONS_MAX_ATTEMPTS:3}
       initial-delay: ${TURNOS_CATEDRA_OPERATIONS_INITIAL_DELAY:500ms}
       multiplier: ${TURNOS_CATEDRA_OPERATIONS_DELAY_MULTIPLIER:2}
+      # Lo que espera la reconciliación al login técnico inicial cuando corre al arrancar
+      initial-login-wait: ${TURNOS_CATEDRA_OPERATIONS_INITIAL_LOGIN_WAIT:2m}
     kafka:
       # Los servidores, los topics y el consumer group los informa el login técnico; el servicio empieza a consumir
       # cuando la integración queda habilitada. Desactivado, no consume (lo usan los tests que no son de Kafka)
@@ -81,6 +88,12 @@ turnos:
       enabled: ${TURNOS_RESERVATION_SWEEP_ENABLED:true}
       # Cuánto se espera entre el fin de un barrido y el comienzo del siguiente
       interval: ${TURNOS_RESERVATION_SWEEP_INTERVAL:1m}
+    reconciliation:
+      # La reconciliación con la cátedra. Los tests la apagan: si no, consultaría la cátedra simulada y cambiaría los
+      # procesos que preparan
+      enabled: ${TURNOS_RESERVATION_RECONCILIATION_ENABLED:true}
+      # Cuánto se espera entre el fin de un ciclo y el comienzo del siguiente
+      interval: ${TURNOS_RESERVATION_RECONCILIATION_INTERVAL:1m}
   cors:
     # Orígenes de navegador permitidos, separados por comas. Vacío por defecto: ningún navegador puede usar la API
     allowed-origins: ${TURNOS_CORS_ALLOWED_ORIGINS:}

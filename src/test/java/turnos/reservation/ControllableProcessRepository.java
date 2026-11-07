@@ -122,6 +122,11 @@ final class ControllableProcessRepository implements ReservationProcessRepositor
     }
 
     @Override
+    public List<ReservationProcess> findToReconcile(boolean includeOpen) {
+        return realDatabase.findToReconcile(includeOpen);
+    }
+
+    @Override
     public List<ReservationProcess> findOverdue(Instant expiredBefore) {
         maxSimultaneousOverdueSearches.accumulateAndGet(simultaneousOverdueSearches.incrementAndGet(), Math::max);
         try {

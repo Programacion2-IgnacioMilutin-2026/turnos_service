@@ -5,8 +5,10 @@ import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager;
@@ -29,11 +31,14 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -525,6 +530,61 @@ class JpaReservationProcessRepositoryAdapterTest {
         ReservationProcessRepository adapter = new JpaReservationProcessRepositoryAdapter(failing, new ReservationProcessMapper());
 
         assertThatThrownBy(() -> adapter.findOverdue(NOW)).isInstanceOf(ReservationNotSavedException.class);
+    }
+
+    // Procesos a reconciliar: los marcados siempre; los abiertos sin marca, solo si se piden
+    @ParameterizedTest
+    @MethodSource("everyStatusMarkedOrNot")
+    void aProcessIsFoundToReconcileIfMarkedOrIfOpenAndOpenOnesAreRequested(ReservationStatus status, boolean marked,
+                                                                          boolean includeOpen) {
+        ReservationProcess process = process("process-1", newUser("maria.gomez"), status, DAY, TIME);
+        process.setNeedsReconciliation(marked);
+        repository.create(process);
+
+        boolean expected = marked || (includeOpen && status.isOpen());
+        assertThat(repository.findToReconcile(includeOpen)).extracting(ReservationProcess::getReservationProcessId)
+                .containsExactlyElementsOf(expected ? List.of("process-1") : List.of());
+    }
+
+    @Test
+    void processesToReconcileOfEveryUserComeOldestFirstWithEveryField() {
+        ReservationProcess newest = process("process-a", newUser("maria.gomez"), ReservationStatus.CONFIRMED, DAY, TIME);
+        newest.setExpiresAt(NOW.minusSeconds(100));
+        newest.setReservationId(8251L);
+        newest.setConfirmedAt(NOW.minusSeconds(50));
+        newest.setNeedsReconciliation(true);
+        ReservationProcess oldest = process("process-b", newUser("juan.perez"), ReservationStatus.PHONE_SUBMITTED, DAY, TIME);
+        oldest.setExpiresAt(NOW.minusSeconds(300));
+        oldest.setNeedsReconciliation(true);
+        ReservationProcess tiedWithNewest = process("process-c", newUser("ana.diaz"), ReservationStatus.HELD, DAY, TIME);
+        tiedWithNewest.setExpiresAt(NOW.minusSeconds(100));
+        repository.create(newest);
+        repository.create(oldest);
+        repository.create(tiedWithNewest);
+        entityManager.flush();
+        entityManager.clear();
+
+        List<ReservationProcess> found = repository.findToReconcile(true);
+
+        assertThat(found).extracting(ReservationProcess::getReservationProcessId).containsExactly("process-b", "process-a", "process-c");
+        assertThat(found.get(1)).usingRecursiveComparison().isEqualTo(newest);
+        assertThat(repository.findToReconcile(false)).extracting(ReservationProcess::getReservationProcessId)
+                .containsExactly("process-b", "process-a");
+    }
+
+    @Test
+    void aFailureSearchingForProcessesToReconcileIsReportedAsNotSaved() {
+        JpaReservationProcessRepository failing = mock(JpaReservationProcessRepository.class);
+        when(failing.findToReconcile(anyBoolean(), any())).thenThrow(new DataAccessResourceFailureException("database down"));
+        ReservationProcessRepository adapter = new JpaReservationProcessRepositoryAdapter(failing, new ReservationProcessMapper());
+
+        assertThatThrownBy(() -> adapter.findToReconcile(true)).isInstanceOf(ReservationNotSavedException.class);
+    }
+
+    private static Stream<Arguments> everyStatusMarkedOrNot() {
+        return Arrays.stream(ReservationStatus.values()).flatMap(status -> Stream.of(
+                Arguments.of(status, true, true), Arguments.of(status, true, false),
+                Arguments.of(status, false, true), Arguments.of(status, false, false)));
     }
 
     @Test

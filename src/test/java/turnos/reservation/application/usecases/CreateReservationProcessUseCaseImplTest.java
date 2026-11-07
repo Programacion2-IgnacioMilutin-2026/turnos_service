@@ -375,6 +375,11 @@ class CreateReservationProcessUseCaseImplTest {
         }
 
         @Override
+        public List<ReservationProcess> findToReconcile(boolean includeOpen) {
+            throw new UnsupportedOperationException("Blocking a slot does not reconcile");
+        }
+
+        @Override
         public void markForReconciliation(String reservationProcessId) {
             processes.stream().filter(p -> p.getReservationProcessId().equals(reservationProcessId))
                     .forEach(ReservationProcess::markForReconciliation);

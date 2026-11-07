@@ -2,13 +2,19 @@ package turnos.catedra;
 
 import turnos.FakeHttpServer;
 
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
+import java.util.function.Function;
 
 // Cátedra simulada para los tests, sobre el servidor HTTP de test.
 // Por defecto responde a cualquier ruta con un login técnico exitoso; http() da acceso a las respuestas por ruta
 public final class FakeCatedraServer implements AutoCloseable {
 
+    public static final String APPOINTMENTS_PATH = "/api/appointments";
     public static final String TOKEN = "eyJhbGciOiJIUzUxMiJ9.token-tecnico-de-test.firma";
 
     private final FakeHttpServer server;
@@ -73,6 +79,39 @@ public final class FakeCatedraServer implements AutoCloseable {
                  "kafkaAppointmentPhoneTopic":"%s",
                  "provisioningStatus":"%s"}}
                 """.formatted(TOKEN, kafkaBootstrapServers, consumerGroup, actionsTopic, phoneTopic, provisioningStatus);
+    }
+
+    // Contesta el listado de reservas con lo que corresponda al paciente pedido
+    public void respondToListings(Function<String, FakeHttpServer.Response> byPatient) {
+        server.respondTo(APPOINTMENTS_PATH, request -> byPatient.apply(patientOf(request)));
+    }
+
+    public List<FakeHttpServer.ReceivedRequest> listings() {
+        return server.receivedRequests(APPOINTMENTS_PATH);
+    }
+
+    public static String patientOf(FakeHttpServer.ReceivedRequest request) {
+        return Arrays.stream(request.query().split("&"))
+                .filter(parameter -> parameter.startsWith("externalPatientId="))
+                .map(parameter -> URLDecoder.decode(parameter.substring("externalPatientId=".length()), StandardCharsets.UTF_8))
+                .findFirst().orElse(null);
+    }
+
+    // Una reserva del listado con el formato de la cátedra real; los datos personales son de prueba
+    public static String appointment(String reservationProcessId, String externalPatientId, String status,
+                                     Long reservationId, Instant confirmedAt, Instant cancelledAt, String cancellationReason) {
+        return """
+                {"appointmentDate":"2026-11-09","cancellationReason":%s,"cancelledAt":%s,"confirmedAt":%s,
+                 "createdAt":"2026-11-05T12:00:00Z","endTime":"11:00:00","externalPatientId":"%s","patientFirstName":"Prueba",
+                 "patientLastName":"Grabacion","patientPhone":null,"professionalFirstName":"Ana","professionalId":201,
+                 "professionalLastName":"Gomez","reservationId":%s,"reservationProcessId":"%s","startTime":"10:30:00",
+                 "status":"%s"}
+                """.formatted(quoted(cancellationReason), quoted(cancelledAt), quoted(confirmedAt), externalPatientId,
+                reservationId, reservationProcessId, status);
+    }
+
+    private static String quoted(Object value) {
+        return value == null ? "null" : "\"" + value + "\"";
     }
 
     public static String problem(int status, String code) {

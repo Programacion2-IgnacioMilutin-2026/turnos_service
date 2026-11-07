@@ -1,0 +1,11 @@
+{
+  "eventId": "request-event-dc431eb4-19ad-49fb-bcd8-efb6493e89ee",
+  "eventType": "AdditionalInformationRequested",
+  "reservationProcessId": "process-dc876cba-7654-42e0-bb93-ceaaacba6a25",
+  "holdId": "hold-b6240361-bb98-49b4-8a75-3acd8d832779",
+  "requiredField": "PHONE_NUMBER",
+  "message": "Ingrese un numero de telefono para continuar.",
+  "expiresAt": "2026-11-06T06:15:34.496777646Z",
+  "occurredAt": "2026-11-06T06:05:34.795170460Z",
+  "schemaVersion": 1
+}

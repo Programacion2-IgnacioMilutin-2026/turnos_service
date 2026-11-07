@@ -46,7 +46,7 @@ class GetOccupanciesUseCaseImplTest {
     private final RenewTechnicalSessionUseCaseImpl renew = new RenewTechnicalSessionUseCaseImpl(loginClient, repository,
             new TechnicalLoginPolicy(1, Duration.ofMillis(1), 2, Duration.ofMillis(1), Duration.ofSeconds(60)), clock, integration -> {});
     private final GetOccupanciesUseCaseImpl useCase = new GetOccupanciesUseCaseImpl(occupancyClient,
-            new CatedraOperationRunner(repository, renew, new CatedraOperationPolicy(3, Duration.ofMillis(1), 2)));
+            new CatedraOperationRunner(repository, renew, new CatedraOperationPolicy(3, Duration.ofMillis(1), 2, Duration.ofSeconds(1))));
 
     @Test
     void anEnabledSessionUsesItsCurrentToken() {

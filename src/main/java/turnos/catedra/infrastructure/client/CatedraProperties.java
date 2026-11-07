@@ -29,7 +29,9 @@ public record CatedraProperties(
             @DefaultValue("3s") Duration readTimeout,
             @DefaultValue("3") int maxAttempts,
             @DefaultValue("500ms") Duration initialDelay,
-            @DefaultValue("2") double multiplier) {
+            @DefaultValue("2") double multiplier,
+            // Lo que espera una tarea programada al login inicial; el login, con sus reintentos, tarda como mucho unos 80 s
+            @DefaultValue("2m") Duration initialLoginWait) {
     }
 
     // La contraseña de la cuenta técnica no debe aparecer en logs
