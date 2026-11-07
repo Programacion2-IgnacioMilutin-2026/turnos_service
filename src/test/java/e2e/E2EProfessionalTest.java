@@ -16,6 +16,7 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -104,7 +105,7 @@ class E2EProfessionalTest {
         });
 
         assertThat(asked).hasSize(2).allMatch(date -> !date.isBefore(tomorrow))
-                .allMatch(date -> date.getDayOfWeek() == DayOfWeek.MONDAY || date.getDayOfWeek() == DayOfWeek.FRIDAY);
+                .allMatch(date -> Set.of(DayOfWeek.MONDAY, DayOfWeek.FRIDAY).contains(date.getDayOfWeek()));
         assertThat(choice.date()).isEqualTo(asked.get(1));
         assertThat(choice.freeSlots()).containsExactly("12:00", "12:30");
         assertThat(choice.professional().id()).isEqualTo(15L);

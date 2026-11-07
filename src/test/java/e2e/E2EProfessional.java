@@ -124,7 +124,7 @@ record E2EProfessional(long id, String firstName, String lastName, String catego
     // Los turnos que ofrece ese día según sus horarios, sin mirar las ocupaciones
     List<String> slotsOn(LocalDate date) {
         return schedules.stream()
-                .filter(schedule -> schedule.dayOfWeek() == date.getDayOfWeek())
+                .filter(schedule -> schedule.dayOfWeek().equals(date.getDayOfWeek()))
                 .flatMap(schedule -> schedule.slots().stream())
                 .sorted()
                 .toList();
