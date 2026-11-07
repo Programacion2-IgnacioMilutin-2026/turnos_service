@@ -6,7 +6,7 @@ Los comandos se ejecutan desde la raíz de este repositorio.
 
 - Docker en ejecución: lo usan el compose y los tests.
 - Un archivo `.env` creado a partir de `.env.example`, con `TURNOS_DB_PASSWORD` y `TURNOS_JWT_PRIVATE_KEY_LOCATION` completos, y las tres variables `TURNOS_CATEDRA_*` de la cuenta técnica. No se versiona. Sin las de la cátedra, el servicio arranca con un warning y sin integración. `TURNOS_CORS_ALLOWED_ORIGINS` es opcional: vacía, ningún navegador puede usar la API (decisión 007). `TURNOS_CATALOG_BASE_URL` apunta al servicio de catálogo; vacía, el servicio arranca con un warning y `GET /api/free-slots` responde `503` `CATALOG_UNAVAILABLE`. Los tiempos, reintentos, zona de atención (`TURNOS_ATTENTION_ZONE`, la comparten `availability` y `reservation`), antigüedad del caché y margen de seguridad de los holds (`TURNOS_RESERVATION_SAFETY_MARGIN`, 30 s) son opcionales y están comentados en `.env.example`; una variable vacía conserva el valor por defecto. El barrido de vencidos (T12) y la reconciliación (T13) son la excepción: `TURNOS_RESERVATION_SWEEP_INTERVAL` y `TURNOS_RESERVATION_RECONCILIATION_INTERVAL` (1 minuto) vacías, en `0`, negativas o mal escritas impiden arrancar, y `TURNOS_RESERVATION_SWEEP_ENABLED` y `TURNOS_RESERVATION_RECONCILIATION_ENABLED` vacías los apagan. `TURNOS_CATEDRA_OPERATIONS_INITIAL_LOGIN_WAIT` (2 minutos) es lo que espera la reconciliación de arranque al login técnico inicial. `TURNOS_DB_SOCKET_TIMEOUT` (segundos que se espera una respuesta de Postgres, 30 por defecto, D5 de T09) también es opcional, y es otra excepción: si se define vacía, la aplicación no arranca, porque la lee el driver de Postgres, que exige un entero. Kafka no lleva variables obligatorias: los servidores, los topics y el consumer group llegan con el login técnico; las `TURNOS_CATEDRA_KAFKA_*` (consumo, seguridad, reintentos y publicación) son opcionales. `TURNOS_E2E_KAFKA_CONSUMER_GROUP` es solo de la suite E2E (la aplicación no la lee) y tiene que terminar en `-e2e`. La suite normal de tests nunca lee el `.env` (simula catálogo y cátedra); solo la suite E2E (`-Pe2e`) lo lee.
-- El par de claves RSA del JWT de los usuarios en `secrets/`, que no se versiona. Sin la clave privada, la aplicación no arranca (los tests generan su propio par). Se crea una sola vez:
+- El par de claves RSA del JWT de los usuarios en `secrets/`, que no se versiona. Sin la clave privada, la aplicación no arranca (los tests generan su propio par). `docker compose up` lo genera solo la primera vez (servicio `turnos-keys`); para correr con `./mvnw` sin haber levantado el compose, se crea una sola vez a mano:
 
 ```bash
 mkdir -p secrets
@@ -18,21 +18,32 @@ openssl rsa -pubout -in secrets/jwt-private.pem -out secrets/jwt-public.pem
 
 | Para | Comando |
 | --- | --- |
-| Levantar Postgres de desarrollo y esperar a que esté listo | `docker compose up -d --wait` |
-| Ver el estado de Postgres | `docker compose ps` |
+| Levantar la base y la aplicación en contenedores (la primera vez genera las claves y construye la imagen) | `docker compose up -d --build` |
+| Levantar solo Postgres de desarrollo, para correr la aplicación con `./mvnw`, y esperar a que esté listo | `docker compose up -d --wait turnos-db` |
+| Levantar el sistema completo, con catálogo (necesita `../catalog_service` con su `compose.yaml`) | `docker compose -f compose.full-system.yaml up -d --build` |
+| Ver el estado de los contenedores | `docker compose ps` |
 | Correr la aplicación (necesita Postgres levantado) | `./mvnw spring-boot:run` |
 | Correr todos los tests (Testcontainers crea su propio Postgres; no usan el compose) | `./mvnw test` |
 | Correr solo la suite E2E, contra la cátedra real con las credenciales del `.env` (se saltea sin ellas) | `./mvnw test -Pe2e` |
 | Correr una sola clase de test | `./mvnw test -Dtest=NombreDeLaClase` |
 | Compilar desde cero y correr los tests | `./mvnw clean test` |
 | Tests más reporte de cobertura de JaCoCo (`target/site/jacoco/jacoco.xml`), lo mismo que corre GitHub Actions | `./mvnw clean verify` |
-| Apagar Postgres conservando los datos | `docker compose down` |
-| Apagar Postgres y borrar los datos | `docker compose down -v` |
+| Apagar los contenedores conservando los datos | `docker compose down` |
+| Apagar los contenedores y borrar los datos de la base | `docker compose down -v` |
 
 ## Datos del proyecto
 
 - `{basePackage}` de la skill `hexagonal-vertical-slicing`: `turnos`.
 - La aplicación escucha en el puerto 8080; Postgres en `TURNOS_DB_PORT` (5432 por defecto).
+
+## Docker
+
+- `Dockerfile` en dos etapas: compila con el `./mvnw` del repo dentro de `eclipse-temurin:25-jdk`, sin tests (necesitan Docker), y ejecuta solo el jar en `eclipse-temurin:25-jre`, con un usuario sin privilegios. `.dockerignore` deja afuera `target/`, `.env`, `secrets/`, `*.pem`, `.git/` y `docs/`.
+- `compose.yaml`: `turnos-db`, `turnos-keys` (de un solo uso: genera el par de claves en `secrets/` si falta; monta la carpeta del repo para crear `secrets/` con el usuario de la máquina, porque si Docker la creara al montarla quedaría a nombre de root) y `turnos-service` (espera a las dos). La app recibe el `.env` con `env_file`, y el compose cambia lo distinto dentro de Docker: `TURNOS_DB_HOST=turnos-db`, `TURNOS_DB_PORT=5432`, `TURNOS_JWT_PRIVATE_KEY_LOCATION=file:./secrets/jwt-private.pem` y `TURNOS_CATALOG_BASE_URL=${TURNOS_CATALOG_DOCKER_URL:-http://catalog-service:8080}`. `secrets/` se monta en solo lectura y la clave nunca entra a la imagen.
+- **Permisos de la clave:** `secrets/` es `700` y la privada `600`, del usuario de la máquina. Por eso `turnos-keys` y `turnos-service` corren con `user: "${TURNOS_UID:-1000}:${TURNOS_GID:-1000}"`: con el usuario de la imagen (uid 999) la app no puede leer la clave y dice que no existe (comprobado el 2026-11-07). Los `secrets:` de Compose no lo resuelven: fuera de Swarm ignoran `uid`, `gid` y `mode` (Compose lo avisa) y montan el archivo con sus permisos.
+- El volumen de la base tiene nombre fijo, `turnos_service_turnos-db-data` (el que Compose le había dado antes), para que sea la misma base si turnos se levanta solo o con el sistema completo. **`docker compose down -v` lo borra**, también desde otro proyecto que declare ese volumen; para borrar solo un volumen de prueba, `down` sin `-v` y `docker volume rm` con su nombre.
+- `compose.full-system.yaml`: `name: full-system` e `include` de este `compose.yaml` y de `../catalog_service/compose.yaml`. Solo incluye: lo que conecta un servicio con el otro va en el `compose.yaml` de cada uno. Catálogo tiene un archivo igual. Requiere los dos repositorios uno al lado del otro, y no se puede levantar a la vez que un servicio solo (mismos puertos). Hasta que catálogo tenga su `compose.yaml`, falla al no encontrarlo.
+- Comprobado el 2026-11-07, sin la cátedra (sus variables vacías) y con una base descartable: el build, la generación de claves (la segunda corrida no las toca), el arranque como uid 1000, `POST /api/register` `201`, `POST /api/authenticate` con JWT, `GET /api/free-slots` `503` `CATALOG_UNAVAILABLE` sin catálogo y `401` sin token. No se probó contra la cátedra desde el contenedor: la red del Kafka de la cátedra se superpone con la red por defecto de Docker; en la máquina de desarrollo gana la ruta más específica, pero falta la corrida real.
 
 ## Arquitectura
 

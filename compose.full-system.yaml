@@ -1,0 +1,8 @@
+# El sistema completo: turnos y catálogo, cada uno con su base.
+# Requiere los dos repositorios clonados uno al lado del otro, como turnos_service y catalog_service, cada uno con su
+# .env y sus claves. Uso: `docker compose -f compose.full-system.yaml up -d`, desde cualquiera de los dos repositorios.
+# Solo incluye: la configuración de cada servicio está en su compose.yaml. Catálogo tiene un archivo igual a este.
+name: full-system
+include:
+  - compose.yaml
+  - ../catalog_service/compose.yaml
