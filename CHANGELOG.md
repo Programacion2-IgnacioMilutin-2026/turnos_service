@@ -179,3 +179,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Documentacion debido a decisiones tomadas en T13.
 - El test E2E recibe el snapshop para ejecutarse, en vez de ejecutarse con valores preestablecidos.
+
+## 2026-11-07
+### Added
+- Dockerfile y compose para todos el sistema con servicio de catalogo incluido y para el servicio de turnos individual.
+
+## 2026-11-08
+### Changed
+- README actualizado.
