@@ -38,7 +38,7 @@ class CatedraOperationRunnerTest {
     private final RenewTechnicalSessionUseCaseImpl renew = new RenewTechnicalSessionUseCaseImpl(loginClient, repository,
             new TechnicalLoginPolicy(1, Duration.ofMillis(1), 2, Duration.ofMillis(1), Duration.ofSeconds(60)), clock, integration -> {});
     private final CatedraOperationRunner runner =
-            new CatedraOperationRunner(repository, renew, new CatedraOperationPolicy(3, Duration.ofMillis(1), 2));
+            new CatedraOperationRunner(repository, renew, new CatedraOperationPolicy(3, Duration.ofMillis(1), 2, Duration.ofSeconds(1)));
     private final ScriptedCall call = new ScriptedCall();
 
     @Test
@@ -194,6 +194,90 @@ class CatedraOperationRunnerTest {
     }
 
     // El último login fue hace dos minutos: ya pasó el intervalo mínimo para pedir otro
+    // Esperar el login inicial
+
+    @Test
+    void aTaskWaitsForTheInitialLoginAndUsesItsToken(CapturedOutput output) {
+        repository.save(TechnicalSession.connecting());
+        call.then(ANSWERED);
+        finishTheInitialLoginAfter(Duration.ofMillis(300), enabled("jwt-initial"));
+
+        assertThat(runner.runAfterInitialLogin(OPERATION, call)).isEqualTo(ANSWERED);
+        assertThat(call.tokens()).containsExactly("jwt-initial");
+        assertThat(loginClient.calls()).isZero();
+        assertThat(output.getAll()).contains("Catedra " + OPERATION + " waits for the initial technical login");
+    }
+
+    @Test
+    void aFailedInitialLoginLeavesTheTaskWithoutCatedraAndWithoutAnotherLogin() {
+        repository.save(TechnicalSession.connecting());
+        finishTheInitialLoginAfter(Duration.ofMillis(200), TechnicalSession.degraded(START));
+
+        assertThat(runner.runAfterInitialLogin(OPERATION, call)).isInstanceOf(CatedraResponse.Unavailable.class);
+        assertThat(call.tokens()).isEmpty();
+        assertThat(loginClient.calls()).isZero();
+    }
+
+    @Test
+    void aConfigurationErrorInTheInitialLoginIsReportedAfterWaiting() {
+        repository.save(TechnicalSession.connecting());
+        finishTheInitialLoginAfter(Duration.ofMillis(200), TechnicalSession.configurationError(START));
+
+        assertThat(runner.runAfterInitialLogin(OPERATION, call)).isInstanceOf(CatedraResponse.ConfigurationError.class);
+        assertThat(call.tokens()).isEmpty();
+    }
+
+    @Test
+    void theWaitForTheInitialLoginHasALimit(CapturedOutput output) {
+        CatedraOperationRunner shortWait = new CatedraOperationRunner(repository, renew,
+                new CatedraOperationPolicy(3, Duration.ofMillis(1), 2, Duration.ofMillis(300)));
+        repository.save(TechnicalSession.connecting());
+
+        long started = System.nanoTime();
+        CatedraResponse<String> response = shortWait.runAfterInitialLogin(OPERATION, call);
+        Duration waited = Duration.ofNanos(System.nanoTime() - started);
+
+        assertThat(response).isInstanceOf(CatedraResponse.Unavailable.class);
+        assertThat(waited).isBetween(Duration.ofMillis(300), Duration.ofSeconds(2));
+        assertThat(call.tokens()).isEmpty();
+        assertThat(output.getAll()).contains("the initial technical login did not finish within PT0.3S");
+    }
+
+    @Test
+    void withoutALoginInProgressTheTaskDoesNotWait(CapturedOutput output) {
+        repository.save(enabled("jwt-a"));
+        call.then(ANSWERED);
+
+        assertThat(runner.runAfterInitialLogin(OPERATION, call)).isEqualTo(ANSWERED);
+        assertThat(call.tokens()).containsExactly("jwt-a");
+        assertThat(output.getAll()).doesNotContain("waits for the initial technical login");
+    }
+
+    @Test
+    void anOperationOfAUserNeverWaitsForTheInitialLogin() {
+        CatedraOperationRunner longWait = new CatedraOperationRunner(repository, renew,
+                new CatedraOperationPolicy(3, Duration.ofMillis(1), 2, Duration.ofSeconds(10)));
+        repository.save(TechnicalSession.connecting());
+
+        long started = System.nanoTime();
+        CatedraResponse<String> response = longWait.run(OPERATION, call);
+
+        assertThat(response).isInstanceOf(CatedraResponse.Unavailable.class);
+        assertThat(Duration.ofNanos(System.nanoTime() - started)).isLessThan(Duration.ofSeconds(1));
+    }
+
+    private void finishTheInitialLoginAfter(Duration delay, TechnicalSession result) {
+        Thread.ofVirtual().start(() -> {
+            try {
+                Thread.sleep(delay);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            repository.save(result);
+        });
+    }
+
     private static TechnicalSession enabled(String token) {
         return TechnicalSession.enabled(token, ScriptedLoginClient.integration(ProvisioningStatus.PROVISIONED),
                 START.minusSeconds(120));

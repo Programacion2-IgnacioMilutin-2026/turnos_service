@@ -8,10 +8,12 @@ import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.in.CancelReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.ConfirmReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.CreateReservationProcessUseCase;
+import turnos.reservation.domain.ports.in.ExpireOverdueProcessesUseCase;
 import turnos.reservation.domain.ports.in.FindReservationProcessesByUserUseCase;
 import turnos.reservation.domain.ports.in.GetReservationProcessByIdUseCase;
 import turnos.reservation.domain.ports.in.ProcessPhoneRequestUseCase;
 import turnos.reservation.domain.ports.in.ProcessReservationResultUseCase;
+import turnos.reservation.domain.ports.in.ReconcilePendingProcessesUseCase;
 import turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
 
 import java.util.List;
@@ -20,6 +22,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class ReservationServiceTest {
@@ -27,10 +30,12 @@ class ReservationServiceTest {
     private final GetReservationProcessByIdUseCase getReservationProcessById = mock(GetReservationProcessByIdUseCase.class);
     private final FindReservationProcessesByUserUseCase findReservationProcessesByUser = mock(FindReservationProcessesByUserUseCase.class);
     private final CancelReservationProcessUseCase cancelReservationProcess = mock(CancelReservationProcessUseCase.class);
+    private final ExpireOverdueProcessesUseCase expireOverdueProcesses = mock(ExpireOverdueProcessesUseCase.class);
+    private final ReconcilePendingProcessesUseCase reconcilePendingProcesses = mock(ReconcilePendingProcessesUseCase.class);
     private final ReservationService service = new ReservationService(mock(CreateReservationProcessUseCase.class),
             mock(ConfirmReservationProcessUseCase.class), mock(ProcessPhoneRequestUseCase.class),
             mock(ProcessReservationResultUseCase.class), mock(SubmitPhoneUseCase.class), getReservationProcessById,
-            findReservationProcessesByUser, cancelReservationProcess);
+            findReservationProcessesByUser, cancelReservationProcess, expireOverdueProcesses, reconcilePendingProcesses);
 
     @Test
     void aProcessFoundIsReturned() {
@@ -54,6 +59,20 @@ class ReservationServiceTest {
         when(cancelReservationProcess.cancelReservationProcess(42L, "process-1", "Cambio")).thenReturn(process);
 
         assertThat(service.cancelReservationProcess(42L, "process-1", "Cambio")).isSameAs(process);
+    }
+
+    @Test
+    void aSweepIsDelegatedToItsUseCase() {
+        service.expireOverdueProcesses();
+
+        verify(expireOverdueProcesses).expireOverdueProcesses();
+    }
+
+    @Test
+    void aReconciliationIsDelegatedToItsUseCase() {
+        service.reconcilePendingProcesses();
+
+        verify(reconcilePendingProcesses).reconcilePendingProcesses();
     }
 
     @Test

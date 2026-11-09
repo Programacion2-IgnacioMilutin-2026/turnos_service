@@ -1,0 +1,9 @@
+# Lo que no entra al contexto de build: lo compilado, los secretos y lo local
+target/
+.env
+secrets/
+*.pem
+.git/
+.idea/
+.vscode/
+docs/

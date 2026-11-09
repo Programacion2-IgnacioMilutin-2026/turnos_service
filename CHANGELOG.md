@@ -156,3 +156,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests de la funcionalidad cancelar una reserva, incluido la extension del test E2E.
 ### Changed
 - Actualizados archivos de documentacion con las nuevas reglas o decisiones tomadas para T09, T10 y T11.
+
+## 2026-11-04
+### Added
+- Documentacion de SDD para el caso de T12-Expirar procesos vencidos.
+- Query para en ver los procesos que vencieron.
+- Caso de uso en slice 'Reservation' para expirar los precesps de reserva vencidos.
+- Schedulling en infraestructure de slice 'Reservation' encargado del barrido.
+- Variables de entorno sobre duracion y activacion de la barrida periodica.
+- Tests para el barrido.
+
+## 2026-11-06
+### Added 
+- Documentacion de SDD para el caso de uso T13-ReconciliarProcesos.
+- Modelos en slice 'Reservation' para reconciliar procesos.
+- Archivos en slice 'Catedra' para obtener el estado real de una reserva en el servicio de catedra (utlizado por T13).
+- Metodo para comenzar el proceso de reconciliacion luego del login tecnico, con una cantidad de tiempo configurable.
+- Puertos y busquedas en slice 'Reservation' para buscr en la base y y comunicarse con la catedra pra ver que procesos reconciliar.
+- Implementacion del ciclo de reconciliar un proceso en el slice 'Reservation'.
+- Schedulling en infraestructure de slice 'Reservation' encargado de la reconciliacion.
+- Tests para lo archivos añadidos en la implementacion de T13.
+### Changed
+- Documentacion debido a decisiones tomadas en T13.
+- El test E2E recibe el snapshop para ejecutarse, en vez de ejecutarse con valores preestablecidos.
+
+## 2026-11-07
+### Added
+- Dockerfile y compose para todos el sistema con servicio de catalogo incluido y para el servicio de turnos individual.
+
+## 2026-11-08
+### Changed
+- README actualizado.

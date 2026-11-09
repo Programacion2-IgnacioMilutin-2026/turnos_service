@@ -12,10 +12,12 @@ import turnos.reservation.domain.model.ReservationStatus;
 import turnos.reservation.domain.ports.in.CancelReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.ConfirmReservationProcessUseCase;
 import turnos.reservation.domain.ports.in.CreateReservationProcessUseCase;
+import turnos.reservation.domain.ports.in.ExpireOverdueProcessesUseCase;
 import turnos.reservation.domain.ports.in.FindReservationProcessesByUserUseCase;
 import turnos.reservation.domain.ports.in.GetReservationProcessByIdUseCase;
 import turnos.reservation.domain.ports.in.ProcessPhoneRequestUseCase;
 import turnos.reservation.domain.ports.in.ProcessReservationResultUseCase;
+import turnos.reservation.domain.ports.in.ReconcilePendingProcessesUseCase;
 import turnos.reservation.domain.ports.in.SubmitPhoneUseCase;
 
 import java.time.LocalDate;
@@ -33,6 +35,8 @@ public class ReservationService {
     private final GetReservationProcessByIdUseCase getReservationProcessByIdUseCase;
     private final FindReservationProcessesByUserUseCase findReservationProcessesByUserUseCase;
     private final CancelReservationProcessUseCase cancelReservationProcessUseCase;
+    private final ExpireOverdueProcessesUseCase expireOverdueProcessesUseCase;
+    private final ReconcilePendingProcessesUseCase reconcilePendingProcessesUseCase;
 
     public ReservationProcess createReservationProcess(Long userId, Long professionalId, LocalDate date,
                                                        LocalTime startTime, String userToken) {
@@ -58,6 +62,14 @@ public class ReservationService {
 
     public ReservationProcess cancelReservationProcess(Long userId, String reservationProcessId, String reason) {
         return cancelReservationProcessUseCase.cancelReservationProcess(userId, reservationProcessId, reason);
+    }
+
+    public void expireOverdueProcesses() {
+        expireOverdueProcessesUseCase.expireOverdueProcesses();
+    }
+
+    public void reconcilePendingProcesses() {
+        reconcilePendingProcessesUseCase.reconcilePendingProcesses();
     }
 
     public ReservationEventOutcome processPhoneRequest(ReservationPhoneRequest request) {

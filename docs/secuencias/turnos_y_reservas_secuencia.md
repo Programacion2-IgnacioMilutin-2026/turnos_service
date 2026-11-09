@@ -604,21 +604,25 @@ sequenceDiagram
     Service->>DB: Find processes marked for reconciliation (on the startup run only, also any process left in HELD, WAITING_FOR_PHONE or PHONE_SUBMITTED)
     DB-->>Service: Processes to reconcile
     loop For each process
-        Service->>Central: List appointments (externalPatientId of the owner, date range that includes the slot date), technical JWT
+        Service->>Central: List appointments (only externalPatientId of the owner, all pages), technical JWT
         Central-->>Service: Appointments, or error
         opt 401 (technical JWT expired or rejected)
             Service->>Service: Run X01 (authenticate again), once
             Service->>Central: List appointments again
             Central-->>Service: Appointments, or error
         end
-        alt Central API unavailable after retries (timeout, connection lost, 503, growing wait, max attempts)
-            Service->>Service: The process stays pending for the next cycle, unchanged
+        alt Central API unavailable after retries (timeout, connection lost, 500, 503, growing wait, max attempts)
+            Service->>Service: This process and the remaining ones stay pending for the next cycle, unchanged, and the cycle ends
         else Appointments received
-            alt Appointment found for the reservationProcessId
-                Service->>DB: Update local state if it differs (CONFIRMED to CONFIRMED, CANCELLED to CANCELLED, PHONE_PENDING to WAITING_FOR_PHONE unless the phone was already submitted locally, FAILED to EXPIRED), save reservationId and confirmedAt when informed, clear the reconciliation mark
+            alt Appointment found and the local process is open
+                Service->>DB: Update local state if it differs (CONFIRMED to CONFIRMED, CANCELLED to CANCELLED, PHONE_PENDING to WAITING_FOR_PHONE unless the phone was already submitted locally, FAILED to EXPIRED), save reservationId and confirmedAt when informed (and professional, date and time on CONFIRMED), clear the reconciliation mark
+            else Appointment found and the local process is closed and marked (CONFIRMED by T11, INVALID by T08)
+                Service->>DB: Move it only to a final state, never reopen it (CONFIRMED and CANCELLED apply, FAILED to EXPIRED, PHONE_PENDING leaves it unchanged and logs an error), clear the reconciliation mark
             else No record for the reservationProcessId
                 alt Local process is HELD and expiresAt plus safety margin not reached
-                    Service->>Service: Leave it open (the Central API list shows reservations, not holds)
+                    Service->>DB: Leave it open, clear the reconciliation mark (the Central API list shows reservations, not holds)
+                else Local process is closed
+                    Service->>DB: Leave it unchanged, clear the reconciliation mark, log an error
                 else Any other case
                     Service->>DB: Mark process EXPIRED, clear the reconciliation mark
                 end

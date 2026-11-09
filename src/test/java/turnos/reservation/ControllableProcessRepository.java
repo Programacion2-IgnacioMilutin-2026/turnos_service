@@ -9,9 +9,12 @@ import turnos.reservation.domain.model.ReservationProcessPage;
 import turnos.reservation.domain.ports.out.ReservationProcessRepository;
 import turnos.reservation.infrastructure.persistence.adapter.JpaReservationProcessRepositoryAdapter;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 // La base real, que falla al guardar cuando el test lo indica, cuenta lo que guarda y avisa al leer por dueño
@@ -24,6 +27,11 @@ final class ControllableProcessRepository implements ReservationProcessRepositor
     private volatile Predicate<ReservationProcess> failUpdate = process -> false;
     private volatile String failureMessage = DEFAULT_FAILURE;
     private volatile Runnable afterOwnerRead = () -> { };
+    private volatile Consumer<List<ReservationProcess>> afterOverdueSearch = found -> { };
+    private volatile Duration overdueSearchDelay = Duration.ZERO;
+    private final AtomicInteger overdueSearches = new AtomicInteger();
+    private final AtomicInteger simultaneousOverdueSearches = new AtomicInteger();
+    private final AtomicInteger maxSimultaneousOverdueSearches = new AtomicInteger();
 
     ControllableProcessRepository(ReservationProcessRepository realDatabase) {
         this.realDatabase = realDatabase;
@@ -43,6 +51,23 @@ final class ControllableProcessRepository implements ReservationProcessRepositor
         afterOwnerRead = action;
     }
 
+    // Lo que pasa después de cada búsqueda de vencidos, antes de que el barrido llegue a escribir
+    void afterOverdueSearch(Consumer<List<ReservationProcess>> action) {
+        afterOverdueSearch = action;
+    }
+
+    void delayOverdueSearches(Duration delay) {
+        overdueSearchDelay = delay;
+    }
+
+    int overdueSearches() {
+        return overdueSearches.get();
+    }
+
+    int maxSimultaneousOverdueSearches() {
+        return maxSimultaneousOverdueSearches.get();
+    }
+
     int updates() {
         return updates.get();
     }
@@ -51,6 +76,10 @@ final class ControllableProcessRepository implements ReservationProcessRepositor
         failUpdate = process -> false;
         failureMessage = DEFAULT_FAILURE;
         afterOwnerRead = () -> { };
+        afterOverdueSearch = found -> { };
+        overdueSearchDelay = Duration.ZERO;
+        overdueSearches.set(0);
+        maxSimultaneousOverdueSearches.set(0);
         updates.set(0);
     }
 
@@ -90,6 +119,28 @@ final class ControllableProcessRepository implements ReservationProcessRepositor
     @Override
     public ReservationProcessPage findListable(ReservationListCriteria criteria) {
         return realDatabase.findListable(criteria);
+    }
+
+    @Override
+    public List<ReservationProcess> findToReconcile(boolean includeOpen) {
+        return realDatabase.findToReconcile(includeOpen);
+    }
+
+    @Override
+    public List<ReservationProcess> findOverdue(Instant expiredBefore) {
+        maxSimultaneousOverdueSearches.accumulateAndGet(simultaneousOverdueSearches.incrementAndGet(), Math::max);
+        try {
+            Thread.sleep(overdueSearchDelay);
+            List<ReservationProcess> found = realDatabase.findOverdue(expiredBefore);
+            afterOverdueSearch.accept(found);
+            return found;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        } finally {
+            simultaneousOverdueSearches.decrementAndGet();
+            overdueSearches.incrementAndGet();
+        }
     }
 
     @Override

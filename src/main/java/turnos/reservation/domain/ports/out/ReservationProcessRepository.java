@@ -4,6 +4,7 @@ import turnos.reservation.domain.model.ReservationListCriteria;
 import turnos.reservation.domain.model.ReservationProcess;
 import turnos.reservation.domain.model.ReservationProcessPage;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +22,14 @@ public interface ReservationProcessRepository {
 
     // Solo lectura: lo que vencía y no se lista queda como estaba
     ReservationProcessPage findListable(ReservationListCriteria criteria);
+
+    // De todos los usuarios: los que el vencimiento todavía puede cerrar o marcar. Son candidatos: el dato puede cambiar
+    // antes de escribir, así que quien los usa vuelve a leerlos
+    List<ReservationProcess> findOverdue(Instant expiredBefore);
+
+    // De todos los usuarios: los marcados para reconciliar, abiertos o cerrados, y con includeOpen también los abiertos sin
+    // marca. Son candidatos, como los vencidos: quien los usa vuelve a leerlos antes de escribir
+    List<ReservationProcess> findToReconcile(boolean includeOpen);
 
     // Enciende la marca sin tocar el resto del proceso
     void markForReconciliation(String reservationProcessId);

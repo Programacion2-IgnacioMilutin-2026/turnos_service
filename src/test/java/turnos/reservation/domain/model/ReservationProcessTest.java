@@ -20,6 +20,8 @@ class ReservationProcessTest {
     private static final Instant EXPIRES_AT = Instant.parse("2026-10-27T12:10:00Z");
     private static final Duration MARGIN = Duration.ofSeconds(30);
     private static final Instant OCCURRED_AT = Instant.parse("2026-10-27T12:01:00Z");
+    private static final Instant CATEDRA_CONFIRMED_AT = Instant.parse("2026-10-27T12:05:00Z");
+    private static final Instant CATEDRA_CANCELLED_AT = Instant.parse("2026-10-28T09:00:00Z");
     private static final ReservationPhoneNumber PHONE = ReservationPhoneNumber.parse("+5492615551234").orElseThrow();
 
     @ParameterizedTest
@@ -595,6 +597,336 @@ class ReservationProcessTest {
         assertThatThrownBy(process::revertPhoneSubmission).isInstanceOf(IllegalStateException.class);
         assertThat(process.getStatus()).isEqualTo(status);
         assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    // Reconciliación con la cátedra: procesos abiertos
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE", "PHONE_SUBMITTED"})
+    void anOpenProcessTakesTheConfirmationOfTheCatedraWithItsAppointment(ReservationStatus status) {
+        ReservationProcess process = marked(status);
+        process.setRejectionReason("INVALID_PHONE_NUMBER");
+
+        ReconciliationOutcome outcome = process.reconcileWith(confirmedRecord());
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.CORRECTED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(process.getReservationId()).isEqualTo(8251L);
+        assertThat(process.getConfirmedAt()).isEqualTo(CATEDRA_CONFIRMED_AT);
+        assertThat(process.getProfessionalId()).isEqualTo(203L);
+        assertThat(process.getDate()).isEqualTo(LocalDate.of(2026, 11, 6));
+        assertThat(process.getStartTime()).isEqualTo(LocalTime.of(12, 0));
+        assertThat(process.getRejectionReason()).isNull();
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
+    void aConfirmationWithoutTheAppointmentKeepsTheStoredOne() {
+        ReservationProcess process = marked(ReservationStatus.PHONE_SUBMITTED);
+        process.setProfessionalId(201L);
+        process.setDate(LocalDate.of(2026, 11, 9));
+        process.setStartTime(LocalTime.of(10, 30));
+
+        process.reconcileWith(record(ReservationRecordStatus.CONFIRMED, 8251L, CATEDRA_CONFIRMED_AT, null, null));
+
+        assertThat(process.getProfessionalId()).isEqualTo(201L);
+        assertThat(process.getDate()).isEqualTo(LocalDate.of(2026, 11, 9));
+        assertThat(process.getStartTime()).isEqualTo(LocalTime.of(10, 30));
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE", "PHONE_SUBMITTED"})
+    void anOpenProcessTakesTheCancellationOfTheCatedraWithItsDateAndReason(ReservationStatus status) {
+        ReservationProcess process = marked(status);
+
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.CANCELLED, 8251L, null, CATEDRA_CANCELLED_AT, "Paciente no asiste"));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.CORRECTED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(process.getCancelledAt()).isEqualTo(CATEDRA_CANCELLED_AT);
+        assertThat(process.getCancellationReason()).isEqualTo("Paciente no asiste");
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
+    void aCancellationReasonFromTheCatedraIsStoredAsTheDatabaseAcceptsIt() {
+        ReservationProcess process = marked(ReservationStatus.PHONE_SUBMITTED);
+
+        process.reconcileWith(record(ReservationRecordStatus.CANCELLED, 8251L, null, CATEDRA_CANCELLED_AT, "a\0".repeat(600)));
+
+        assertThat(process.getCancellationReason()).hasSize(ReservationProcess.MAX_REASON_LENGTH).doesNotContain("\0");
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE", "PHONE_SUBMITTED"})
+    void anOpenProcessThatFailedInTheCatedraExpires(ReservationStatus status) {
+        ReservationProcess process = marked(status);
+
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.FAILED, 1252L, null, null, null));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.CORRECTED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.EXPIRED);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
+    void aHeldProcessWhoseConfirmationReachedTheCatedraWaitsForThePhoneWithTheSameExpiration() {
+        ReservationProcess process = marked(ReservationStatus.HELD);
+
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.PHONE_PENDING, 1664L, null, null, null));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.CORRECTED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
+        assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT);
+        assertThat(process.getReservationId()).isEqualTo(1664L);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
+    void aProcessWaitingForThePhoneAlreadyMatchesAReservationWithoutPhone() {
+        ReservationProcess process = marked(ReservationStatus.WAITING_FOR_PHONE);
+        process.setRejectionReason("INVALID_PHONE_NUMBER");
+
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.PHONE_PENDING, 1664L, null, null, null));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.MATCHED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.WAITING_FOR_PHONE);
+        assertThat(process.getExpiresAt()).isEqualTo(EXPIRES_AT);
+        assertThat(process.getRejectionReason()).isEqualTo("INVALID_PHONE_NUMBER");
+        assertThat(process.getReservationId()).isEqualTo(1664L);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
+    void aReservationWithoutItsNumberKeepsTheStoredOne() {
+        ReservationProcess process = marked(ReservationStatus.WAITING_FOR_PHONE);
+        process.setReservationId(1664L);
+
+        process.reconcileWith(record(ReservationRecordStatus.PHONE_PENDING, null, null, null, null));
+
+        assertThat(process.getReservationId()).isEqualTo(1664L);
+    }
+
+    @Test
+    void aSubmittedPhoneThatTheCatedraHasNotResolvedStaysMarkedToBeCheckedAgain() {
+        ReservationProcess process = marked(ReservationStatus.PHONE_SUBMITTED);
+        process.setPhoneNumber(PHONE.value());
+
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.PHONE_PENDING, 1664L, null, null, null));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.STILL_PENDING);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.PHONE_SUBMITTED);
+        assertThat(process.getPhoneNumber()).isEqualTo(PHONE.value());
+        assertThat(process.isNeedsReconciliation()).isTrue();
+    }
+
+    @Test
+    void aSubmittedPhoneWithoutTheMarkIsNotMarkedByTheReconciliation() {
+        ReservationProcess process = process(ReservationStatus.PHONE_SUBMITTED);
+
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.PHONE_PENDING, 1664L, null, null, null));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.STILL_PENDING);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.PHONE_SUBMITTED);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    // Reconciliación con la cátedra: procesos cerrados que quedaron marcados
+
+    @Test
+    void aMarkedConfirmationThatTheCatedraStillHasOnlyLosesTheMark() {
+        ReservationProcess process = confirmedAndMarked();
+
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.CONFIRMED, 9999L, CATEDRA_CONFIRMED_AT, null, null));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.MATCHED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(process.getReservationId()).isEqualTo(8251L);
+        assertThat(process.getConfirmedAt()).isEqualTo(OCCURRED_AT);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
+    void aMarkedConfirmationThatTheCatedraCancelledIsCancelledKeepingItsConfirmation() {
+        ReservationProcess process = confirmedAndMarked();
+
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.CANCELLED, 8251L, OCCURRED_AT, CATEDRA_CANCELLED_AT, "Cancelada por el paciente"));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.CORRECTED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(process.getCancelledAt()).isEqualTo(CATEDRA_CANCELLED_AT);
+        assertThat(process.getCancellationReason()).isEqualTo("Cancelada por el paciente");
+        assertThat(process.getReservationId()).isEqualTo(8251L);
+        assertThat(process.getConfirmedAt()).isEqualTo(OCCURRED_AT);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
+    void anInvalidProcessThatTheCatedraConfirmedTakesTheConfirmation() {
+        ReservationProcess process = invalid();
+
+        ReconciliationOutcome outcome = process.reconcileWith(confirmedRecord());
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.CORRECTED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.CONFIRMED);
+        assertThat(process.getReservationId()).isEqualTo(8251L);
+        assertThat(process.getConfirmedAt()).isEqualTo(CATEDRA_CONFIRMED_AT);
+        assertThat(process.getProfessionalId()).isEqualTo(203L);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
+    void anInvalidProcessThatTheCatedraCancelledIsCancelled() {
+        ReservationProcess process = invalid();
+
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.CANCELLED, 8251L, null, CATEDRA_CANCELLED_AT, null));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.CORRECTED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.CANCELLED);
+        assertThat(process.getCancelledAt()).isEqualTo(CATEDRA_CANCELLED_AT);
+        assertThat(process.getCancellationReason()).isNull();
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("closedAndMarked")
+    void aMarkedClosedProcessThatFailedInTheCatedraExpires(ReservationProcess process) {
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.FAILED, 8251L, null, null, null));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.CORRECTED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.EXPIRED);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("closedAndMarked")
+    void aMarkedClosedProcessIsNeverReopenedByAReservationWithoutPhone(ReservationProcess process) {
+        ReservationStatus before = process.getStatus();
+        Long reservationIdBefore = process.getReservationId();
+
+        ReconciliationOutcome outcome = process.reconcileWith(record(ReservationRecordStatus.PHONE_PENDING, 1664L, null, null, null));
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.UNRESOLVED);
+        assertThat(process.getStatus()).isEqualTo(before);
+        assertThat(process.getReservationId()).isEqualTo(reservationIdBefore);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    // Reconciliación con la cátedra: sin registro para el proceso
+
+    @Test
+    void aHeldProcessThatHasNotExpiredStaysOpenAndLosesTheMark() {
+        ReservationProcess process = marked(ReservationStatus.HELD);
+
+        ReconciliationOutcome outcome = process.reconcileWithoutRecord(EXPIRES_AT.plus(MARGIN), MARGIN);
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.MATCHED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.HELD);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @Test
+    void anExpiredHeldProcessWithoutRecordExpires() {
+        ReservationProcess process = marked(ReservationStatus.HELD);
+
+        ReconciliationOutcome outcome = process.reconcileWithoutRecord(EXPIRES_AT.plus(MARGIN).plusSeconds(1), MARGIN);
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.CORRECTED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.EXPIRED);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"WAITING_FOR_PHONE", "PHONE_SUBMITTED"})
+    void aProcessPastTheHoldWithoutRecordExpiresEvenBeforeItsExpiration(ReservationStatus status) {
+        ReservationProcess process = marked(status);
+
+        ReconciliationOutcome outcome = process.reconcileWithoutRecord(EXPIRES_AT.minusSeconds(60), MARGIN);
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.CORRECTED);
+        assertThat(process.getStatus()).isEqualTo(ReservationStatus.EXPIRED);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    @ParameterizedTest
+    @MethodSource("closedAndMarked")
+    void aMarkedClosedProcessWithoutRecordStaysAsItIsAndLosesTheMark(ReservationProcess process) {
+        ReservationStatus before = process.getStatus();
+
+        ReconciliationOutcome outcome = process.reconcileWithoutRecord(EXPIRES_AT.plusSeconds(3600), MARGIN);
+
+        assertThat(outcome).isEqualTo(ReconciliationOutcome.UNRESOLVED);
+        assertThat(process.getStatus()).isEqualTo(before);
+        assertThat(process.isNeedsReconciliation()).isFalse();
+    }
+
+    // Reconciliación con la cátedra: qué procesos se pueden reconciliar
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"HELD", "WAITING_FOR_PHONE", "PHONE_SUBMITTED"})
+    void anOpenProcessCanBeReconciledWithOrWithoutTheMark(ReservationStatus status) {
+        assertThat(process(status).canBeReconciled()).isTrue();
+        assertThat(marked(status).canBeReconciled()).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ReservationStatus.class, names = {"CONFIRMED", "INVALID"})
+    void aConfirmedOrInvalidProcessCanBeReconciledOnlyIfMarked(ReservationStatus status) {
+        assertThat(process(status).canBeReconciled()).isFalse();
+        assertThat(marked(status).canBeReconciled()).isTrue();
+    }
+
+    @ParameterizedTest
+    @MethodSource("notReconcilable")
+    void aProcessThatCannotBeReconciledIsLeftUntouched(ReservationProcess process) {
+        ReservationStatus before = process.getStatus();
+        boolean markBefore = process.isNeedsReconciliation();
+
+        assertThat(process.canBeReconciled()).isFalse();
+        assertThatThrownBy(() -> process.reconcileWith(confirmedRecord())).isInstanceOf(IllegalStateException.class);
+        assertThatThrownBy(() -> process.reconcileWithoutRecord(EXPIRES_AT, MARGIN)).isInstanceOf(IllegalStateException.class);
+        assertThat(process.getStatus()).isEqualTo(before);
+        assertThat(process.isNeedsReconciliation()).isEqualTo(markBefore);
+    }
+
+    private static Stream<ReservationProcess> closedAndMarked() {
+        return Stream.of(confirmedAndMarked(), invalid());
+    }
+
+    private static Stream<ReservationProcess> notReconcilable() {
+        return Stream.of(process(ReservationStatus.CONFIRMED), process(ReservationStatus.INVALID),
+                process(ReservationStatus.CANCELLED), marked(ReservationStatus.CANCELLED),
+                process(ReservationStatus.EXPIRED), marked(ReservationStatus.EXPIRED));
+    }
+
+    private static ReservationProcess marked(ReservationStatus status) {
+        ReservationProcess process = process(status);
+        process.markForReconciliation();
+        return process;
+    }
+
+    private static ReservationProcess confirmedAndMarked() {
+        ReservationProcess process = process(ReservationStatus.PHONE_SUBMITTED);
+        process.confirmReservation(8251L, OCCURRED_AT, null, null, null);
+        process.markForReconciliation();
+        return process;
+    }
+
+    private static ReservationProcess invalid() {
+        ReservationProcess process = process(ReservationStatus.PHONE_SUBMITTED);
+        process.invalidate();
+        return process;
+    }
+
+    private static ReservationRecord confirmedRecord() {
+        return new ReservationRecord("process-1", ReservationRecordStatus.CONFIRMED, 8251L, CATEDRA_CONFIRMED_AT, null, null,
+                203L, LocalDate.of(2026, 11, 6), LocalTime.of(12, 0));
+    }
+
+    private static ReservationRecord record(ReservationRecordStatus status, Long reservationId, Instant confirmedAt,
+                                            Instant cancelledAt, String cancellationReason) {
+        return new ReservationRecord("process-1", status, reservationId, confirmedAt, cancelledAt, cancellationReason,
+                null, null, null);
     }
 
     private static Stream<Consumer<ReservationProcess>> exitsFromWaitingForThePhone() {

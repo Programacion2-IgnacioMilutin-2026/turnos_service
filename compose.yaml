@@ -1,5 +1,7 @@
-# Infraestructura local de desarrollo del servicio de turnos.
-# Uso: copiar .env.example como .env, completar los valores y ejecutar `docker compose up -d`.
+# Servicio de turnos: su base y la aplicación.
+# Uso: copiar .env.example como .env, completar los valores y ejecutar `docker compose up -d`. La primera vez se
+# generan las claves del JWT en secrets/. Para desarrollar con ./mvnw, levantar solo la base: `docker compose up -d turnos-db`.
+# El sistema completo, con catálogo, se levanta con compose.full-system.yaml.
 services:
   turnos-db:
     image: postgres:18
@@ -18,5 +20,59 @@ services:
       timeout: 5s
       retries: 10
 
+  # Paso de un solo uso, antes de la app: si secrets/ no tiene la clave del JWT, genera el par; si ya la tiene, no hace
+  # nada. Monta la carpeta del repositorio para crear secrets/ con el usuario de la máquina: si Docker la creara al
+  # montarla, quedaría a nombre de root. La privada queda legible solo por ese usuario, y la pública, por todos
+  turnos-keys:
+    image: eclipse-temurin:25-jre
+    user: "${TURNOS_UID:-1000}:${TURNOS_GID:-1000}"
+    working_dir: /project
+    volumes:
+      - ./:/project
+    entrypoint:
+      - sh
+      - -c
+      - |
+        if [ -f secrets/jwt-private.pem ]; then
+          echo "JWT keys already in secrets/"
+        else
+          umask 077 && mkdir -p secrets \
+            && openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 -out secrets/jwt-private.pem \
+            && openssl rsa -pubout -in secrets/jwt-private.pem -out secrets/jwt-public.pem \
+            && chmod 644 secrets/jwt-public.pem \
+            && echo "JWT keys created in secrets/"
+        fi
+    restart: "no"
+
+  turnos-service:
+    build: .
+    image: turnos-service:local
+    # Con el usuario de la máquina: la clave privada es solo suya, y con el usuario de la imagen no se podría leer
+    user: "${TURNOS_UID:-1000}:${TURNOS_GID:-1000}"
+    # Las mismas variables que usa la app con ./mvnw; las de abajo cambian lo que es distinto dentro de Docker
+    env_file: .env
+    environment:
+      # Siempre la clave de secrets/, la carpeta que se monta abajo, aunque el .env apunte a otro lugar
+      TURNOS_JWT_PRIVATE_KEY_LOCATION: file:./secrets/jwt-private.pem
+      # Dentro de la red de Docker, la base se llama por su servicio y escucha en su puerto interno
+      TURNOS_DB_HOST: turnos-db
+      TURNOS_DB_PORT: "5432"
+      # Dentro del contenedor, localhost es el propio contenedor: el catálogo se busca por su nombre en la red del
+      # sistema completo. Si turnos se levanta solo, no está, y los turnos libres responden CATALOG_UNAVAILABLE
+      TURNOS_CATALOG_BASE_URL: ${TURNOS_CATALOG_DOCKER_URL:-http://catalog-service:8080}
+    ports:
+      - "${TURNOS_PORT:-8080}:8080"
+    volumes:
+      # La clave del JWT queda en el disco y no entra a la imagen: se monta en la misma ruta relativa que en el .env
+      - ./secrets:/app/secrets:ro
+    depends_on:
+      turnos-keys:
+        condition: service_completed_successfully
+      turnos-db:
+        condition: service_healthy
+
 volumes:
   turnos-db-data:
+    # Nombre fijo: la misma base si turnos se levanta solo o con el sistema completo. Es el nombre que Compose le
+    # había dado antes, así se conservan los datos que ya tenía
+    name: turnos_service_turnos-db-data

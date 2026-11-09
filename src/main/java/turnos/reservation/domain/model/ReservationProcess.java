@@ -124,6 +124,11 @@ public class ReservationProcess {
     public void confirmReservation(Long confirmedReservationId, Instant occurredAt, Long confirmedProfessionalId,
                                    LocalDate confirmedDate, LocalTime confirmedStartTime) {
         requireOpen("confirmed");
+        applyConfirmation(confirmedReservationId, occurredAt, confirmedProfessionalId, confirmedDate, confirmedStartTime);
+    }
+
+    private void applyConfirmation(Long confirmedReservationId, Instant occurredAt, Long confirmedProfessionalId,
+                                   LocalDate confirmedDate, LocalTime confirmedStartTime) {
         close(ReservationStatus.CONFIRMED);
         reservationId = confirmedReservationId;
         confirmedAt = occurredAt;
@@ -201,6 +206,10 @@ public class ReservationProcess {
         if (!canBeCancelled()) {
             throw new IllegalStateException("Only an open or confirmed process can be cancelled, this one is " + status);
         }
+        applyCancellation(occurredAt, reason);
+    }
+
+    private void applyCancellation(Instant occurredAt, String reason) {
         close(ReservationStatus.CANCELLED);
         cancelledAt = occurredAt;
         cancellationReason = storable(reason);
@@ -217,6 +226,108 @@ public class ReservationProcess {
             throw new IllegalStateException("Only a process waiting for the user and not marked can be abandoned, this one is " + status);
         }
         cancel(occurredAt, reason);
+    }
+
+    // Se reconcilia un proceso abierto, o uno cerrado que quedó marcado porque turnos no sabe qué pasó en la cátedra
+    public boolean canBeReconciled() {
+        return isOpen() || (needsReconciliation
+                && (status == ReservationStatus.CONFIRMED || status == ReservationStatus.INVALID));
+    }
+
+    // La cátedra tiene una reserva para este proceso. Manda ella, pero un proceso cerrado solo pasa a otro estado final:
+    // reabrirlo volvería atrás un final y podría chocar con otro proceso abierto del usuario
+    public ReconciliationOutcome reconcileWith(ReservationRecord record) {
+        requireReconcilable();
+        if (!isOpen()) {
+            return reconcileClosedWith(record);
+        }
+        return switch (record.status()) {
+            case CONFIRMED -> {
+                applyConfirmation(record.reservationId(), record.confirmedAt(), record.professionalId(), record.date(),
+                        record.startTime());
+                yield ReconciliationOutcome.CORRECTED;
+            }
+            case CANCELLED -> {
+                applyCancellation(record.cancelledAt(), record.cancellationReason());
+                yield ReconciliationOutcome.CORRECTED;
+            }
+            case FAILED -> {
+                close(ReservationStatus.EXPIRED);
+                yield ReconciliationOutcome.CORRECTED;
+            }
+            case PHONE_PENDING -> waitForThePhone(record.reservationId());
+        };
+    }
+
+    // La cátedra confirmó el hold y espera el teléfono. El listado no informa el vencimiento: se conserva el guardado
+    private ReconciliationOutcome waitForThePhone(Long informedReservationId) {
+        if (informedReservationId != null) {
+            reservationId = informedReservationId;
+        }
+        return switch (status) {
+            case HELD -> {
+                status = ReservationStatus.WAITING_FOR_PHONE;
+                needsReconciliation = false;
+                yield ReconciliationOutcome.CORRECTED;
+            }
+            case WAITING_FOR_PHONE -> {
+                needsReconciliation = false;
+                yield ReconciliationOutcome.MATCHED;
+            }
+            // El teléfono ya salió y la cátedra todavía no lo resolvió: la marca queda como estaba, y si estaba encendida
+            // se vuelve a consultar hasta que la cátedra confirme o dé la reserva por fallida
+            default -> ReconciliationOutcome.STILL_PENDING;
+        };
+    }
+
+    private ReconciliationOutcome reconcileClosedWith(ReservationRecord record) {
+        return switch (record.status()) {
+            case CONFIRMED -> {
+                if (status == ReservationStatus.CONFIRMED) {
+                    needsReconciliation = false;
+                    yield ReconciliationOutcome.MATCHED;
+                }
+                applyConfirmation(record.reservationId(), record.confirmedAt(), record.professionalId(), record.date(),
+                        record.startTime());
+                yield ReconciliationOutcome.CORRECTED;
+            }
+            case CANCELLED -> {
+                applyCancellation(record.cancelledAt(), record.cancellationReason());
+                yield ReconciliationOutcome.CORRECTED;
+            }
+            case FAILED -> {
+                close(ReservationStatus.EXPIRED);
+                yield ReconciliationOutcome.CORRECTED;
+            }
+            case PHONE_PENDING -> leaveUnresolved();
+        };
+    }
+
+    // La cátedra no tiene una reserva para este proceso. Su listado muestra reservas y no holds: un hold vigente sigue
+    // abierto, y como la confirmación dudosa no llegó, deja de estar marcado
+    public ReconciliationOutcome reconcileWithoutRecord(Instant now, Duration margin) {
+        requireReconcilable();
+        if (!isOpen()) {
+            return leaveUnresolved();
+        }
+        if (status == ReservationStatus.HELD && !hasExpired(now, margin)) {
+            needsReconciliation = false;
+            return ReconciliationOutcome.MATCHED;
+        }
+        close(ReservationStatus.EXPIRED);
+        return ReconciliationOutcome.CORRECTED;
+    }
+
+    private ReconciliationOutcome leaveUnresolved() {
+        needsReconciliation = false;
+        return ReconciliationOutcome.UNRESOLVED;
+    }
+
+    private void requireReconcilable() {
+        if (!canBeReconciled()) {
+            throw new IllegalStateException("Only an open process or a marked confirmed or invalid one can be reconciled, this one is "
+                    + status + (needsReconciliation ? " and marked" : " and not marked"));
+        }
     }
 
     private void requireOpen(String action) {

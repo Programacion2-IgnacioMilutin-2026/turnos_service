@@ -195,6 +195,8 @@
 					<systemPropertyVariables>
 						<turnos.env-file>${tests.env-file}</turnos.env-file>
 						<turnos.catedra.kafka.enabled>false</turnos.catedra.kafka.enabled>
+						<turnos.reservation.sweep.enabled>false</turnos.reservation.sweep.enabled>
+						<turnos.reservation.reconciliation.enabled>false</turnos.reservation.reconciliation.enabled>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>

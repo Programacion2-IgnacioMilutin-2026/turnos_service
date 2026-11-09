@@ -1,0 +1,15 @@
+{
+  "eventId": "confirmation-event-52d9034c-a32a-448f-ba31-98fa6f083207",
+  "eventType": "AppointmentConfirmed",
+  "groupId": "proyecto-de-prueba",
+  "reservationProcessId": "process-dc876cba-7654-42e0-bb93-ceaaacba6a25",
+  "holdId": "hold-b6240361-bb98-49b4-8a75-3acd8d832779",
+  "requestEventId": "request-event-dc431eb4-19ad-49fb-bcd8-efb6493e89ee",
+  "reservationId": 1665,
+  "professionalId": 201,
+  "date": "2026-11-09",
+  "startTime": "13:30",
+  "status": "CONFIRMED",
+  "occurredAt": "2026-11-06T06:05:41.713858758Z",
+  "schemaVersion": 1
+}

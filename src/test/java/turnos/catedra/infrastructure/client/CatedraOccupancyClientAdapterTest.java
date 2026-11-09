@@ -173,7 +173,7 @@ class CatedraOccupancyClientAdapterTest {
         CatedraProperties properties = new CatedraProperties(baseUrl, "user", "pass", Duration.ofSeconds(5),
                 Duration.ofSeconds(10), new CatedraProperties.Login(5, Duration.ofSeconds(1), 2, Duration.ofSeconds(30),
                 Duration.ofSeconds(60)),
-                new CatedraProperties.Operations(Duration.ofMillis(500), Duration.ofMillis(500), 3, Duration.ofMillis(5), 2));
+                new CatedraProperties.Operations(Duration.ofMillis(500), Duration.ofMillis(500), 3, Duration.ofMillis(5), 2, Duration.ofSeconds(1)));
         return new CatedraOccupancyClientAdapter(properties, new OccupancyMapper());
     }
 

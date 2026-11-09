@@ -24,6 +24,7 @@ class CatedraPropertiesTest {
             assertThat(operations.maxAttempts()).isEqualTo(3);
             assertThat(operations.initialDelay()).isEqualTo(Duration.ofMillis(500));
             assertThat(operations.multiplier()).isEqualTo(2);
+            assertThat(operations.initialLoginWait()).isEqualTo(Duration.ofMinutes(2));
         });
     }
 
@@ -31,13 +32,15 @@ class CatedraPropertiesTest {
     void theOperationsCanBeConfiguredWithoutChangingTheLogin() {
         contextRunner.withPropertyValues("turnos.catedra.operations.connect-timeout=1s",
                 "turnos.catedra.operations.read-timeout=4s", "turnos.catedra.operations.max-attempts=4",
-                "turnos.catedra.operations.initial-delay=100ms", "turnos.catedra.operations.multiplier=1.5").run(context -> {
+                "turnos.catedra.operations.initial-delay=100ms", "turnos.catedra.operations.multiplier=1.5",
+                "turnos.catedra.operations.initial-login-wait=30s").run(context -> {
             CatedraProperties properties = context.getBean(CatedraProperties.class);
             assertThat(properties.operations().connectTimeout()).isEqualTo(Duration.ofSeconds(1));
             assertThat(properties.operations().readTimeout()).isEqualTo(Duration.ofSeconds(4));
             assertThat(properties.operations().maxAttempts()).isEqualTo(4);
             assertThat(properties.operations().initialDelay()).isEqualTo(Duration.ofMillis(100));
             assertThat(properties.operations().multiplier()).isEqualTo(1.5);
+            assertThat(properties.operations().initialLoginWait()).isEqualTo(Duration.ofSeconds(30));
             assertThat(properties.login().maxAttempts()).isEqualTo(5);
             assertThat(properties.connectTimeout()).isEqualTo(Duration.ofSeconds(5));
         });

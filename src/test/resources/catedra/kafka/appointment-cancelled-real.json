@@ -1,0 +1,16 @@
+{
+  "eventId": "cancellation-event-575fa905-d1be-43e5-8d79-4130b0ffee7c",
+  "eventType": "AppointmentCancelled",
+  "groupId": "proyecto-de-prueba",
+  "reservationProcessId": "process-dc876cba-7654-42e0-bb93-ceaaacba6a25",
+  "holdId": "hold-b6240361-bb98-49b4-8a75-3acd8d832779",
+  "requestEventId": "request-event-dc431eb4-19ad-49fb-bcd8-efb6493e89ee",
+  "reservationId": 1665,
+  "professionalId": 201,
+  "date": "2026-11-09",
+  "startTime": "13:30",
+  "status": "CANCELLED",
+  "reason": null,
+  "occurredAt": "2026-11-06T06:05:44.233380937Z",
+  "schemaVersion": 1
+}

@@ -19,6 +19,7 @@ import turnos.reservation.infrastructure.persistence.entity.ReservationProcessEn
 import turnos.reservation.infrastructure.persistence.mapper.ReservationProcessMapper;
 import turnos.reservation.infrastructure.persistence.repository.JpaReservationProcessRepository;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -113,6 +114,30 @@ public class JpaReservationProcessRepositoryAdapter implements ReservationProces
                 .map(reservationProcessMapper::toDomainModel)
                 .toList();
         return new ReservationProcessPage(items, total);
+    }
+
+    // La falla no es de un proceso en particular: se traduce igual que una lectura por id
+    @Override
+    public List<ReservationProcess> findOverdue(Instant expiredBefore) {
+        try {
+            return jpaReservationProcessRepository.findOverdue(expiredBefore, WAITING_FOR_USER_STATUSES, ReservationStatus.PHONE_SUBMITTED).stream()
+                    .map(reservationProcessMapper::toDomainModel)
+                    .toList();
+        } catch (DataAccessException | TransactionException e) {
+            throw new ReservationNotSavedException(e);
+        }
+    }
+
+    // Como la búsqueda de vencidos: la falla no es de un proceso en particular
+    @Override
+    public List<ReservationProcess> findToReconcile(boolean includeOpen) {
+        try {
+            return jpaReservationProcessRepository.findToReconcile(includeOpen, OPEN_STATUSES).stream()
+                    .map(reservationProcessMapper::toDomainModel)
+                    .toList();
+        } catch (DataAccessException | TransactionException e) {
+            throw new ReservationNotSavedException(e);
+        }
     }
 
     // Un UPDATE de una sola columna: si guardar el proceso completo acaba de fallar, esto no repite esa escritura

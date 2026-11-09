@@ -3,7 +3,8 @@ package turnos.catedra.domain.model;
 import java.time.Duration;
 
 // Cuántas veces y con qué esperas se intenta una operación con la cátedra que no respondió
-public record CatedraOperationPolicy(int maxAttempts, Duration initialDelay, double multiplier) {
+// initialLoginWait: cuánto espera una tarea al login técnico inicial antes de seguir sin sesión
+public record CatedraOperationPolicy(int maxAttempts, Duration initialDelay, double multiplier, Duration initialLoginWait) {
 
     // El primer intento no espera; desde el segundo, la espera crece con el multiplicador
     public Duration delayBeforeAttempt(int attempt) {

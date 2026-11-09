@@ -18,6 +18,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
+import java.util.function.Function;
 
 // Servidor HTTP real para simular sistemas externos en los tests, en un puerto aleatorio.
 // Cada ruta tiene su cola de respuestas: cada request consume la siguiente y la última se repite.
@@ -27,6 +28,7 @@ public final class FakeHttpServer implements AutoCloseable {
     private final HttpServer server;
     private final List<ReceivedRequest> receivedRequests = new CopyOnWriteArrayList<>();
     private final Map<String, Deque<Response>> responsesByPath = new ConcurrentHashMap<>();
+    private final Map<String, Function<ReceivedRequest, Response>> respondersByPath = new ConcurrentHashMap<>();
     private volatile Deque<Response> defaultResponses = queueOf(List.of(Response.of(404, "{\"status\":404}")));
 
     // Una respuesta: estado, cuerpo, tipo de contenido y una demora opcional antes de responder
@@ -77,6 +79,12 @@ public final class FakeHttpServer implements AutoCloseable {
         responsesByPath.put(path, queueOf(List.of(responses)));
     }
 
+    // Para una ruta exacta, la respuesta que arme la función con cada request: sirve cuando depende de la consulta.
+    // Tiene prioridad sobre las respuestas en cola de esa ruta
+    public void respondTo(String path, Function<ReceivedRequest, Response> responder) {
+        respondersByPath.put(path, responder);
+    }
+
     // Respuestas para cualquier ruta que no tenga las suyas
     public void respondToAnyPath(Response... responses) {
         defaultResponses = queueOf(List.of(responses));
@@ -102,9 +110,11 @@ public final class FakeHttpServer implements AutoCloseable {
     private void handle(HttpExchange exchange) throws IOException {
         String requestBody = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
         String path = exchange.getRequestURI().getPath();
-        receivedRequests.add(new ReceivedRequest(exchange.getRequestMethod(), path,
-                exchange.getRequestURI().getRawQuery(), headersOf(exchange), requestBody));
-        Response response = nextResponse(path);
+        ReceivedRequest request = new ReceivedRequest(exchange.getRequestMethod(), path,
+                exchange.getRequestURI().getRawQuery(), headersOf(exchange), requestBody);
+        receivedRequests.add(request);
+        Function<ReceivedRequest, Response> responder = respondersByPath.get(path);
+        Response response = responder != null ? responder.apply(request) : nextResponse(path);
         sleep(response.delay());
         byte[] bytes = response.body().getBytes(StandardCharsets.UTF_8);
         if (response.contentType() != null) {

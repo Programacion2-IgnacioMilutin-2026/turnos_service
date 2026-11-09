@@ -709,20 +709,22 @@ Respuesta `200`:
 ]
 ```
 
-La cátedra devuelve las reservas de toda la cuenta técnica. Turnos filtra por el `externalPatientId` del usuario dueño del proceso y por un rango de fechas que incluya la del turno, y nunca expone reservas ajenas.
+La cátedra devuelve las reservas de toda la cuenta técnica. Turnos filtra solo por el `externalPatientId` del usuario dueño del proceso, recorre todas las páginas y nunca expone reservas ajenas. No usa `from` ni `to`: la cátedra real responde `500` a todo listado con fechas (2026-11-05).
 
-| Estado en la cátedra | Estado local |
-| --- | --- |
-| `CONFIRMED` | `CONFIRMED`, con `reservationId` y `confirmedAt` |
-| `CANCELLED` | `CANCELLED` |
-| `PHONE_PENDING` | `WAITING_FOR_PHONE`, salvo que el teléfono ya se haya informado localmente |
-| `FAILED` | `EXPIRED` |
-| Sin registro para el `reservationProcessId` | Se deja abierto si está en `HELD` y no venció, con el margen de seguridad; en otro caso, `EXPIRED` (T13 6) |
+| Estado en la cátedra | Proceso abierto | Proceso cerrado y marcado (`CONFIRMED` por T11, `INVALID` por T08) |
+| --- | --- | --- |
+| `CONFIRMED` | `CONFIRMED`, con `reservationId`, `confirmedAt`, profesional, fecha y hora | `CONFIRMED`, con los mismos datos |
+| `CANCELLED` | `CANCELLED`, con fecha y motivo | `CANCELLED`, con fecha y motivo |
+| `PHONE_PENDING` | `WAITING_FOR_PHONE`, salvo que el teléfono ya se haya informado localmente: entonces sigue `PHONE_SUBMITTED` | Sin cambios; se registra un error |
+| `FAILED` | `EXPIRED` | `EXPIRED` |
+| Sin registro para el `reservationProcessId` | Se deja abierto si está en `HELD` y no venció, con el margen de seguridad; en otro caso, `EXPIRED` (T13 6) | Sin cambios; se registra un error |
+
+Un proceso nunca vuelve de cerrado a abierto. La marca de reconciliación se apaga en todos los casos, salvo en un `PHONE_SUBMITTED` con `PHONE_PENDING`, que la conserva.
 
 | Respuesta de la cátedra | Qué hace turnos |
 | --- | --- |
 | `401` | Login técnico y una sola repetición (T13 4.1). |
-| Timeout, corte o `503` | Reintenta. Agotados, el proceso queda pendiente para el siguiente ciclo, sin cambios (T13 4.2). |
+| Timeout, corte, `500` o `503` | Reintenta. Agotados, ese proceso y los que faltan quedan pendientes para el siguiente ciclo, sin cambios, y el ciclo termina (T13 4.2). |
 
 #### 4.2.7 Cancelar una reserva
 
