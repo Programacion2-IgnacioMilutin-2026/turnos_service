@@ -41,7 +41,7 @@ Cada alumno tiene sus propios topics y su consumer group: lo que se haga sobre e
 | `alumnos.turnos.acciones.{groupId}` | Cátedra → turnos | `AdditionalInformationRequested` | T07 |
 | (el mismo) | Cátedra → turnos | `AppointmentConfirmed`, `AdditionalInformationRejected`, `AppointmentProcessExpired`, `AppointmentProcessInvalid`, `AppointmentCancelled` | T08 |
 | `catedra.turnos.telefono.{groupId}` | Turnos → cátedra | `AdditionalInformationSubmitted` | T06 |
-| `catedra.catalog.{groupId}` | Cátedra → catálogo | `CatalogUpdated` | `catalog_service` (turnos no lo usa) |
+| `catedra.catalog.{groupId}` | Cátedra → catálogo | `CatalogUpdated` | `catalogo_service` (turnos no lo usa) |
 
 La clave de los mensajes de turnos es el `reservationProcessId`: los eventos de un mismo proceso caen en la misma partición y llegan en orden.
 
@@ -212,11 +212,14 @@ Mientras la cátedra no publique el pedido, T06 no tiene `requestEventId` y no l
 
 **Verificado solo con Kafka en contenedor (2026-11-02, T06):** con el contenedor congelado, los tres intentos y el `503` entran en el tope de 10 s; un intento vencido puede llegar cuando Kafka vuelve, así que el caso de 3.15 ocurre de verdad. No se probó contra el Kafka de la cátedra (3.17).
 
+**Verificado (2026-11-20, `catalog_service`, C02):**
+
+- Catálogo usa `{kafkaConsumerGroupId}-catalog`, D4 de C02; en su E2E el grupo sugerido no se tocó.
+
 **Por verificar:**
 
 - Cuánto conserva Kafka las posiciones de un consumer group inactivo.
 - El formato real de `AdditionalInformationRejected` y `AppointmentProcessInvalid`: la cátedra todavía no los publicó. Los tests usan los mensajes armados desde el anexo.
-- Si `catalog_service` usará el mismo consumer group sugerido sobre su topic: dos servicios en un mismo grupo provocan reacomodos entre ellos aunque cada uno lea su topic. Se revisa al hacer catálogo.
 
 ## 5. Por definir en los PLAN
 
@@ -238,3 +241,4 @@ Nada pendiente: lo de T06 quedó en 3.15 a 3.18.
 - 2026-11-03: el E2E de reserva pasa a esperar el resultado: `CONFIRMED`, cancelación directa en la cátedra y `CANCELLED` local, porque una reserva confirmada no vence sola (indicación del usuario). Si la cátedra publica, también prueba el formato real de esos eventos. Sin correr: lo corre el usuario.
 - 2026-11-03: E2E de reserva corrido por el usuario: la cátedra no entregó el pedido de teléfono en 30 s. T07 TASK-12 y T06 TASK-11 siguen bloqueadas.
 - 2026-11-06: la cátedra publica desde el 2026-11-04 (sección 4). E2E de reserva completo con el Kafka real, y lectura del topic sin consumer group: formato igual al anexo, con nanosegundos y `reason` en `null`; cuatro mensajes reales grabados. T07 TASK-02 y TASK-12, T06 TASK-11 y CA-17 de T11 verificados.
+- 2026-11-21: verificado que catálogo no comparte el consumer group de turnos (sección 4): usa el sugerido con `-catalog` al final (D4 de C02 de `catalog_service`).
