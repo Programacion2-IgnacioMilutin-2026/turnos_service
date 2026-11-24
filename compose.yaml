@@ -44,6 +44,23 @@ services:
         fi
     restart: "no"
 
+  # Paso de un solo uso, después de turnos-keys: copia solo la clave pública a un volumen con nombre fijo, que catálogo
+  # monta de solo lectura. Así catálogo nunca ve secrets/, que también tiene la privada, y si turnos no está, el volumen
+  # existe vacío y catálogo arranca igual
+  turnos-public-key:
+    image: eclipse-temurin:25-jre
+    volumes:
+      - ./secrets/jwt-public.pem:/source/jwt-public.pem:ro
+      - turnos-jwt-public-key:/public-key
+    entrypoint:
+      - sh
+      - -c
+      - cp /source/jwt-public.pem /public-key/jwt-public.pem && chmod 644 /public-key/jwt-public.pem && echo "JWT public key published for catalog"
+    depends_on:
+      turnos-keys:
+        condition: service_completed_successfully
+    restart: "no"
+
   turnos-service:
     build: .
     image: turnos-service:local
@@ -76,3 +93,6 @@ volumes:
     # Nombre fijo: la misma base si turnos se levanta solo o con el sistema completo. Es el nombre que Compose le
     # había dado antes, así se conservan los datos que ya tenía
     name: turnos_service_turnos-db-data
+  turnos-jwt-public-key:
+    # Nombre fijo: es el mismo volumen que monta catálogo, cada uno solo o en el sistema completo
+    name: turnos-jwt-public-key
